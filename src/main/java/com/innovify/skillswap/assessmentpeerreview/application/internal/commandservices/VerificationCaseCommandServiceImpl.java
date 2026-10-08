@@ -19,12 +19,14 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Verification case command service. Not {@code @Transactional}: resolving a case saves the case and the
  * profile, and completes the node when approved, as a unit in the given {@link TransactionOperations}.
  */
+@Service
 public class VerificationCaseCommandServiceImpl implements VerificationCaseCommandService {
 
     private static final Logger log = LoggerFactory.getLogger(VerificationCaseCommandServiceImpl.class);

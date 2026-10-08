@@ -5,7 +5,9 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Verif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerifierProfileByUserIdQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerifierProfileRepository;
 import java.util.Optional;
+import org.springframework.stereotype.Service;
 
+@Service
 public class VerifierProfileQueryServiceImpl implements VerifierProfileQueryService {
 
     private final VerifierProfileRepository profileRepository;

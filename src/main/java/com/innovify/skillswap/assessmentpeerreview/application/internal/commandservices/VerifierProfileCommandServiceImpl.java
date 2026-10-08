@@ -14,12 +14,14 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Verifier profile command service. Not {@code @Transactional}: saving the profile and giving it the pending
  * cases it can take is one unit, run in the given {@link TransactionOperations}.
  */
+@Service
 public class VerifierProfileCommandServiceImpl implements VerifierProfileCommandService {
 
     private static final Logger log = LoggerFactory.getLogger(VerifierProfileCommandServiceImpl.class);

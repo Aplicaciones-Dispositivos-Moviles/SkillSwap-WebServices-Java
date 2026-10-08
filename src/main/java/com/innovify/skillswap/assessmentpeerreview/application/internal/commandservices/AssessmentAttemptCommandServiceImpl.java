@@ -21,6 +21,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
@@ -30,6 +31,7 @@ import org.springframework.transaction.support.TransactionOperations;
  * transaction, and only the final step, which must save the attempt together with the node completion or the
  * case it opens, runs in the given {@link TransactionOperations}. Events are published once it is committed.
  */
+@Service
 public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCommandService {
 
     private static final Logger log = LoggerFactory.getLogger(AssessmentAttemptCommandServiceImpl.class);

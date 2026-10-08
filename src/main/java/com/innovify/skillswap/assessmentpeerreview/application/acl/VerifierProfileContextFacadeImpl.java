@@ -3,8 +3,10 @@ package com.innovify.skillswap.assessmentpeerreview.application.acl;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerifierProfileRepository;
 import java.util.Optional;
+import org.springframework.stereotype.Service;
 
 /** Facade implementation over the verifier profile repository. */
+@Service
 public class VerifierProfileContextFacadeImpl implements VerifierProfileContextFacade {
 
     private final VerifierProfileRepository profileRepository;

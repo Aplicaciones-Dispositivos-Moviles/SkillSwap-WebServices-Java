@@ -1,6 +1,14 @@
 package com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates;
 
+import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.StringListConverter;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,18 +17,38 @@ import java.util.List;
  * Makes a student eligible to review the cases of other students in the skills they demonstrated themselves.
  * It can be switched off by the verifier (availability) or revoked by moderation.
  */
+@Entity
+@Table(name = "verifier_profiles")
 public class VerifierProfile {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Integer id;
+
+    @Column(name = "verifier_user_id", nullable = false)
     private int verifierUserId;
+
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "skill_tags", nullable = false, columnDefinition = "jsonb")
     private List<String> skillTags;
+
+    @Column(name = "available", nullable = false)
     private boolean available;
+
+    @Column(name = "verified", nullable = false)
     private boolean verified;
+
+    @Column(name = "rating", nullable = false)
     private double rating;
+
+    @Column(name = "review_count", nullable = false)
     private int reviewCount;
+
+    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    /** Required by the persistence layer. */
+    /** Required by JPA. */
     protected VerifierProfile() {
     }
 

@@ -15,7 +15,9 @@ import com.innovify.skillswap.learningpathengine.application.acl.BlueprintView;
 import com.innovify.skillswap.learningpathengine.application.acl.LearningPathContextFacade;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.stereotype.Service;
 
+@Service
 public class VerificationCaseQueryServiceImpl implements VerificationCaseQueryService {
 
     private final VerificationCaseRepository caseRepository;

@@ -5,7 +5,9 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Asses
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetAssessmentAttemptByIdQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
 import java.util.Optional;
+import org.springframework.stereotype.Service;
 
+@Service
 public class AssessmentAttemptQueryServiceImpl implements AssessmentAttemptQueryService {
 
     private final AssessmentAttemptRepository attemptRepository;

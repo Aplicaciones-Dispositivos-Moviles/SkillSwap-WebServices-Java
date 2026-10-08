@@ -1,7 +1,15 @@
 package com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Score;
+import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.IntegerListConverter;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,20 +18,39 @@ import java.util.List;
  * A student's attempt at the assessment of a node. The score is always computed on the server, against the
  * correct answers of the blueprint, so the client cannot tamper with it.
  */
+@Entity
+@Table(name = "assessment_attempts")
 public class AssessmentAttempt {
 
     public static final int ANSWER_OPTION_COUNT = 4;
     public static final int PASSING_SCORE = 4;
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Integer id;
+
+    @Column(name = "blueprint_id", nullable = false)
     private int blueprintId;
+
+    @Column(name = "student_id", nullable = false)
     private int studentId;
+
+    @Convert(converter = IntegerListConverter.class)
+    @Column(name = "selected_answers", nullable = false, columnDefinition = "jsonb")
     private List<Integer> selectedAnswers;
+
+    /** Stored as "value/total" by the auto-applied score converter. */
+    @Column(name = "score", nullable = false, length = 10)
     private Score score;
+
+    @Column(name = "passed", nullable = false)
     private boolean passed;
+
+    @Column(name = "completed_at", nullable = false)
     private Instant completedAt;
 
-    /** Required by the persistence layer. */
+    /** Required by JPA. */
     protected AssessmentAttempt() {
     }
 

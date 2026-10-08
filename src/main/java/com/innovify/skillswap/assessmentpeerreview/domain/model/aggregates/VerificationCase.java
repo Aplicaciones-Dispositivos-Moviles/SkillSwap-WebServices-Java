@@ -3,6 +3,12 @@ package com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Instant;
@@ -12,26 +18,57 @@ import java.util.Locale;
  * Opened when an attempt is not approved. It is assigned to an enabled verifier, who resolves it with a
  * decision and the notes of the rubric. A student can add evidence while it is open.
  */
+@Entity
+@Table(name = "verification_cases")
 public class VerificationCase {
 
     public static final int MAX_EVIDENCE_URL_LENGTH = 500;
     public static final int MAX_RUBRIC_NOTES_LENGTH = 2000;
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Integer id;
+
+    @Column(name = "attempt_id", nullable = false)
     private int attemptId;
+
+    @Column(name = "student_id", nullable = false)
     private int studentId;
+
+    @Column(name = "verifier_user_id")
     private Integer verifierUserId;
+
+    @Column(name = "path_node_id", nullable = false)
     private int pathNodeId;
+
+    @Column(name = "skill_tag", nullable = false, length = 100)
     private String skillTag;
+
+    /** Stored as the text the C# API wrote ("Pending", "Assigned", "Resolved"). */
+    @Column(name = "status", nullable = false, length = 20)
     private CaseStatus status;
+
+    /** Stored as "Approved" or "Rejected"; null until the case is resolved. */
+    @Column(name = "decision", length = 20)
     private ReviewDecision decision;
+
+    @Column(name = "rubric_notes", length = 2000)
     private String rubricNotes;
+
+    @Column(name = "evidence_url", length = 500)
     private String evidenceUrl;
+
+    @Column(name = "opened_at", nullable = false)
     private Instant openedAt;
+
+    @Column(name = "assigned_at")
     private Instant assignedAt;
+
+    @Column(name = "resolved_at")
     private Instant resolvedAt;
 
-    /** Required by the persistence layer. */
+    /** Required by JPA. */
     protected VerificationCase() {
     }
 

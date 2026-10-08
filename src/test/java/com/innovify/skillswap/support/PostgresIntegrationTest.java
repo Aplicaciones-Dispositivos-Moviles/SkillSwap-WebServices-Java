@@ -9,13 +9,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 
 /**
  * Base class of the tests that run the whole application against a real PostgreSQL, started by Testcontainers
  * through its JDBC URL (jdbc:tc:...). The schema comes from iam-test-schema.sql and
  * credential-verification-test-schema.sql, copies of what the C# API's migrations create, and Hibernate only
- * validates it. All the subclasses share one Spring context and one container. They are skipped when Docker is
- * not available.
+ * validates it. The file storage is an in-memory fake. All the subclasses share one Spring context and one
+ * container. They are skipped when Docker is not available.
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///skillswap",
@@ -29,6 +30,7 @@ import org.springframework.boot.test.context.SpringBootTest;
         "cloudinary.api-key=test-key",
         "cloudinary.api-secret=test-secret"
 })
+@Import(FileStorageTestConfig.class)
 @ExtendWith(DockerAvailableCondition.class)
 public abstract class PostgresIntegrationTest {
 

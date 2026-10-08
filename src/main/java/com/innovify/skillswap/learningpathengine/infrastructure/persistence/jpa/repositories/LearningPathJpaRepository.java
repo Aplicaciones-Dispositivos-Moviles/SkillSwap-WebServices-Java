@@ -1,0 +1,23 @@
+package com.innovify.skillswap.learningpathengine.infrastructure.persistence.jpa.repositories;
+
+import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
+import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+/** Spring Data access to the "learning_paths" table. Only {@link LearningPathRepositoryAdapter} uses it. */
+public interface LearningPathJpaRepository extends JpaRepository<LearningPath, Integer> {
+
+    Optional<LearningPath> findFirstByStudentIdOrderByIdDesc(int studentId);
+
+    @Query("select p from LearningPath p join p.nodes n where n.id = :nodeId")
+    Optional<LearningPath> findByNodeId(@Param("nodeId") int nodeId);
+
+    @Query("select distinct n.skillTag from LearningPath p join p.nodes n "
+            + "where p.studentId = :studentId and n.status = :status")
+    List<String> findSkillTagsByStudentIdAndNodeStatus(@Param("studentId") int studentId,
+                                                       @Param("status") NodeStatus status);
+}

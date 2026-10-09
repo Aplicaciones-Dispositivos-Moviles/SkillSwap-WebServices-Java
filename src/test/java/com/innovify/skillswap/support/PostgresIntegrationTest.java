@@ -15,8 +15,8 @@ import org.springframework.context.annotation.Import;
  * Base class of the tests that run the whole application against a real PostgreSQL, started by Testcontainers
  * through its JDBC URL (jdbc:tc:...). The schema is created by the same Flyway migrations as production
  * (db/migration), and Hibernate only validates it, so a mapping that drifts from the migrations fails the tests.
- * The file storage and the question generator are in-memory fakes. All the subclasses share one Spring context
- * and one container. They are skipped when Docker is not available.
+ * The file storage, the question generator and the payment gateway are in-memory fakes. All the subclasses share
+ * one Spring context and one container. They are skipped when Docker is not available.
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///skillswap?stringtype=unspecified",
@@ -26,11 +26,16 @@ import org.springframework.context.annotation.Import;
         "cloudinary.cloud-name=test-cloud",
         "cloudinary.api-key=test-key",
         "cloudinary.api-secret=test-secret",
-        "gemini.api-key=test-gemini-key"
+        "gemini.api-key=test-gemini-key",
+        "revenuecat.webhook-authorization=" + PostgresIntegrationTest.WEBHOOK_AUTHORIZATION,
+        "billing.expiration-check-enabled=false"
 })
-@Import({FileStorageTestConfig.class, QuestionGenerationTestConfig.class})
+@Import({FileStorageTestConfig.class, QuestionGenerationTestConfig.class, PaymentGatewayTestConfig.class})
 @ExtendWith(DockerAvailableCondition.class)
 public abstract class PostgresIntegrationTest {
+
+    /** The Authorization header the RevenueCat webhook expects in the tests. */
+    protected static final String WEBHOOK_AUTHORIZATION = "Bearer test-webhook-secret";
 
     @Autowired
     private DataSource dataSource;
@@ -38,7 +43,8 @@ public abstract class PostgresIntegrationTest {
     @BeforeEach
     protected void cleanDatabase() throws SQLException {
         execute("TRUNCATE TABLE users, certificates, path_nodes, learning_paths, assessment_blueprints, "
-                + "assessment_attempts, verification_cases, verifier_profiles, verifier_reliabilities, student_employability_scores, wallets, credit_transactions RESTART IDENTITY");
+                + "assessment_attempts, verification_cases, verifier_profiles, verifier_reliabilities, student_employability_scores, wallets, credit_transactions, "
+                + "subscriptions, processed_webhook_events RESTART IDENTITY");
     }
 
     protected void execute(String sql) throws SQLException {

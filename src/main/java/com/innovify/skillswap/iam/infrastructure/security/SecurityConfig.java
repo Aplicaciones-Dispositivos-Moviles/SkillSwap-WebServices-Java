@@ -5,6 +5,7 @@ import com.innovify.skillswap.iam.application.queryservices.UserQueryService;
 import java.nio.charset.StandardCharsets;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -18,8 +19,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
- * Stateless JWT security. Anonymous: health check, sign-up / sign-in and the API docs. Everything else needs
- * a valid token (401 otherwise); role checks use {@code @PreAuthorize} (403 with a JSON message).
+ * Stateless JWT security. Anonymous: health check, sign-up / sign-in, the API docs and the RevenueCat webhook
+ * (which checks its own shared secret). Everything else needs a valid token (401 otherwise); role checks use
+ * {@code @PreAuthorize} (403 with a JSON message).
  */
 @Configuration
 @EnableWebSecurity
@@ -51,6 +53,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers("/", "/swagger", "/health", "/api/v1/authentication/**",
                                 "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/subscriptions/webhooks/revenuecat").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenGenerator, userQueryService),
                         UsernamePasswordAuthenticationFilter.class);

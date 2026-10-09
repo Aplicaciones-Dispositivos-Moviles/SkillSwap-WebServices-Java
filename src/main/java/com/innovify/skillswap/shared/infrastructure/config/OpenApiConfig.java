@@ -22,7 +22,7 @@ public class OpenApiConfig {
                         .version("v1")
                         .description("""
                                 SkillSwap verifies what a student really knows: learning paths, certificate \
-                                verification, peer review, reputation and SkillCredits.
+                                verification, peer review, reputation, SkillCredits and the monthly subscription.
 
                                 **How to try it:** sign up and sign in at `/api/v1/authentication`, press \
                                 **Authorize** and paste only the token. Every resource belongs to its owner, \

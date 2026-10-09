@@ -16,8 +16,8 @@ public final class ModerationDisputesActionResultAssembler {
 
     public static HttpStatus toStatusFromError(ModerationDisputesError error) {
         return switch (error) {
-            case NONE, INVALID_OUTCOME, INVALID_DISPUTE_STATUS, COORDINATOR_NOTES_REQUIRED,
-                 COORDINATOR_NOTES_TOO_LONG -> HttpStatus.BAD_REQUEST;
+            case NONE, INVALID_OUTCOME, INVALID_DISPUTE_STATUS, RESOLUTION_NOTES_REQUIRED,
+                 RESOLUTION_NOTES_TOO_LONG -> HttpStatus.BAD_REQUEST;
             case DISPUTE_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case NOT_A_VERIFIER, NOT_ASSIGNED_REVIEWER -> HttpStatus.FORBIDDEN;
             case DISPUTE_ALREADY_RESOLVED, CERTIFICATE_NOT_SUSPICIOUS, OPERATION_CANCELLED -> HttpStatus.CONFLICT;

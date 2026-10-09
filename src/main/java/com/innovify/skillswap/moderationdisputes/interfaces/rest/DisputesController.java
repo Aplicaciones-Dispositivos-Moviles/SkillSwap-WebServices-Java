@@ -114,7 +114,7 @@ public class DisputesController {
     public ResponseEntity<?> resolve(@PathVariable int id, @RequestBody(required = false) ResolveDisputeResource resource,
                                      @AuthenticationPrincipal User actor) {
         DisputeOutcome outcome = resource == null ? null : DisputeOutcome.tryParse(resource.outcome()).orElse(null);
-        String notes = resource == null || resource.coordinatorNotes() == null ? "" : resource.coordinatorNotes();
+        String notes = resource == null || resource.resolutionNotes() == null ? "" : resource.resolutionNotes();
 
         var result = commandService.handle(new ResolveDisputeCommand(id, actor.getId(), outcome, notes));
         return ModerationDisputesActionResultAssembler.toResponse(result,

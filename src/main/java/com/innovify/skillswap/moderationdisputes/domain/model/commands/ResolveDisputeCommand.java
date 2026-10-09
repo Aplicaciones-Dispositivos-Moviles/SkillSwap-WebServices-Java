@@ -9,8 +9,8 @@ import com.innovify.skillswap.moderationdisputes.domain.model.valueobjects.Dispu
  * @param disputeId        the dispute
  * @param verifierUserId   the reviewer (the authenticated user)
  * @param outcome          the decision
- * @param coordinatorNotes the observations of the reviewer, required
+ * @param resolutionNotes the observations of the reviewer, required
  */
 public record ResolveDisputeCommand(int disputeId, int verifierUserId, DisputeOutcome outcome,
-                                    String coordinatorNotes) {
+                                    String resolutionNotes) {
 }

@@ -67,7 +67,7 @@ class DisputeTest {
 
         assertThat(dispute.getStatus()).isEqualTo(DisputeStatus.RESOLVED);
         assertThat(dispute.getOutcome()).isEqualTo(DisputeOutcome.UPHELD);
-        assertThat(dispute.getCoordinatorNotes()).isEqualTo("Legitimate.");
+        assertThat(dispute.getResolutionNotes()).isEqualTo("Legitimate.");
         assertThat(dispute.getResolvedAt()).isNotNull();
         assertThatThrownBy(() -> dispute.resolve(DisputeOutcome.UPHELD, "Again", validator))
                 .isInstanceOf(DomainException.class);

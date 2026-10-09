@@ -108,12 +108,12 @@ public class DisputeCommandServiceImpl implements DisputeCommandService {
         if (command.outcome() == null) {
             return failures.failure(ModerationDisputesError.INVALID_OUTCOME);
         }
-        String notes = command.coordinatorNotes() == null ? "" : command.coordinatorNotes().strip();
+        String notes = command.resolutionNotes() == null ? "" : command.resolutionNotes().strip();
         if (notes.isEmpty()) {
-            return failures.failure(ModerationDisputesError.COORDINATOR_NOTES_REQUIRED);
+            return failures.failure(ModerationDisputesError.RESOLUTION_NOTES_REQUIRED);
         }
-        if (notes.length() > Dispute.MAX_COORDINATOR_NOTES_LENGTH) {
-            return failures.failure(ModerationDisputesError.COORDINATOR_NOTES_TOO_LONG);
+        if (notes.length() > Dispute.MAX_RESOLUTION_NOTES_LENGTH) {
+            return failures.failure(ModerationDisputesError.RESOLUTION_NOTES_TOO_LONG);
         }
 
         try {
@@ -194,7 +194,7 @@ public class DisputeCommandServiceImpl implements DisputeCommandService {
     private void applyToCertificate(Dispute dispute) {
         boolean authentic = dispute.getOutcome() == DisputeOutcome.UPHELD;
         CertificateReviewOutcome outcome = credentialFacade.resolveSuspiciousCertificate(
-                dispute.getSourceReferenceId(), authentic, dispute.getCoordinatorNotes());
+                dispute.getSourceReferenceId(), authentic, dispute.getResolutionNotes());
         switch (outcome) {
             case RESOLVED -> {
                 // Done: the certificate is in its final state.

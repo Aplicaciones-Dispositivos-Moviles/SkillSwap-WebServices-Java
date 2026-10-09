@@ -15,7 +15,7 @@ public final class DisputeResourceAssemblers {
     public static DisputeResource toResource(Dispute dispute) {
         return new DisputeResource(dispute.getId(), dispute.getSourceType().value(), dispute.getSourceReferenceId(),
                 dispute.getReason(), dispute.getStatus().value(),
-                dispute.getOutcome() == null ? null : dispute.getOutcome().value(), dispute.getCoordinatorNotes(),
+                dispute.getOutcome() == null ? null : dispute.getOutcome().value(), dispute.getResolutionNotes(),
                 dispute.getAssignedVerifierUserId(), dispute.isAssignedToSenior(), dispute.getAssignedAt(),
                 dispute.getRaisedAt(), dispute.getResolvedAt());
     }

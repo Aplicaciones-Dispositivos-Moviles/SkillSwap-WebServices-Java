@@ -23,7 +23,7 @@ CREATE TABLE disputes (
     reason character varying(500) NOT NULL,
     status character varying(20) NOT NULL,
     outcome character varying(20),
-    coordinator_notes character varying(2000),
+    resolution_notes character varying(2000),
     assigned_verifier_user_id integer,
     assigned_to_senior boolean NOT NULL DEFAULT false,
     assigned_at timestamp with time zone,

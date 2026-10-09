@@ -29,7 +29,7 @@ import java.util.Objects;
 public class Dispute {
 
     public static final int MAX_REASON_LENGTH = 500;
-    public static final int MAX_COORDINATOR_NOTES_LENGTH = 2000;
+    public static final int MAX_RESOLUTION_NOTES_LENGTH = 2000;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -60,8 +60,8 @@ public class Dispute {
     @Column(name = "outcome", length = 20)
     private DisputeOutcome outcome;
 
-    @Column(name = "coordinator_notes", length = MAX_COORDINATOR_NOTES_LENGTH)
-    private String coordinatorNotes;
+    @Column(name = "resolution_notes", length = MAX_RESOLUTION_NOTES_LENGTH)
+    private String resolutionNotes;
 
     @Column(name = "assigned_verifier_user_id")
     private Integer assignedVerifierUserId;
@@ -159,7 +159,7 @@ public class Dispute {
      * @throws DomainException when the dispute cannot be resolved, has no reviewer, the outcome does not apply to its
      *                         origin, or the observations are empty or too long
      */
-    public Dispute resolve(DisputeOutcome outcome, String coordinatorNotes, DisputeResolutionValidator validator) {
+    public Dispute resolve(DisputeOutcome outcome, String resolutionNotes, DisputeResolutionValidator validator) {
         Objects.requireNonNull(validator, "validator");
         if (!validator.canResolve(this)) {
             throw new DomainException("The dispute is already resolved.");
@@ -170,17 +170,17 @@ public class Dispute {
         if (!validator.isValidOutcome(sourceType, outcome)) {
             throw new DomainException("The outcome does not apply to this kind of dispute.");
         }
-        String notes = coordinatorNotes == null ? "" : coordinatorNotes.strip();
+        String notes = resolutionNotes == null ? "" : resolutionNotes.strip();
         if (notes.isEmpty()) {
             throw new DomainException("The observations of the reviewer are required.");
         }
-        if (notes.length() > MAX_COORDINATOR_NOTES_LENGTH) {
+        if (notes.length() > MAX_RESOLUTION_NOTES_LENGTH) {
             throw new DomainException(
-                    "The observations cannot exceed %d characters.".formatted(MAX_COORDINATOR_NOTES_LENGTH));
+                    "The observations cannot exceed %d characters.".formatted(MAX_RESOLUTION_NOTES_LENGTH));
         }
 
         this.outcome = outcome;
-        this.coordinatorNotes = notes;
+        this.resolutionNotes = notes;
         this.status = DisputeStatus.RESOLVED;
         this.resolvedAt = Instant.now();
         return this;
@@ -239,8 +239,8 @@ public class Dispute {
     }
 
     /** Null until resolved. */
-    public String getCoordinatorNotes() {
-        return coordinatorNotes;
+    public String getResolutionNotes() {
+        return resolutionNotes;
     }
 
     /** Null while it waits for a reviewer. */

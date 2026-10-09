@@ -327,7 +327,7 @@ class CertificateEscalationApiIntegrationTest extends PostgresIntegrationTest {
         int disputeId = onlyDisputeId();
 
         MvcResult resolved = call(patch(DISPUTES + "/" + disputeId + "/resolve"), carlaToken,
-                "{\"outcome\":\"Upheld\",\"coordinatorNotes\":\"The issuer confirmed the certificate.\"}");
+                "{\"outcome\":\"Upheld\",\"resolutionNotes\":\"The issuer confirmed the certificate.\"}");
 
         assertThat(status(resolved)).as(body(resolved)).isEqualTo(200);
         assertThat((String) read(resolved, "$.status")).isEqualTo("Resolved");
@@ -348,7 +348,7 @@ class CertificateEscalationApiIntegrationTest extends PostgresIntegrationTest {
         int disputeId = onlyDisputeId();
 
         MvcResult resolved = call(patch(DISPUTES + "/" + disputeId + "/resolve"), carlaToken,
-                "{\"outcome\":\"Overturned\",\"coordinatorNotes\":\"Same file as another student.\"}");
+                "{\"outcome\":\"Overturned\",\"resolutionNotes\":\"Same file as another student.\"}");
 
         assertThat(status(resolved)).isEqualTo(200);
         assertThat((String) read(call(get(CERTIFICATES + "/" + certificateId), anaToken, null), "$.status"))
@@ -362,10 +362,10 @@ class CertificateEscalationApiIntegrationTest extends PostgresIntegrationTest {
         int disputeId = onlyDisputeId();
 
         MvcResult result = call(patch(DISPUTES + "/" + disputeId + "/resolve"), carlaToken,
-                "{\"outcome\":\"Upheld\",\"coordinatorNotes\":\"   \"}");
+                "{\"outcome\":\"Upheld\",\"resolutionNotes\":\"   \"}");
 
         assertThat(status(result)).isEqualTo(400);
-        assertThat((String) read(result, "$.title")).isEqualTo("CoordinatorNotesRequired");
+        assertThat((String) read(result, "$.title")).isEqualTo("ResolutionNotesRequired");
         assertThat((String) read(call(get(CERTIFICATES + "/" + certificateId), anaToken, null), "$.status"))
                 .isEqualTo("Suspicious");
     }
@@ -377,7 +377,7 @@ class CertificateEscalationApiIntegrationTest extends PostgresIntegrationTest {
         int disputeId = onlyDisputeId();
 
         MvcResult result = call(patch(DISPUTES + "/" + disputeId + "/resolve"), carlaToken,
-                "{\"outcome\":\"Sanctioned\",\"coordinatorNotes\":\"Fraud\"}");
+                "{\"outcome\":\"Sanctioned\",\"resolutionNotes\":\"Fraud\"}");
 
         assertThat(status(result)).isEqualTo(400);
         assertThat((String) read(result, "$.title")).isEqualTo("InvalidOutcome");
@@ -389,7 +389,7 @@ class CertificateEscalationApiIntegrationTest extends PostgresIntegrationTest {
         enrollVerifier(dan);
         uploadFileAlreadyRegisteredByAnotherStudent();
         int disputeId = onlyDisputeId();
-        String decision = "{\"outcome\":\"Upheld\",\"coordinatorNotes\":\"Legitimate.\"}";
+        String decision = "{\"outcome\":\"Upheld\",\"resolutionNotes\":\"Legitimate.\"}";
 
         assertThat(status(call(patch(DISPUTES + "/" + disputeId + "/resolve"), danToken, decision))).isEqualTo(403);
         assertThat(status(call(patch(DISPUTES + "/" + disputeId + "/resolve"), anaToken, decision))).isEqualTo(403);

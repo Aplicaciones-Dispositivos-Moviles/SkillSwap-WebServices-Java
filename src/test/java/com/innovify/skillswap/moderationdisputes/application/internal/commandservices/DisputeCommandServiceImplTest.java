@@ -152,9 +152,9 @@ class DisputeCommandServiceImplTest {
         assertError(service.handle(new ResolveDisputeCommand(id, 4, null, "x")).error(),
                 ModerationDisputesError.INVALID_OUTCOME);
         assertError(service.handle(new ResolveDisputeCommand(id, 4, DisputeOutcome.UPHELD, " ")).error(),
-                ModerationDisputesError.COORDINATOR_NOTES_REQUIRED);
+                ModerationDisputesError.RESOLUTION_NOTES_REQUIRED);
         assertError(service.handle(new ResolveDisputeCommand(id, 4, DisputeOutcome.UPHELD, "x".repeat(2001))).error(),
-                ModerationDisputesError.COORDINATOR_NOTES_TOO_LONG);
+                ModerationDisputesError.RESOLUTION_NOTES_TOO_LONG);
         assertError(service.handle(new ResolveDisputeCommand(99, 4, DisputeOutcome.UPHELD, "x")).error(),
                 ModerationDisputesError.DISPUTE_NOT_FOUND);
         assertError(service.handle(new ResolveDisputeCommand(id, OWNER, DisputeOutcome.UPHELD, "x")).error(),

@@ -38,8 +38,8 @@ class ModerationDisputesMessagesTest {
     @Test
     void codes_andStatuses_areTheOnesOfTheApi() {
         assertThat(Arrays.stream(ModerationDisputesError.values()).map(ErrorCodes::of)).containsExactly(
-                "None", "InvalidOutcome", "InvalidDisputeStatus", "CoordinatorNotesRequired",
-                "CoordinatorNotesTooLong", "DisputeNotFound", "NotAVerifier", "NotAssignedReviewer",
+                "None", "InvalidOutcome", "InvalidDisputeStatus", "ResolutionNotesRequired",
+                "ResolutionNotesTooLong", "DisputeNotFound", "NotAVerifier", "NotAssignedReviewer",
                 "DisputeAlreadyResolved", "CertificateNotSuspicious", "OperationCancelled", "DatabaseError",
                 "InternalServerError");
         assertThat(ModerationDisputesActionResultAssembler.toStatusFromError(ModerationDisputesError.INVALID_OUTCOME))

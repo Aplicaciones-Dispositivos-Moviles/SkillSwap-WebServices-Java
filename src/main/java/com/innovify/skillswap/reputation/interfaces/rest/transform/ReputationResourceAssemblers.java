@@ -20,6 +20,7 @@ public final class ReputationResourceAssemblers {
         return new VerifierReliabilityResource(reliability.getId(), reliability.getVerifierUserId(),
                 reliability.getResolvedCasesCount(), reliability.getOverturnedDecisionsCount(),
                 reliability.getSanctionsCount(), reliability.getScore().value(), reliability.getUpdatedAt(),
-                reliability.getRank().value(), reliability.isSeniorVerifier());
+                reliability.getRank().value(), reliability.isSeniorVerifier(),
+                reliability.getMissedDeadlinesCount());
     }
 }

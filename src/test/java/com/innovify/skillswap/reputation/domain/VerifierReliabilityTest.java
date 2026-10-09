@@ -106,4 +106,14 @@ class VerifierReliabilityTest {
         assertThatThrownBy(() -> new VerifierReliability(3).applySanction(null))
                 .isInstanceOf(NullPointerException.class);
     }
+
+    @org.junit.jupiter.api.Test
+    void recordMissedDeadline_countsItAndLowersTheScore() {
+        var reliability = new com.innovify.skillswap.reputation.domain.model.aggregates.VerifierReliability(3);
+
+        reliability.recordMissedDeadline(CALCULATOR);
+
+        org.assertj.core.api.Assertions.assertThat(reliability.getMissedDeadlinesCount()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(reliability.getScore().value()).isEqualTo(95);
+    }
 }

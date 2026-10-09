@@ -41,3 +41,42 @@ CREATE UNIQUE INDEX ux_advanced_path_unlocks_redemption_id ON advanced_path_unlo
 CREATE UNIQUE INDEX ux_advanced_path_unlocks_learning_path_id ON advanced_path_unlocks (learning_path_id)
     WHERE learning_path_id IS NOT NULL;
 CREATE INDEX ix_advanced_path_unlocks_student_id ON advanced_path_unlocks (student_id);
+
+-- US39: the Verificador senior defines the review deadline of each plan, and a case whose deadline passed is
+-- reassigned to another verifier, recording the breach in the reliability of the original one.
+
+-- Assessment & Peer Review: the deadline a senior defined for each plan, applied to the cases opened from then on.
+-- Without a row the plan keeps its own deadline (48 hours on the monthly plan, 5 business days on the free plan).
+CREATE TABLE review_deadline_policies (
+    plan character varying(20) NOT NULL,
+    amount integer NOT NULL,
+    unit character varying(20) NOT NULL,
+    updated_by_user_id integer NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    CONSTRAINT pk_review_deadline_policies PRIMARY KEY (plan),
+    CONSTRAINT ck_review_deadline_policies_plan CHECK (plan IN ('Free', 'Premium')),
+    CONSTRAINT ck_review_deadline_policies_unit CHECK (unit IN ('Hours', 'BusinessDays')),
+    CONSTRAINT ck_review_deadline_policies_amount_positive CHECK (amount > 0)
+);
+
+-- The deadline a case was opened with, so a reassigned case gives the new verifier the same time; when the current
+-- verifier missed it (cleared when the case is reassigned); and how many times it was reassigned for that reason.
+-- The cases opened before keep NULL: they are reassigned with the deadline of the current plan of the student.
+ALTER TABLE verification_cases
+    ADD COLUMN review_deadline_amount integer,
+    ADD COLUMN review_deadline_unit character varying(20),
+    ADD COLUMN deadline_missed_at timestamp with time zone,
+    ADD COLUMN reassignment_count integer NOT NULL DEFAULT 0;
+
+ALTER TABLE verification_cases
+    ADD CONSTRAINT ck_verification_cases_review_deadline CHECK (
+        (review_deadline_amount IS NULL AND review_deadline_unit IS NULL)
+        OR (review_deadline_amount > 0 AND review_deadline_unit IN ('Hours', 'BusinessDays')));
+
+-- The periodic search of the assigned cases whose review is overdue.
+CREATE INDEX ix_verification_cases_assigned_review_due_at ON verification_cases (review_due_at)
+    WHERE status = 'Assigned';
+
+-- Reputation: the deadlines a verifier missed, which discount their reliability.
+ALTER TABLE verifier_reliabilities
+    ADD COLUMN missed_deadlines_count integer NOT NULL DEFAULT 0;

@@ -22,6 +22,8 @@ SkillSwap runs as a **Web Service** with **Runtime: Docker** (the `Dockerfile` a
 | `REVENUECAT_ACCEPT_SANDBOX` | no | Apply test purchases (`environment: SANDBOX`). Default `true`; set `false` once the app is in production. |
 | `BILLING_EXPIRATION_CHECK_INTERVAL` | no | How often the subscriptions whose paid period ended are checked with RevenueCat. Default `1h`. |
 | `BILLING_SIMULATED_PERIOD` | no | Length of a period of the simulated gateway (no API key). Default `30d`; e.g. `10m` to demo the expiration. |
+| `REVIEW_DEADLINE_CHECK_INTERVAL` | no | How often the assigned verification cases whose review deadline passed are reassigned to another verifier (the breach counts in the reliability of the original one). Default `15m`. |
+| `MODERATION_ASSIGNMENT_RETRY_INTERVAL` | no | How often the suspicious certificates escalated while no verifier was available are offered again to a Verificador senior (or another verifier). Default `15m`. |
 
 Not used anymore (delete them): `SEED_COORDINATOR_*`, `ASPNETCORE_*`, `ConnectionStrings__*`.
 

@@ -1,6 +1,7 @@
 package com.innovify.skillswap.assessmentpeerreview.application.internal;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
+import java.util.Optional;
 
 /** Gives pending verification cases to the least loaded qualified verifier. */
 public interface CaseAssignmentService {
@@ -19,4 +20,10 @@ public interface CaseAssignmentService {
      * @return the number of cases assigned
      */
     int assignPending(Iterable<String> skillTags);
+
+    /**
+     * The least loaded qualified verifier who could take an assigned case instead of its current verifier: never its
+     * student, its current verifier, nor the one who resolved it before an appeal. Nothing is changed.
+     */
+    Optional<Integer> findReplacementVerifier(VerificationCase verificationCase);
 }

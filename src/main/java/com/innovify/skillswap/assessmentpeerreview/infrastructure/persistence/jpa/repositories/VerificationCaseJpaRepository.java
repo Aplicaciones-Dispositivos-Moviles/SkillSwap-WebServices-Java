@@ -2,11 +2,13 @@ package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.j
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,6 +16,16 @@ import org.springframework.data.repository.query.Param;
 public interface VerificationCaseJpaRepository extends JpaRepository<VerificationCase, Integer> {
 
     List<VerificationCase> findByVerifierUserIdOrderByIdDesc(int verifierUserId);
+
+    /** SELECT ... FOR UPDATE: it waits for the other transactions that hold the case. Needs a transaction. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from VerificationCase c where c.id = :id")
+    Optional<VerificationCase> findForUpdateById(@Param("id") int id);
+
+    @Query("select c.id from VerificationCase c where c.status = :status and c.reviewDueAt <= :now "
+            + "order by c.reviewDueAt, c.id")
+    List<Integer> findIdsByStatusAndReviewDueAtNotAfter(@Param("status") CaseStatus status,
+                                                        @Param("now") Instant now);
 
     Optional<VerificationCase> findFirstByStudentIdAndPathNodeIdAndStatusNot(int studentId, int pathNodeId,
                                                                            CaseStatus status);

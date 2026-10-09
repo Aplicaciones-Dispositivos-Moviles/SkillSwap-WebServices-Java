@@ -16,10 +16,11 @@ import java.time.Instant;
  * @param rank                     Bronze (0 to 29 resolved cases), Silver (30 to 99) or Gold (100 or more)
  * @param seniorVerifier           whether the verifier is a Verificador senior: Gold rank and a score of 90 or
  *                                 more
+ * @param missedDeadlinesCount     the assigned cases they did not resolve within the deadline
  */
 public record VerifierReliabilityResource(int id, int verifierUserId, int resolvedCasesCount,
                                           int overturnedDecisionsCount, int sanctionsCount, int score,
                                           Instant updatedAt,
                                           @Schema(allowableValues = {"Bronze", "Silver", "Gold"}) String rank,
-                                          boolean seniorVerifier) {
+                                          boolean seniorVerifier, int missedDeadlinesCount) {
 }

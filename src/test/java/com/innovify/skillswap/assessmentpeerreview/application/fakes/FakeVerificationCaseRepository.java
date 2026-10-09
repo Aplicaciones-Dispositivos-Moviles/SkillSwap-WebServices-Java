@@ -19,11 +19,17 @@ public class FakeVerificationCaseRepository implements VerificationCaseRepositor
     private final List<VerificationCase> cases = new ArrayList<>();
     private int nextId = 1;
     private final List<Integer> lockedStudents = new ArrayList<>();
+    private final List<Integer> lockedCases = new ArrayList<>();
     private RuntimeException saveFailure;
 
     /** The students whose escalations were locked, in order. */
     public List<Integer> lockedStudents() {
         return lockedStudents;
+    }
+
+    /** The cases read with a lock, in order. */
+    public List<Integer> lockedCases() {
+        return lockedCases;
     }
 
     public List<VerificationCase> cases() {
@@ -52,6 +58,21 @@ public class FakeVerificationCaseRepository implements VerificationCaseRepositor
     @Override
     public Optional<VerificationCase> findById(int id) {
         return cases.stream().filter(c -> c.getId() == id).findFirst();
+    }
+
+    @Override
+    public Optional<VerificationCase> findByIdForUpdate(int id) {
+        lockedCases.add(id);
+        return findById(id);
+    }
+
+    @Override
+    public List<Integer> findOverdueAssignedIds(Instant now) {
+        return cases.stream()
+                .filter(c -> c.isOverdue(now))
+                .sorted(Comparator.comparing(VerificationCase::getReviewDueAt).thenComparing(VerificationCase::getId))
+                .map(VerificationCase::getId)
+                .toList();
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.innovify.skillswap.reputation.infrastructure.config;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.AssessmentAttemptPassed;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseDeadlineMissed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.application.acl.VerifierProfileContextFacade;
 import com.innovify.skillswap.reputation.application.acl.ReputationContextFacade;
@@ -8,6 +9,7 @@ import com.innovify.skillswap.reputation.application.acl.ReputationContextFacade
 import com.innovify.skillswap.reputation.application.commandservices.ReputationCommandService;
 import com.innovify.skillswap.reputation.application.eventhandlers.RecordAutomaticApprovalEventHandler;
 import com.innovify.skillswap.reputation.application.eventhandlers.RecordCaseResolutionEventHandler;
+import com.innovify.skillswap.reputation.application.eventhandlers.RecordMissedDeadlineEventHandler;
 import com.innovify.skillswap.reputation.application.internal.commandservices.ReputationCommandServiceImpl;
 import com.innovify.skillswap.reputation.application.internal.queryservices.StudentEmployabilityQueryServiceImpl;
 import com.innovify.skillswap.reputation.application.internal.queryservices.VerifierReliabilityQueryServiceImpl;
@@ -88,5 +90,11 @@ public class ReputationConfig {
     public DomainEventHandler<VerificationCaseResolved> recordCaseResolutionEventHandler(
             ReputationCommandService commandService) {
         return new RecordCaseResolutionEventHandler(commandService);
+    }
+
+    @Bean
+    public DomainEventHandler<VerificationCaseDeadlineMissed> recordMissedDeadlineEventHandler(
+            ReputationCommandService commandService) {
+        return new RecordMissedDeadlineEventHandler(commandService);
     }
 }

@@ -29,7 +29,8 @@ import org.springframework.context.annotation.Import;
         "gemini.api-key=test-gemini-key",
         "revenuecat.webhook-authorization=" + PostgresIntegrationTest.WEBHOOK_AUTHORIZATION,
         "billing.expiration-check-enabled=false",
-        "moderation.assignment-retry-enabled=false"
+        "moderation.assignment-retry-enabled=false",
+        "review-deadlines.reassignment-enabled=false"
 })
 @Import({FileStorageTestConfig.class, QuestionGenerationTestConfig.class, PaymentGatewayTestConfig.class})
 @ExtendWith(DockerAvailableCondition.class)
@@ -45,7 +46,7 @@ public abstract class PostgresIntegrationTest {
     protected void cleanDatabase() throws SQLException {
         execute("TRUNCATE TABLE users, certificates, path_nodes, learning_paths, assessment_blueprints, "
                 + "assessment_attempts, verification_cases, verifier_profiles, verifier_reliabilities, student_employability_scores, wallets, credit_transactions, "
-                + "subscriptions, processed_webhook_events, disputes, advanced_path_unlocks RESTART IDENTITY");
+                + "subscriptions, processed_webhook_events, disputes, advanced_path_unlocks, review_deadline_policies RESTART IDENTITY");
     }
 
     protected void execute(String sql) throws SQLException {

@@ -41,6 +41,9 @@ public class OpenApiTagsConfig {
                 "Assessment & Peer Review. Attach evidence, resolve a case as verifier and appeal a rejection.");
         group("verifier-profiles-controller", "Verifier Profiles",
                 "Assessment & Peer Review. Become a verifier for a skill and set the availability.");
+        group("review-deadline-policies-controller", "Review Deadline Policies",
+                "Assessment & Peer Review. The time verifiers have to resolve the cases of each plan, defined by a "
+                        + "Verificador senior; overdue cases are reassigned.");
         group("disputes-controller", "Disputes",
                 "Moderation & Disputes. Suspicious certificates escalated to a Verificador senior: list the ones "
                         + "assigned to you, read their evidence and resolve them.");

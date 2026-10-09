@@ -2,11 +2,13 @@ package com.innovify.skillswap.assessmentpeerreview.infrastructure.config;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.VerifierMatcher;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /** Wiring of the Assessment &amp; Peer Review beans that are not annotated themselves. */
 @Configuration
+@EnableConfigurationProperties(ReviewDeadlineSettings.class)
 public class AssessmentPeerReviewConfig {
 
     @Bean

@@ -18,6 +18,7 @@ public final class RecognitionIncentivesResourceAssemblers {
     public static CreditTransactionResource toResource(CreditTransaction transaction) {
         return new CreditTransactionResource(transaction.getId(), transaction.getWalletId(),
                 transaction.getAmount().value(), transaction.getType().value(), transaction.getDescription(),
-                transaction.getRelatedCaseId(), transaction.getCreatedAt());
+                transaction.getRelatedCaseId(), transaction.getCreatedAt(),
+                transaction.getRedemptionItem() == null ? null : transaction.getRedemptionItem().value());
     }
 }

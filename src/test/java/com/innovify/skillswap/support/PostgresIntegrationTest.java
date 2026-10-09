@@ -15,8 +15,9 @@ import org.springframework.context.annotation.Import;
  * Base class of the tests that run the whole application against a real PostgreSQL, started by Testcontainers
  * through its JDBC URL (jdbc:tc:...). The schema is created by the same Flyway migrations as production
  * (db/migration), and Hibernate only validates it, so a mapping that drifts from the migrations fails the tests.
- * The file storage, the question generator and the payment gateway are in-memory fakes. All the subclasses share
- * one Spring context and one container. They are skipped when Docker is not available.
+ * The file storage, the question generator, the payment gateway, the email sender and the push sender are
+ * in-memory fakes, and goals are interpreted by keywords only. All the subclasses share one Spring context and one
+ * container. They are skipped when Docker is not available.
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///skillswap?stringtype=unspecified",
@@ -27,10 +28,16 @@ import org.springframework.context.annotation.Import;
         "cloudinary.api-key=test-key",
         "cloudinary.api-secret=test-secret",
         "gemini.api-key=test-gemini-key",
+        // Goals are interpreted by keywords only, so no test calls Gemini (GoalInterpretationIntegrationTest
+        // enables it against a fake Gemini server).
+        "gemini.goal-interpretation.enabled=false",
         "revenuecat.webhook-authorization=" + PostgresIntegrationTest.WEBHOOK_AUTHORIZATION,
-        "billing.expiration-check-enabled=false"
+        "billing.expiration-check-enabled=false",
+        "moderation.assignment-retry-enabled=false",
+        "review-deadlines.reassignment-enabled=false"
 })
-@Import({FileStorageTestConfig.class, QuestionGenerationTestConfig.class, PaymentGatewayTestConfig.class})
+@Import({FileStorageTestConfig.class, QuestionGenerationTestConfig.class, PaymentGatewayTestConfig.class,
+        EmailSenderTestConfig.class, PushNotificationTestConfig.class})
 @ExtendWith(DockerAvailableCondition.class)
 public abstract class PostgresIntegrationTest {
 
@@ -44,7 +51,7 @@ public abstract class PostgresIntegrationTest {
     protected void cleanDatabase() throws SQLException {
         execute("TRUNCATE TABLE users, certificates, path_nodes, learning_paths, assessment_blueprints, "
                 + "assessment_attempts, verification_cases, verifier_profiles, verifier_reliabilities, student_employability_scores, wallets, credit_transactions, "
-                + "subscriptions, processed_webhook_events RESTART IDENTITY");
+                + "subscriptions, processed_webhook_events, disputes, advanced_path_unlocks, review_deadline_policies RESTART IDENTITY");
     }
 
     protected void execute(String sql) throws SQLException {

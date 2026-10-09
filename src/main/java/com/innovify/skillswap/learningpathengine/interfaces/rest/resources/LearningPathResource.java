@@ -16,6 +16,8 @@ import java.util.List;
  * @param createdAt      when the path was created (UTC)
  * @param updatedAt      when the path last changed (UTC)
  * @param lastProgressAt when the student last advanced on it (UTC); after a downgrade the most recent stays active
+ * @param advanced       whether it is the advanced path redeemed with SkillCredits, which does not count toward the
+ *                       limits of the plan
  */
 public record LearningPathResource(
         int id,
@@ -26,5 +28,6 @@ public record LearningPathResource(
         List<PathNodeResource> nodes,
         Instant createdAt,
         Instant updatedAt,
-        Instant lastProgressAt) {
+        Instant lastProgressAt,
+        boolean advanced) {
 }

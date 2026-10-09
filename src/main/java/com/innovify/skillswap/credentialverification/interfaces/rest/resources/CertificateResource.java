@@ -23,6 +23,8 @@ import java.time.LocalDate;
  * @param createdAt         when the certificate was registered (UTC)
  * @param verifiedAt        when a verifier resolved it (UTC), if ever
  * @param fileUrl           temporary signed URL to view the file (expires in 15 minutes)
+ * @param holderNameMismatch whether the holder is not the registered name of the owner (the certificate is then
+ *                          suspicious and escalated to a verifier)
  */
 public record CertificateResource(
         int id,
@@ -40,5 +42,6 @@ public record CertificateResource(
         String riskLevel,
         Instant createdAt,
         Instant verifiedAt,
-        String fileUrl) {
+        String fileUrl,
+        boolean holderNameMismatch) {
 }

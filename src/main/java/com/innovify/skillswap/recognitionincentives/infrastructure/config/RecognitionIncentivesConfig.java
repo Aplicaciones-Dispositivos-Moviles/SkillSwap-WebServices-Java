@@ -2,6 +2,8 @@ package com.innovify.skillswap.recognitionincentives.infrastructure.config;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
+import com.innovify.skillswap.recognitionincentives.application.acl.RecognitionContextFacade;
+import com.innovify.skillswap.recognitionincentives.application.acl.RecognitionContextFacadeImpl;
 import com.innovify.skillswap.recognitionincentives.application.commandservices.WalletCommandService;
 import com.innovify.skillswap.recognitionincentives.application.eventhandlers.CreateWalletEventHandler;
 import com.innovify.skillswap.recognitionincentives.application.eventhandlers.CreditVerifierEventHandler;
@@ -13,6 +15,7 @@ import com.innovify.skillswap.recognitionincentives.domain.repositories.WalletRe
 import com.innovify.skillswap.recognitionincentives.domain.services.DefaultRedemptionPricing;
 import com.innovify.skillswap.recognitionincentives.domain.services.RedemptionPricing;
 import com.innovify.skillswap.shared.domain.events.DomainEventHandler;
+import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,10 +42,17 @@ public class RecognitionIncentivesConfig {
                                                      CreditTransactionRepository transactions,
                                                      RedemptionPricing pricing,
                                                      PlatformTransactionManager transactionManager,
+                                                     DomainEventPublisher eventPublisher,
                                                      MessageSource messageSource) {
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        return new WalletCommandServiceImpl(wallets, transactions, pricing, template, messageSource);
+        return new WalletCommandServiceImpl(wallets, transactions, pricing, template, eventPublisher, messageSource);
+    }
+
+    @Bean
+    public RecognitionContextFacade recognitionContextFacade(WalletRepository wallets,
+                                                             CreditTransactionRepository transactions) {
+        return new RecognitionContextFacadeImpl(wallets, transactions);
     }
 
     @Bean

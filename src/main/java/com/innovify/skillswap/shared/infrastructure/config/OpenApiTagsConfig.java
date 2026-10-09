@@ -28,8 +28,13 @@ public class OpenApiTagsConfig {
                 "Identity & Access. The authenticated user and the profile bio.");
         group("learning-paths-controller", "Learning Paths",
                 "Learning Path Engine. Declare a goal and get the certification path with its nodes.");
+        group("advanced-path-unlocks-controller", "Advanced Path Unlocks",
+                "Learning Path Engine. Advanced paths redeemed with SkillCredits, which do not count toward the "
+                        + "limits of the plan.");
         group("assessment-blueprints-controller", "Assessment Blueprints",
                 "Learning Path Engine. Generate the AI questions that assess a path node.");
+        group("path-node-certificates-controller", "Path Node Certificates",
+                "Learning Path Engine. Associate a verified certificate with the path node whose skill it covers.");
         group("certificates-controller", "Certificates",
                 "Credential Verification. Upload a certificate (JPG, PNG or PDF) and check its risk and status.");
         group("assessment-attempts-controller", "Assessment Attempts",
@@ -38,6 +43,12 @@ public class OpenApiTagsConfig {
                 "Assessment & Peer Review. Attach evidence, resolve a case as verifier and appeal a rejection.");
         group("verifier-profiles-controller", "Verifier Profiles",
                 "Assessment & Peer Review. Become a verifier for a skill and set the availability.");
+        group("review-deadline-policies-controller", "Review Deadline Policies",
+                "Assessment & Peer Review. The time verifiers have to resolve the cases of each plan, defined by a "
+                        + "Verificador senior; overdue cases are reassigned.");
+        group("disputes-controller", "Disputes",
+                "Moderation & Disputes. Suspicious certificates escalated to a Verificador senior: list the ones "
+                        + "assigned to you, read their evidence and resolve them.");
         group("verifier-reliabilities-controller", "Verifier Reliabilities",
                 "Reputation. Reliability score of a verifier (owner only).");
         group("student-employability-scores-controller", "Student Employability Scores",

@@ -48,6 +48,9 @@ public class PathNode {
     @Column(name = "assessment_blueprint_id")
     private Integer assessmentBlueprintId;
 
+    @Column(name = "completed_by_certificate", nullable = false)
+    private boolean completedByCertificate;
+
     /** Required by JPA. */
     protected PathNode() {
     }
@@ -105,9 +108,17 @@ public class PathNode {
                 : Arrays.stream(prerequisites.split(SEPARATOR)).map(String::strip).toList();
     }
 
-    /** The certificate that already supports this skill, if any. It is evidence only: it never completes it. */
+    /**
+     * The certificate linked to this skill, if any. Usually it is supporting evidence that does not complete the
+     * node; only a certificate validated by a verifier completes it ({@link #isCompletedByCertificate()}).
+     */
     public Integer getLinkedCertificateId() {
         return linkedCertificateId;
+    }
+
+    /** Whether the node was completed because a validated certificate already covers its skill (US09). */
+    public boolean isCompletedByCertificate() {
+        return completedByCertificate;
     }
 
     /** The latest assessment generated for this node, if any. */
@@ -130,6 +141,13 @@ public class PathNode {
     /** Called by the learning path. */
     public void linkCertificate(int certificateId) {
         this.linkedCertificateId = certificateId;
+    }
+
+    /** Called by the learning path: a validated certificate covers the skill, so it counts as demonstrated. */
+    public void completeWithCertificate(int certificateId) {
+        this.status = NodeStatus.COMPLETED;
+        this.linkedCertificateId = certificateId;
+        this.completedByCertificate = true;
     }
 
     /** Called by the learning path. */

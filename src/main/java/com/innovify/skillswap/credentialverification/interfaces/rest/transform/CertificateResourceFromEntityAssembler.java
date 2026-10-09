@@ -25,6 +25,7 @@ public final class CertificateResourceFromEntityAssembler {
                 entity.getRiskAssessment() == null ? null : entity.getRiskAssessment().level().value(),
                 entity.getCreatedAt(),
                 entity.getVerifiedAt(),
-                fileUrl);
+                fileUrl,
+                entity.hasHolderNameMismatch());
     }
 }

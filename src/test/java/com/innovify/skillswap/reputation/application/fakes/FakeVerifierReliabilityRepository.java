@@ -3,6 +3,7 @@ package com.innovify.skillswap.reputation.application.fakes;
 import com.innovify.skillswap.reputation.domain.model.aggregates.VerifierReliability;
 import com.innovify.skillswap.reputation.domain.repositories.VerifierReliabilityRepository;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -46,5 +47,10 @@ public class FakeVerifierReliabilityRepository implements VerifierReliabilityRep
     @Override
     public Optional<VerifierReliability> findByVerifierUserId(int verifierUserId) {
         return items.stream().filter(r -> r.getVerifierUserId() == verifierUserId).findFirst();
+    }
+
+    @Override
+    public List<VerifierReliability> findByVerifierUserIds(Collection<Integer> verifierUserIds) {
+        return items.stream().filter(r -> verifierUserIds.contains(r.getVerifierUserId())).toList();
     }
 }

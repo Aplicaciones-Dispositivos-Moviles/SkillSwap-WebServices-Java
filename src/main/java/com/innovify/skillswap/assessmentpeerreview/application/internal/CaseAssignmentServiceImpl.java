@@ -31,9 +31,38 @@ public class CaseAssignmentServiceImpl implements CaseAssignmentService {
 
     @Override
     public boolean tryAssign(VerificationCase verificationCase) {
+        Optional<VerifierProfile> chosen = choose(verificationCase, partiesOf(verificationCase));
+        if (chosen.isEmpty()) {
+            return false;
+        }
+
+        verificationCase.assignVerifier(chosen.get().getVerifierUserId());
+        return true;
+    }
+
+    @Override
+    public Optional<Integer> findReplacementVerifier(VerificationCase verificationCase) {
+        Set<Integer> excluded = partiesOf(verificationCase);
+        if (verificationCase.getVerifierUserId() != null) {
+            excluded.add(verificationCase.getVerifierUserId());
+        }
+        return choose(verificationCase, excluded).map(VerifierProfile::getVerifierUserId);
+    }
+
+    /** The parties of the case never review it: its student and, after an appeal, the first verifier. */
+    private static Set<Integer> partiesOf(VerificationCase verificationCase) {
+        Set<Integer> excluded = new HashSet<>();
+        excluded.add(verificationCase.getStudentId());
+        if (verificationCase.getPreviousVerifierUserId() != null) {
+            excluded.add(verificationCase.getPreviousVerifierUserId());
+        }
+        return excluded;
+    }
+
+    private Optional<VerifierProfile> choose(VerificationCase verificationCase, Set<Integer> excluded) {
         List<VerifierProfile> profiles = profileRepository.findEnabledBySkillTag(verificationCase.getSkillTag());
         if (profiles.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
 
         Map<Integer, Integer> openCases = caseRepository.countOpenByVerifierUserIds(
@@ -42,22 +71,7 @@ public class CaseAssignmentServiceImpl implements CaseAssignmentService {
                 .map(profile -> new VerifierCandidate(profile,
                         openCases.getOrDefault(profile.getVerifierUserId(), 0)))
                 .toList();
-
-        // The parties of the case never review it: its student and, after an appeal, the first verifier.
-        Set<Integer> excluded = new HashSet<>();
-        excluded.add(verificationCase.getStudentId());
-        if (verificationCase.getPreviousVerifierUserId() != null) {
-            excluded.add(verificationCase.getPreviousVerifierUserId());
-        }
-
-        Optional<VerifierProfile> chosen = verifierMatcher.findVerifier(
-                verificationCase.getSkillTag(), excluded, candidates);
-        if (chosen.isEmpty()) {
-            return false;
-        }
-
-        verificationCase.assignVerifier(chosen.get().getVerifierUserId());
-        return true;
+        return verifierMatcher.findVerifier(verificationCase.getSkillTag(), excluded, candidates);
     }
 
     @Override

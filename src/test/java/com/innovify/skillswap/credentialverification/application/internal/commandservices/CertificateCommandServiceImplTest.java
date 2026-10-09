@@ -1,11 +1,17 @@
 package com.innovify.skillswap.credentialverification.application.internal.commandservices;
 
 import com.innovify.skillswap.credentialverification.application.fakes.FakeCertificateRepository;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeDomainEventPublisher;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeIamContextFacade;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateFlaggedSuspicious;
+import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
 import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
 import com.innovify.skillswap.credentialverification.domain.model.CredentialVerificationError;
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.model.commands.ResolveCertificateDisputeCommand;
 import com.innovify.skillswap.credentialverification.domain.model.commands.UploadCertificateCommand;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerificationResolved;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerified;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.RiskLevel;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationMethod;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
@@ -29,6 +35,7 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+
 class CertificateCommandServiceImplTest {
 
     private static final byte[] JPEG = bytes(0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46);
@@ -38,6 +45,8 @@ class CertificateCommandServiceImplTest {
 
     private final FakeCertificateRepository repository = new FakeCertificateRepository();
     private final FakeFileStorageService storage = new FakeFileStorageService();
+    private final FakeIamContextFacade iam = new FakeIamContextFacade();
+    private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
     private CertificateCommandServiceImpl service;
 
     @BeforeEach
@@ -48,8 +57,8 @@ class CertificateCommandServiceImplTest {
         messages.setFallbackToSystemLocale(false);
 
         LocaleContextHolder.setLocale(Locale.US);
-        service = new CertificateCommandServiceImpl(repository, new DefaultCertificateRiskScorer(), storage,
-                messages);
+        service = new CertificateCommandServiceImpl(repository, new DefaultCertificateRiskScorer(),
+                new HolderNameMatcher(), storage, iam, events, messages);
     }
 
     @AfterEach
@@ -101,6 +110,50 @@ class CertificateCommandServiceImplTest {
     }
 
     // ---------- Upload ----------
+
+    @Test
+    void upload_withAHolderWhoIsNotTheRegisteredStudent_isSuspiciousAndAnnounced() {
+        iam.withFullName(7, "Ana María Pérez García");
+
+        Result<Certificate> result = service.handle(upload(7, JPEG, "image/jpeg", "Luis Gómez", "n-1", "c-1"));
+
+        Certificate certificate = result.value();
+        assertThat(certificate.getStatus()).isEqualTo(VerificationStatus.SUSPICIOUS);
+        assertThat(certificate.hasHolderNameMismatch()).isTrue();
+        assertThat(certificate.getRiskAssessment().level()).isEqualTo(RiskLevel.HIGH_RISK);
+        assertThat(events.published()).containsExactly(
+                new CertificateFlaggedSuspicious(certificate.getId(), 7, java.util.List.of("HolderNameMismatch")));
+    }
+
+    @Test
+    void upload_withTheHolderWrittenDifferently_matchesTheRegisteredStudent() {
+        iam.withFullName(7, "Ana María Pérez García");
+
+        Result<Certificate> result = service.handle(upload(7, JPEG, "image/jpeg", "PÉREZ GARCÍA, ANA", "n-1", "c-1"));
+
+        assertThat(result.value().getStatus()).isEqualTo(VerificationStatus.UNVERIFIED);
+        assertThat(result.value().hasHolderNameMismatch()).isFalse();
+        assertThat(events.published()).isEmpty();
+    }
+
+    @Test
+    void upload_byAStudentWithoutARegisteredName_doesNotCompareTheHolder() {
+        Result<Certificate> result = service.handle(upload(7, JPEG, "image/jpeg", "Luis Gómez", "n-1", "c-1"));
+
+        assertThat(result.value().getStatus()).isEqualTo(VerificationStatus.UNVERIFIED);
+        assertThat(result.value().hasHolderNameMismatch()).isFalse();
+    }
+
+    @Test
+    void upload_ofAFileAnotherStudentRegistered_isSuspiciousAndAnnouncedWithItsReasons() {
+        seedOtherUser(8, JPEG, "OTHER", "OTHER");
+
+        Result<Certificate> result = service.handle(upload(7, JPEG));
+
+        assertThat(result.value().getStatus()).isEqualTo(VerificationStatus.SUSPICIOUS);
+        assertThat(events.published()).containsExactly(
+                new CertificateFlaggedSuspicious(result.value().getId(), 7, java.util.List.of("DuplicateFile")));
+    }
 
     @Test
     void upload_withValidData_createsUnverifiedCertificateWithNoRisk() {
@@ -323,9 +376,12 @@ class CertificateCommandServiceImplTest {
 
     // ---------- Resolve dispute ----------
 
+    /** A suspicious certificate of the student 7; the events of its upload are discarded. */
     private Certificate suspiciousCertificate() {
         seedOtherUser(1, OTHER_JPEG, "CERT-001", "CODE-XYZ");
-        return service.handle(upload(7, JPEG)).value();
+        Certificate suspicious = service.handle(upload(7, JPEG)).value();
+        events.published().clear();
+        return suspicious;
     }
 
     @ParameterizedTest
@@ -346,6 +402,25 @@ class CertificateCommandServiceImplTest {
         return Stream.of(
                 Arguments.of(true, VerificationStatus.VERIFIED),
                 Arguments.of(false, VerificationStatus.REJECTED));
+    }
+
+    @Test
+    void resolve_asAuthentic_publishesCertificateVerifiedForTheOwner() {
+        Certificate suspicious = suspiciousCertificate();
+
+        Certificate verified = service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), true)).value();
+
+        assertThat(events.published()).filteredOn(CertificateVerified.class::isInstance).containsExactly(
+                new CertificateVerified(verified.getId(), 7, verified.getVerifiedAt()));
+    }
+
+    @Test
+    void resolve_asNotAuthentic_doesNotPublishCertificateVerified() {
+        Certificate suspicious = suspiciousCertificate();
+
+        service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), false));
+
+        assertThat(events.published()).noneMatch(CertificateVerified.class::isInstance);
     }
 
     @Test
@@ -386,5 +461,69 @@ class CertificateCommandServiceImplTest {
                 new ResolveCertificateDisputeCommand(suspicious.getId(), true));
 
         assertFailure(result, CredentialVerificationError.DATABASE_ERROR);
+        assertThat(events.published()).isEmpty();
+    }
+
+    @Test
+    void resolve_publishesTheFinalStatusForTheNotificationOfTheStudent() {
+        Certificate suspicious = suspiciousCertificate();
+
+        service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), true, "ignored when verified"));
+
+        assertThat(events.published()).filteredOn(CertificateVerificationResolved.class::isInstance)
+                .singleElement().isEqualTo(new CertificateVerificationResolved(
+                        suspicious.getId(), 7, VerificationStatus.VERIFIED, suspicious.getCourseName(), null));
+    }
+
+    @Test
+    void resolve_asRejected_publishesTheReason() {
+        Certificate suspicious = suspiciousCertificate();
+
+        service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), false, "  La firma no coincide  "));
+
+        CertificateVerificationResolved event = (CertificateVerificationResolved) events.published().get(0);
+        assertThat(event.status()).isEqualTo(VerificationStatus.REJECTED);
+        assertThat(event.rejectionReason()).isEqualTo("La firma no coincide");
+        assertThat(event.ownerId()).isEqualTo(7);
+    }
+
+    @Test
+    void resolve_asRejectedWithoutAReason_publishesNoReason() {
+        Certificate suspicious = suspiciousCertificate();
+
+        service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), false, "   "));
+
+        assertThat(((CertificateVerificationResolved) events.published().get(0)).rejectionReason()).isNull();
+    }
+
+    @Test
+    void resolve_withATooLongReason_returnsFieldTooLongAndKeepsTheCertificateSuspicious() {
+        Certificate suspicious = suspiciousCertificate();
+
+        Result<Certificate> result = service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), false,
+                "x".repeat(ResolveCertificateDisputeCommand.MAX_REASON_LENGTH + 1)));
+
+        assertFailure(result, CredentialVerificationError.FIELD_TOO_LONG);
+        assertThat(suspicious.getStatus()).isEqualTo(VerificationStatus.SUSPICIOUS);
+        assertThat(events.published()).isEmpty();
+    }
+
+    @Test
+    void resolve_thatFails_publishesNothing() {
+        Certificate suspicious = suspiciousCertificate();
+        repository.failOnSave(new DataIntegrityViolationException("boom"));
+
+        service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), true));
+
+        assertThat(events.published()).isEmpty();
+    }
+
+    @Test
+    void upload_publishesNoResolutionEvent() {
+        seedOtherUser(1, OTHER_JPEG, "CERT-001", "CODE-XYZ");
+        service.handle(upload(7, JPEG));
+
+        assertThat(events.published()).noneMatch(event -> event instanceof CertificateVerificationResolved
+                || event instanceof CertificateVerified);
     }
 }

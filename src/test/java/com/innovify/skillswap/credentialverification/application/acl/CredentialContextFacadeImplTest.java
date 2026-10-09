@@ -2,19 +2,45 @@ package com.innovify.skillswap.credentialverification.application.acl;
 
 import com.innovify.skillswap.credentialverification.TestData;
 import com.innovify.skillswap.credentialverification.application.fakes.FakeCertificateRepository;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeDomainEventPublisher;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeIamContextFacade;
+import com.innovify.skillswap.credentialverification.application.internal.commandservices.CertificateCommandServiceImpl;
+import com.innovify.skillswap.credentialverification.application.internal.queryservices.CertificateQueryServiceImpl;
+import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
+import com.innovify.skillswap.credentialverification.domain.services.DefaultCertificateRiskScorer;
+import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.RiskAssessment;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CredentialContextFacadeImplTest {
 
     private final FakeCertificateRepository repository = new FakeCertificateRepository();
-    private final CredentialContextFacadeImpl facade = new CredentialContextFacadeImpl(repository);
+    private final FakeFileStorageService storage = new FakeFileStorageService();
+    private final CredentialContextFacadeImpl facade = new CredentialContextFacadeImpl(repository,
+            new CertificateCommandServiceImpl(repository, new DefaultCertificateRiskScorer(), new HolderNameMatcher(),
+                    storage, new FakeIamContextFacade(), new FakeDomainEventPublisher(), TestMessagesHolder.SOURCE),
+            new CertificateQueryServiceImpl(repository, storage));
+
+    /** The real message bundles. */
+    private static final class TestMessagesHolder {
+        static final org.springframework.context.support.ResourceBundleMessageSource SOURCE = create();
+
+        private static org.springframework.context.support.ResourceBundleMessageSource create() {
+            var messages = new org.springframework.context.support.ResourceBundleMessageSource();
+            messages.setBasename("messages");
+            messages.setDefaultEncoding("UTF-8");
+            messages.setFallbackToSystemLocale(false);
+            return messages;
+        }
+    }
 
     private Certificate stored(int ownerId, String hash, int riskScore) {
         Certificate certificate = TestData.newCertificate(ownerId, hash).assessRisk(new RiskAssessment(riskScore));
@@ -60,6 +86,46 @@ class CredentialContextFacadeImplTest {
         assertThat(result.get(1).id()).isEqualTo(withoutData.getId());
         assertThat(result.get(1).courseName()).isNull();
         assertThat(result.get(1).institutionName()).isNull();
+    }
+
+    @Test
+    void getValidatedCertificates_keepsOnlyTheVerifiedOnesOfTheOwnerOldestFirst() {
+        stored(7, "h1", 0); // unverified: supporting evidence, not validated
+        Certificate second = stored(7, "h2", 60).resolveDispute(true);
+        stored(7, "h3", 60); // suspicious
+        stored(8, "h4", 60).resolveDispute(true); // another student
+        Certificate first = stored(7, "h5", 60).resolveDispute(true);
+
+        List<CertificateEvidence> result = facade.getValidatedCertificates(7);
+
+        assertThat(result).extracting(CertificateEvidence::id).containsExactly(second.getId(), first.getId());
+        assertThat(result).allSatisfy(evidence -> {
+            assertThat(evidence.validated()).isTrue();
+            assertThat(evidence.supportingEvidence()).isTrue();
+            assertThat(evidence.ownerId()).isEqualTo(7);
+        });
+    }
+
+    @Test
+    void getCertificate_exposesTheExtractedDataAndWhetherItIsEvidence() {
+        Certificate unverified = stored(7, "h1", 0);
+        Certificate suspicious = stored(7, "h2", 60);
+        Certificate verified = stored(7, "h3", 60).resolveDispute(true);
+
+        CertificateEvidence evidence = facade.getCertificate(unverified.getId()).orElseThrow();
+        assertThat(evidence.ownerId()).isEqualTo(7);
+        assertThat(evidence.courseName()).isEqualTo("Backend with Spring");
+        assertThat(evidence.ocrText()).isEqualTo(unverified.getOcrText());
+        assertThat(evidence.supportingEvidence()).isTrue();
+        assertThat(evidence.validated()).isFalse();
+
+        assertThat(facade.getCertificate(suspicious.getId()).orElseThrow().supportingEvidence()).isFalse();
+        assertThat(facade.getCertificate(verified.getId()).orElseThrow().validated()).isTrue();
+    }
+
+    @Test
+    void getCertificate_unknown_isEmpty() {
+        assertThat(facade.getCertificate(999)).isEqualTo(Optional.empty());
     }
 
     @Test

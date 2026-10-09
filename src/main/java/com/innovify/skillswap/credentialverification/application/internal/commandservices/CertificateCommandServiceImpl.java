@@ -6,11 +6,17 @@ import com.innovify.skillswap.credentialverification.domain.model.CredentialVeri
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.model.commands.ResolveCertificateDisputeCommand;
 import com.innovify.skillswap.credentialverification.domain.model.commands.UploadCertificateCommand;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerificationResolved;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerified;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateFlaggedSuspicious;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
 import com.innovify.skillswap.credentialverification.domain.repositories.CertificateRepository;
 import com.innovify.skillswap.credentialverification.domain.services.CertificateRiskScorer;
+import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
+import com.innovify.skillswap.iam.application.acl.IamContextFacade;
 import com.innovify.skillswap.shared.application.Result;
 import com.innovify.skillswap.shared.domain.errors.ErrorCodes;
+import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
@@ -23,9 +29,12 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Certificate command service.
@@ -33,6 +42,12 @@ import java.util.Map;
  * <p>It is deliberately not {@code @Transactional}: each {@link CertificateRepository#save} commits on its own,
  * so a persistence failure is caught here, returned as a {@link Result}, and the file already stored is
  * deleted.
+ *
+ * <p>A certificate registered as suspicious (a file another student uploaded, a holder who is not the registered
+ * name of the student...) is announced with {@link CertificateFlaggedSuspicious} once saved, so Moderation &amp;
+ * Disputes escalates it to a Verificador senior. A resolved dispute publishes {@link CertificateVerificationResolved}
+ * (push notification to the student) and, when the certificate is confirmed as authentic, {@link CertificateVerified}
+ * (evidence for the Learning Path Engine).
  */
 @Service
 public class CertificateCommandServiceImpl implements CertificateCommandService {
@@ -48,16 +63,25 @@ public class CertificateCommandServiceImpl implements CertificateCommandService 
 
     private final CertificateRepository certificateRepository;
     private final CertificateRiskScorer riskScorer;
+    private final HolderNameMatcher holderNameMatcher;
     private final FileStorageService fileStorageService;
+    private final IamContextFacade iamContextFacade;
+    private final DomainEventPublisher eventPublisher;
     private final MessageSource messageSource;
 
     public CertificateCommandServiceImpl(CertificateRepository certificateRepository,
                                          CertificateRiskScorer riskScorer,
+                                         HolderNameMatcher holderNameMatcher,
                                          FileStorageService fileStorageService,
+                                         IamContextFacade iamContextFacade,
+                                         DomainEventPublisher eventPublisher,
                                          MessageSource messageSource) {
         this.certificateRepository = certificateRepository;
         this.riskScorer = riskScorer;
+        this.holderNameMatcher = holderNameMatcher;
         this.fileStorageService = fileStorageService;
+        this.iamContextFacade = iamContextFacade;
+        this.eventPublisher = eventPublisher;
         this.messageSource = messageSource;
     }
 
@@ -107,11 +131,22 @@ public class CertificateCommandServiceImpl implements CertificateCommandService 
             boolean duplicateFile = certificateRepository.existsByFileHashExcludingOwner(
                     command.ownerId(), fileHash);
 
-            LocalDate today = LocalDate.now(ZoneOffset.UTC);
-            certificate.assessRisk(riskScorer.calculateRisk(
-                    duplicateNumber, duplicateCode, duplicateFile, certificate.hasOcrInconsistencies(today)));
+            if (holderDiffersFromOwner(certificate, command.ownerId())) {
+                certificate.flagHolderNameMismatch();
+            }
 
-            return Result.success(certificateRepository.save(certificate));
+            LocalDate today = LocalDate.now(ZoneOffset.UTC);
+            boolean ocrInconsistencies = certificate.hasOcrInconsistencies(today);
+            certificate.assessRisk(riskScorer.calculateRisk(duplicateNumber, duplicateCode, duplicateFile,
+                    ocrInconsistencies, certificate.hasHolderNameMismatch()));
+
+            Certificate saved = certificateRepository.save(certificate);
+            if (saved.getStatus() == VerificationStatus.SUSPICIOUS) {
+                eventPublisher.publish(new CertificateFlaggedSuspicious(saved.getId(), saved.getOwnerId(),
+                        suspicionReasons(duplicateFile, duplicateNumber, duplicateCode,
+                                saved.hasHolderNameMismatch(), ocrInconsistencies)));
+            }
+            return Result.success(saved);
         } catch (RuntimeException exception) {
             log.error("Could not register the certificate of user {}", command.ownerId(), exception);
             deleteQuietly(storageReference);
@@ -131,13 +166,71 @@ public class CertificateCommandServiceImpl implements CertificateCommandService 
             return failure(CredentialVerificationError.INVALID_STATUS_TRANSITION);
         }
 
+        String reason = command.isAuthentic() || command.rejectionReason() == null
+                || command.rejectionReason().isBlank()
+                ? null
+                : command.rejectionReason().strip();
+        if (reason != null && reason.length() > ResolveCertificateDisputeCommand.MAX_REASON_LENGTH) {
+            return failure(CredentialVerificationError.FIELD_TOO_LONG);
+        }
+
+        Certificate resolved;
         try {
             certificate.resolveDispute(command.isAuthentic());
-            return Result.success(certificateRepository.save(certificate));
+            resolved = certificateRepository.save(certificate);
         } catch (RuntimeException exception) {
             log.error("Could not resolve the certificate {}", command.certificateId(), exception);
             return failure(toError(exception));
         }
+
+        // The student is notified on their device (US16) once the final status is saved.
+        eventPublisher.publish(new CertificateVerificationResolved(resolved.getId(), resolved.getOwnerId(),
+                resolved.getStatus(), resolved.getCourseName(), reason));
+        // A certificate upheld as authentic is evidence for the Learning Path Engine.
+        if (resolved.getStatus() == VerificationStatus.VERIFIED) {
+            eventPublisher.publish(new CertificateVerified(resolved.getId(), resolved.getOwnerId(),
+                    resolved.getVerifiedAt()));
+        }
+        return Result.success(resolved);
+    }
+
+    /**
+     * Whether the holder read by the OCR is somebody other than the registered name of the owner. When either name
+     * is missing there is nothing to compare: the missing holder already counts as an OCR inconsistency, and an
+     * account without a registered name is not compared.
+     */
+    private boolean holderDiffersFromOwner(Certificate certificate, int ownerId) {
+        if (certificate.getHolderName() == null) {
+            return false;
+        }
+        Optional<String> registeredName = iamContextFacade.getRegisteredFullName(ownerId);
+        return registeredName.isPresent()
+                && holderNameMatcher.isComparable(certificate.getHolderName())
+                && holderNameMatcher.isComparable(registeredName.get())
+                && !holderNameMatcher.matches(certificate.getHolderName(), registeredName.get());
+    }
+
+    /** The rules that made the certificate suspicious, for the verifier who reviews it. */
+    private static List<String> suspicionReasons(boolean duplicateFile, boolean duplicateNumber,
+                                                 boolean duplicateCode, boolean holderNameMismatch,
+                                                 boolean ocrInconsistencies) {
+        List<String> reasons = new ArrayList<>();
+        if (duplicateFile) {
+            reasons.add("DuplicateFile");
+        }
+        if (duplicateNumber) {
+            reasons.add("DuplicateCertificateNumber");
+        }
+        if (duplicateCode) {
+            reasons.add("DuplicateVerificationCode");
+        }
+        if (holderNameMismatch) {
+            reasons.add("HolderNameMismatch");
+        }
+        if (ocrInconsistencies) {
+            reasons.add("OcrInconsistencies");
+        }
+        return List.copyOf(reasons);
     }
 
     /**

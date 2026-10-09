@@ -12,11 +12,15 @@ import com.innovify.skillswap.learningpathengine.domain.repositories.AssessmentB
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
 import com.innovify.skillswap.learningpathengine.domain.services.QuestionGenerationService;
 import com.innovify.skillswap.shared.application.Result;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
@@ -28,28 +32,46 @@ import org.springframework.transaction.support.TransactionOperations;
  * final one, which must save the blueprint and point the node to it as a unit; it runs in the given
  * {@link TransactionOperations}. Generating the questions (a slow call to an external provider) stays outside
  * of any transaction.
+ *
+ * <p>A new attempt on a node never repeats a question of its previous attempts (US17): the previous questions
+ * are sent to the generator as exclusions and the answer is checked, comparing the texts without case, accents or
+ * punctuation. When the provider still repeats some, the fresh questions are kept and the rest are asked again,
+ * up to {@value #MAX_GENERATION_ATTEMPTS} requests in total; if there are still not enough fresh questions the
+ * generation fails like any other provider failure (503, the node unchanged).
  */
 @Service
 public class AssessmentBlueprintCommandServiceImpl implements AssessmentBlueprintCommandService {
 
     private static final Logger log = LoggerFactory.getLogger(AssessmentBlueprintCommandServiceImpl.class);
 
+    /** Requests to the generator for one blueprint when it repeats questions of the previous attempts. */
+    static final int MAX_GENERATION_ATTEMPTS = 2;
+
     private final LearningPathRepository learningPathRepository;
     private final AssessmentBlueprintRepository blueprintRepository;
     private final QuestionGenerationService questionGenerationService;
     private final TransactionOperations transactions;
     private final LearningPathFailures failures;
+    private final boolean requireLinkedCertificate;
 
+    /**
+     * @param requireLinkedCertificate whether a node needs a linked certificate before its assessment can be
+     *                                 generated (learning-path.assessment.require-linked-certificate, false by
+     *                                 default)
+     */
     public AssessmentBlueprintCommandServiceImpl(LearningPathRepository learningPathRepository,
                                                  AssessmentBlueprintRepository blueprintRepository,
                                                  QuestionGenerationService questionGenerationService,
                                                  TransactionOperations transactions,
-                                                 MessageSource messageSource) {
+                                                 MessageSource messageSource,
+                                                 @Value("${learning-path.assessment.require-linked-certificate:false}")
+                                                 boolean requireLinkedCertificate) {
         this.learningPathRepository = learningPathRepository;
         this.blueprintRepository = blueprintRepository;
         this.questionGenerationService = questionGenerationService;
         this.transactions = transactions;
         this.failures = new LearningPathFailures(messageSource);
+        this.requireLinkedCertificate = requireLinkedCertificate;
     }
 
     @Override
@@ -80,9 +102,15 @@ public class AssessmentBlueprintCommandServiceImpl implements AssessmentBlueprin
                         Map.of("pendingPrerequisites", path.pendingPrerequisitesOf(node.getId())));
             }
 
+            // Optional rule (US15/US17): the assessment demonstrates the skill of a certificate linked to the node.
+            if (requireLinkedCertificate && node.getLinkedCertificateId() == null) {
+                return failures.failure(LearningPathError.CERTIFICATE_REQUIRED);
+            }
+
             AssessmentBlueprint blueprint;
             try {
-                List<Question> questions = questionGenerationService.generateQuestions(node.getSkillTag());
+                List<String> previousQuestions = blueprintRepository.findQuestionTextsByPathNodeId(node.getId());
+                List<Question> questions = generateFreshQuestions(node.getSkillTag(), previousQuestions);
                 blueprint = new AssessmentBlueprint(node.getId(), node.getSkillTag(), questions);
             } catch (RuntimeException exception) {
                 // Provider failure, or output that does not meet the contract (a DomainException).
@@ -104,5 +132,40 @@ public class AssessmentBlueprintCommandServiceImpl implements AssessmentBlueprin
             log.error("Could not register the assessment of node {}", command.pathNodeId(), exception);
             return failures.failure(LearningPathFailures.toError(exception));
         }
+    }
+
+    /**
+     * Questions that repeat none of the previous ones (nor each other). A generator answer with the wrong number
+     * of questions breaks its contract and fails at once; repeated questions are replaced by asking again.
+     *
+     * @throws IllegalStateException when the generator keeps repeating questions
+     */
+    private List<Question> generateFreshQuestions(String skillTag, List<String> previousQuestions) {
+        Set<String> asked = new HashSet<>();
+        previousQuestions.forEach(text -> asked.add(Question.comparableText(text)));
+
+        List<Question> fresh = new ArrayList<>();
+        List<String> excluded = new ArrayList<>(previousQuestions);
+        for (int attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
+            List<Question> generated = questionGenerationService.generateQuestions(skillTag, List.copyOf(excluded));
+            if (generated == null || generated.size() != AssessmentBlueprint.QUESTION_COUNT) {
+                throw new IllegalStateException("The generator returned %d questions instead of %d.".formatted(
+                        generated == null ? 0 : generated.size(), AssessmentBlueprint.QUESTION_COUNT));
+            }
+
+            for (Question question : generated) {
+                if (fresh.size() < AssessmentBlueprint.QUESTION_COUNT && asked.add(question.comparableText())) {
+                    fresh.add(question);
+                    // The kept questions are excluded too, so the next request does not repeat them either.
+                    excluded.add(0, question.getQuestionString());
+                }
+            }
+            if (fresh.size() == AssessmentBlueprint.QUESTION_COUNT) {
+                return List.copyOf(fresh);
+            }
+            log.warn("The generator repeated {} questions of {} (request {} of {})",
+                    AssessmentBlueprint.QUESTION_COUNT - fresh.size(), skillTag, attempt, MAX_GENERATION_ATTEMPTS);
+        }
+        throw new IllegalStateException("The generator kept repeating the questions of the previous attempts.");
     }
 }

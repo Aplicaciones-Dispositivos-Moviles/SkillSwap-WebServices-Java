@@ -1,6 +1,8 @@
 package com.innovify.skillswap.reputation.infrastructure.persistence.jpa.repositories;
 
 import com.innovify.skillswap.reputation.domain.model.aggregates.VerifierReliability;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -8,4 +10,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface VerifierReliabilityJpaRepository extends JpaRepository<VerifierReliability, Integer> {
 
     Optional<VerifierReliability> findByVerifierUserId(int verifierUserId);
+
+    List<VerifierReliability> findByVerifierUserIdIn(Collection<Integer> verifierUserIds);
 }

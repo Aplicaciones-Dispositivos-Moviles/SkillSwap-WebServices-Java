@@ -201,4 +201,23 @@ class CertificateTest {
 
         assertThatThrownBy(() -> certificate.resolveDispute(false)).isInstanceOf(DomainException.class);
     }
+
+    @org.junit.jupiter.api.Test
+    void flagHolderNameMismatch_onlyOnAPendingCertificateWithAHolder() {
+        var certificate = com.innovify.skillswap.credentialverification.TestData.newCertificate(7, "abc");
+        org.assertj.core.api.Assertions.assertThat(certificate.hasHolderNameMismatch()).isFalse();
+
+        certificate.flagHolderNameMismatch();
+        org.assertj.core.api.Assertions.assertThat(certificate.hasHolderNameMismatch()).isTrue();
+
+        var withoutHolder = new com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate(
+                7, "def", "ref").applyExtractedData(null, null, null, null, null, null, null, null, null, null);
+        org.assertj.core.api.Assertions.assertThatThrownBy(withoutHolder::flagHolderNameMismatch)
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+
+        certificate.assessRisk(new com.innovify.skillswap.credentialverification.domain.model.valueobjects
+                .RiskAssessment(50));
+        org.assertj.core.api.Assertions.assertThatThrownBy(certificate::flagHolderNameMismatch)
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+    }
 }

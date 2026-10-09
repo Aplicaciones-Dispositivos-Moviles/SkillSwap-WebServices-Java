@@ -15,6 +15,15 @@ public interface VerificationCaseRepository {
 
     Optional<VerificationCase> findById(int id);
 
+    /**
+     * Same as {@link #findById(int)} but locks the row until the current transaction ends, so the verifier resolving
+     * a case and the reassignment of an overdue one never change it at once. It must run inside a transaction.
+     */
+    Optional<VerificationCase> findByIdForUpdate(int id);
+
+    /** The ids of the assigned cases whose review was due before that moment, the most overdue first. */
+    List<Integer> findOverdueAssignedIds(Instant now);
+
     /** The cases assigned to the verifier, newest first. */
     List<VerificationCase> findByVerifierUserId(int verifierUserId);
 

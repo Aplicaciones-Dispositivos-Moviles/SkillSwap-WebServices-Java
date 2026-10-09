@@ -38,4 +38,16 @@ class DefaultCertificateRiskScorerTest {
     void duplicateFile_aloneIsHighRisk() {
         assertThat(scorer.calculateRisk(false, false, true, false).level()).isEqualTo(RiskLevel.HIGH_RISK);
     }
+
+    @org.junit.jupiter.api.Test
+    void holderNameMismatch_aloneIsHighRisk() {
+        var scorer = new com.innovify.skillswap.credentialverification.domain.services.DefaultCertificateRiskScorer();
+
+        var risk = scorer.calculateRisk(false, false, false, false, true);
+
+        org.assertj.core.api.Assertions.assertThat(risk.level()).isEqualTo(
+                com.innovify.skillswap.credentialverification.domain.model.valueobjects.RiskLevel.HIGH_RISK);
+        org.assertj.core.api.Assertions.assertThat(scorer.calculateRisk(false, false, false, false).score())
+                .isZero();
+    }
 }

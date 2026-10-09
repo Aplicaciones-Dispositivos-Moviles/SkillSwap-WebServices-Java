@@ -4,13 +4,13 @@ import com.innovify.skillswap.assessmentpeerreview.application.commandservices.A
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.EscalationLimitReached;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
 import com.innovify.skillswap.assessmentpeerreview.application.internal.CaseAssignmentService;
+import com.innovify.skillswap.assessmentpeerreview.application.internal.ReviewDeadlineResolver;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.AssessmentPeerReviewError;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.SubmitAssessmentAttemptCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.AssessmentAttemptPassed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
-import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.EscalationCalendar;
@@ -51,6 +51,7 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
     private final LearningPathContextFacade learningPathFacade;
     private final CaseAssignmentService caseAssignmentService;
     private final SubscriptionContextFacade subscriptionFacade;
+    private final ReviewDeadlineResolver deadlineResolver;
     private final DomainEventPublisher eventPublisher;
     private final TransactionOperations transactions;
     private final AssessmentPeerReviewFailures failures;
@@ -60,6 +61,7 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
                                                LearningPathContextFacade learningPathFacade,
                                                CaseAssignmentService caseAssignmentService,
                                                SubscriptionContextFacade subscriptionFacade,
+                                               ReviewDeadlineResolver deadlineResolver,
                                                DomainEventPublisher eventPublisher,
                                                TransactionOperations transactions,
                                                MessageSource messageSource) {
@@ -68,6 +70,7 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
         this.learningPathFacade = learningPathFacade;
         this.caseAssignmentService = caseAssignmentService;
         this.subscriptionFacade = subscriptionFacade;
+        this.deadlineResolver = deadlineResolver;
         this.eventPublisher = eventPublisher;
         this.transactions = transactions;
         this.failures = new AssessmentPeerReviewFailures(messageSource);
@@ -130,9 +133,10 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
                             new EscalationLimitReached(limits.plan(), limits.monthlyEscalations(), used));
                 }
 
-                // The attempts are the answers of the quiz of the node: the only work that opens a case today.
+                // The attempts are the answers of the quiz of the node: the only work that opens a case today. Its
+                // deadline is the one a senior defined for the plan, or the one of the plan.
                 VerificationCase opened = new VerificationCase(attempt.getId(), command.studentId(),
-                        blueprint.pathNodeId(), blueprint.skillTag(), CaseType.QUIZ, toReviewDeadline(limits));
+                        blueprint.pathNodeId(), blueprint.skillTag(), CaseType.QUIZ, deadlineResolver.forPlan(limits));
                 caseAssignmentService.tryAssign(opened);
                 return new SubmitAssessmentAttemptOutcome(attempt, caseRepository.save(opened));
             });
@@ -150,13 +154,6 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
                     command.blueprintId(), exception);
             return failures.failure(AssessmentPeerReviewFailures.toError(exception));
         }
-    }
-
-    /** The deadline of the plan, as this context sees it. */
-    private static ReviewDeadline toReviewDeadline(PlanLimitsView limits) {
-        return limits.reviewDeadlineHours() != null
-                ? ReviewDeadline.hours(limits.reviewDeadlineHours())
-                : ReviewDeadline.businessDays(limits.reviewDeadlineBusinessDays());
     }
 
     private static boolean areValidAnswers(List<Integer> answers, int questionCount) {

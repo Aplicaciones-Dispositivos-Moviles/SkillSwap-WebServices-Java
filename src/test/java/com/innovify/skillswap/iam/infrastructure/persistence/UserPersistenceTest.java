@@ -15,6 +15,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.Instant;
+import java.util.List;
+import java.time.temporal.ChronoUnit;
+
 class UserPersistenceTest extends PostgresIntegrationTest {
 
     @Autowired
@@ -30,6 +34,46 @@ class UserPersistenceTest extends PostgresIntegrationTest {
         assertThat(repository.existsByEmail(new Email("ana@upc.edu.pe"))).isTrue();
         assertThat(repository.existsByUsername(new Username("nobody"))).isFalse();
         assertThat(repository.existsByEmail(new Email("nobody@upc.edu.pe"))).isFalse();
+    }
+
+    @Test
+    void verificationToken_isStoredAndFoundByItsHash() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        User user = TestData.newUser("ana", "ana@upc.edu.pe", UserRole.STUDENT);
+        user.issueVerificationToken("b".repeat(64), now.plusSeconds(3600), now);
+        repository.save(user);
+
+        User found = repository.findByVerificationTokenHash("b".repeat(64)).orElseThrow();
+        assertThat(found.getUsername().value()).isEqualTo("ana");
+        assertThat(found.getVerificationTokenExpiresAt()).isEqualTo(now.plusSeconds(3600));
+        assertThat(found.getVerificationEmailSentAt()).isEqualTo(now);
+        assertThat(repository.findByVerificationTokenHash("c".repeat(64))).isEmpty();
+
+        found.verify();
+        repository.save(found);
+        assertThat(repository.findByVerificationTokenHash("b".repeat(64))).isEmpty();
+    }
+
+    @Test
+    void interestProfile_isStoredAsJsonArrays() throws Exception {
+        User user = TestData.newUser("ana", "ana@upc.edu.pe", UserRole.STUDENT);
+        user.replaceInterestTopics(List.of("Desarrollo web", "Java \"moderno\""));
+        user.updateSkillVector(List.of("javascript", "java-language"));
+        User saved = repository.save(user);
+
+        User found = repository.findById(saved.getId()).orElseThrow();
+        assertThat(found.getInterestTopics()).containsExactly("Desarrollo web", "Java \"moderno\"");
+        assertThat(found.getSkillVector()).containsExactly("javascript", "java-language");
+        assertThat(queryString("SELECT jsonb_typeof(interest_topics) FROM users")).isEqualTo("array");
+        assertThat(queryString("SELECT skill_vector ->> 1 FROM users")).isEqualTo("java-language");
+    }
+
+    @Test
+    void anAccountWithoutInterests_hasEmptyJsonArrays() throws Exception {
+        repository.save(TestData.newUser("ana", "ana@upc.edu.pe", UserRole.STUDENT));
+
+        assertThat(queryString("SELECT interest_topics::text FROM users")).isEqualTo("[]");
+        assertThat(queryString("SELECT skill_vector::text FROM users")).isEqualTo("[]");
     }
 
     @Test

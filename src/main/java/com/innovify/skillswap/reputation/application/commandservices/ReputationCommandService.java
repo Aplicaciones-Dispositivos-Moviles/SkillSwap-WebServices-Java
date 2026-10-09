@@ -4,6 +4,7 @@ import com.innovify.skillswap.reputation.domain.model.aggregates.StudentEmployab
 import com.innovify.skillswap.reputation.domain.model.aggregates.VerifierReliability;
 import com.innovify.skillswap.reputation.domain.model.commands.RecordAutomaticApprovalCommand;
 import com.innovify.skillswap.reputation.domain.model.commands.RecordCaseResolutionCommand;
+import com.innovify.skillswap.reputation.domain.model.commands.RecordMissedDeadlineCommand;
 import com.innovify.skillswap.reputation.domain.model.commands.RecordOverturnCommand;
 import com.innovify.skillswap.shared.application.Result;
 
@@ -18,6 +19,9 @@ public interface ReputationCommandService {
 
     /** An appeal overturned the rejection of a verifier, which discounts their reliability. */
     Result<VerifierReliability> handle(RecordOverturnCommand command);
+
+    /** A verifier missed the deadline of an assigned case (US39), which discounts their reliability. */
+    Result<VerifierReliability> handle(RecordMissedDeadlineCommand command);
 
     /** A student passed an assessment without a verifier, which certifies the skill. */
     Result<StudentEmployabilityScore> handle(RecordAutomaticApprovalCommand command);

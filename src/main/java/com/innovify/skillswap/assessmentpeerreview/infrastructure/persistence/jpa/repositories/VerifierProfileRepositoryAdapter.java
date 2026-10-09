@@ -34,4 +34,9 @@ public class VerifierProfileRepositoryAdapter implements VerifierProfileReposito
                 .filter(profile -> profile.canReview(skillTag))
                 .toList();
     }
+
+    @Override
+    public List<VerifierProfile> findEnabled() {
+        return jpaRepository.findByVerifiedTrue();
+    }
 }

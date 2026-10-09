@@ -45,6 +45,15 @@ public class FakeAssessmentBlueprintRepository implements AssessmentBlueprintRep
     }
 
     @Override
+    public List<String> findQuestionTextsByPathNodeId(int pathNodeId) {
+        return blueprints.stream().filter(b -> b.getPathNodeId() == pathNodeId)
+                .sorted(Comparator.comparing(AssessmentBlueprint::getId).reversed())
+                .flatMap(b -> b.getQuestions().stream())
+                .map(question -> question.getQuestionString())
+                .toList();
+    }
+
+    @Override
     public Optional<AssessmentBlueprint> findLatestByPathNodeId(int pathNodeId) {
         return blueprints.stream().filter(b -> b.getPathNodeId() == pathNodeId)
                 .max(Comparator.comparing(AssessmentBlueprint::getId));

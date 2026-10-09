@@ -92,6 +92,10 @@ public class Certificate {
     @Column(name = "verified_at")
     private Instant verifiedAt;
 
+    /** Whether the holder read by the OCR is not the registered name of the owner. */
+    @Column(name = "holder_name_mismatch", nullable = false)
+    private boolean holderNameMismatch;
+
     /** Required by JPA. */
     protected Certificate() {
     }
@@ -159,6 +163,21 @@ public class Certificate {
                 || issueDate == null
                 || issueDate.isAfter(today)
                 || (durationHours != null && durationHours <= 0);
+    }
+
+    /**
+     * Records that the holder read from the document is not the registered name of the owner, which the risk
+     * evaluation must then take into account.
+     *
+     * @throws DomainException when the certificate is not pending or has no holder to compare
+     */
+    public Certificate flagHolderNameMismatch() {
+        ensureStatus(VerificationStatus.PENDING, "Only a pending certificate can be compared with its owner.");
+        if (holderName == null) {
+            throw new DomainException("A certificate without a holder cannot differ from its owner.");
+        }
+        this.holderNameMismatch = true;
+        return this;
     }
 
     /**
@@ -290,5 +309,10 @@ public class Certificate {
     /** Null until a verifier resolves the certificate. */
     public Instant getVerifiedAt() {
         return verifiedAt;
+    }
+
+    /** Whether the holder read by the OCR is not the registered name of the owner. */
+    public boolean hasHolderNameMismatch() {
+        return holderNameMismatch;
     }
 }

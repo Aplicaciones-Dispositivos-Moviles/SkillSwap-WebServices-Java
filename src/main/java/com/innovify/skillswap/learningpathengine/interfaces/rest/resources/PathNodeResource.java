@@ -11,8 +11,11 @@ import java.util.List;
  * @param order                 position of the node in the path (1 = first)
  * @param status                Locked, Available or Completed
  * @param prerequisiteSkillTags skills of this path that must be completed first
- * @param linkedCertificateId   certificate linked as supporting evidence, if any. It never completes the node.
+ * @param linkedCertificateId   certificate linked to the node, if any. Usually it is supporting evidence that does
+ *                              not complete the node; see completedByCertificate
  * @param assessmentBlueprintId latest assessment generated for the node, if any
+ * @param completedByCertificate whether the node was completed because a certificate validated by a verifier
+ *                              already covers its skill (it is the linked certificate)
  */
 public record PathNodeResource(
         int id,
@@ -22,5 +25,6 @@ public record PathNodeResource(
         String status,
         List<String> prerequisiteSkillTags,
         Integer linkedCertificateId,
-        Integer assessmentBlueprintId) {
+        Integer assessmentBlueprintId,
+        boolean completedByCertificate) {
 }

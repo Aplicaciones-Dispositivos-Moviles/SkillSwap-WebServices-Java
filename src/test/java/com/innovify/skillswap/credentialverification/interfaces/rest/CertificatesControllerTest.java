@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.innovify.skillswap.credentialverification.application.fakes.FakeCertificateRepository;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeDomainEventPublisher;
 import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
 import com.innovify.skillswap.credentialverification.application.internal.commandservices.CertificateCommandServiceImpl;
 import com.innovify.skillswap.credentialverification.application.internal.queryservices.CertificateQueryServiceImpl;
@@ -67,7 +68,7 @@ class CertificatesControllerTest {
         var certificates = new FakeCertificateRepository();
         var storage = new FakeFileStorageService();
         var commands = new CertificateCommandServiceImpl(certificates, new DefaultCertificateRiskScorer(), storage,
-                messages);
+                messages, new FakeDomainEventPublisher());
         var queries = new CertificateQueryServiceImpl(certificates, storage);
 
         mockMvc = MockMvcBuilders

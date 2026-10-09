@@ -6,11 +6,13 @@ import com.innovify.skillswap.credentialverification.domain.model.CredentialVeri
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.model.commands.ResolveCertificateDisputeCommand;
 import com.innovify.skillswap.credentialverification.domain.model.commands.UploadCertificateCommand;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerified;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
 import com.innovify.skillswap.credentialverification.domain.repositories.CertificateRepository;
 import com.innovify.skillswap.credentialverification.domain.services.CertificateRiskScorer;
 import com.innovify.skillswap.shared.application.Result;
 import com.innovify.skillswap.shared.domain.errors.ErrorCodes;
+import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
@@ -32,7 +34,7 @@ import java.util.Map;
  *
  * <p>It is deliberately not {@code @Transactional}: each {@link CertificateRepository#save} commits on its own,
  * so a persistence failure is caught here, returned as a {@link Result}, and the file already stored is
- * deleted.
+ * deleted. A certificate confirmed as authentic publishes {@link CertificateVerified} once it is saved.
  */
 @Service
 public class CertificateCommandServiceImpl implements CertificateCommandService {
@@ -50,15 +52,18 @@ public class CertificateCommandServiceImpl implements CertificateCommandService 
     private final CertificateRiskScorer riskScorer;
     private final FileStorageService fileStorageService;
     private final MessageSource messageSource;
+    private final DomainEventPublisher eventPublisher;
 
     public CertificateCommandServiceImpl(CertificateRepository certificateRepository,
                                          CertificateRiskScorer riskScorer,
                                          FileStorageService fileStorageService,
-                                         MessageSource messageSource) {
+                                         MessageSource messageSource,
+                                         DomainEventPublisher eventPublisher) {
         this.certificateRepository = certificateRepository;
         this.riskScorer = riskScorer;
         this.fileStorageService = fileStorageService;
         this.messageSource = messageSource;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -131,13 +136,19 @@ public class CertificateCommandServiceImpl implements CertificateCommandService 
             return failure(CredentialVerificationError.INVALID_STATUS_TRANSITION);
         }
 
+        Certificate saved;
         try {
             certificate.resolveDispute(command.isAuthentic());
-            return Result.success(certificateRepository.save(certificate));
+            saved = certificateRepository.save(certificate);
         } catch (RuntimeException exception) {
             log.error("Could not resolve the certificate {}", command.certificateId(), exception);
             return failure(toError(exception));
         }
+
+        if (saved.getStatus() == VerificationStatus.VERIFIED) {
+            eventPublisher.publish(new CertificateVerified(saved.getId(), saved.getOwnerId(), saved.getVerifiedAt()));
+        }
+        return Result.success(saved);
     }
 
     /**

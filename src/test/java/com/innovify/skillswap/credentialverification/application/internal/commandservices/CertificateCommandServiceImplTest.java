@@ -1,11 +1,13 @@
 package com.innovify.skillswap.credentialverification.application.internal.commandservices;
 
 import com.innovify.skillswap.credentialverification.application.fakes.FakeCertificateRepository;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeDomainEventPublisher;
 import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
 import com.innovify.skillswap.credentialverification.domain.model.CredentialVerificationError;
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.model.commands.ResolveCertificateDisputeCommand;
 import com.innovify.skillswap.credentialverification.domain.model.commands.UploadCertificateCommand;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerified;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.RiskLevel;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationMethod;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
@@ -38,6 +40,7 @@ class CertificateCommandServiceImplTest {
 
     private final FakeCertificateRepository repository = new FakeCertificateRepository();
     private final FakeFileStorageService storage = new FakeFileStorageService();
+    private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
     private CertificateCommandServiceImpl service;
 
     @BeforeEach
@@ -49,7 +52,7 @@ class CertificateCommandServiceImplTest {
 
         LocaleContextHolder.setLocale(Locale.US);
         service = new CertificateCommandServiceImpl(repository, new DefaultCertificateRiskScorer(), storage,
-                messages);
+                messages, events);
     }
 
     @AfterEach
@@ -349,6 +352,25 @@ class CertificateCommandServiceImplTest {
     }
 
     @Test
+    void resolve_asAuthentic_publishesCertificateVerifiedForTheOwner() {
+        Certificate suspicious = suspiciousCertificate();
+
+        Certificate verified = service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), true)).value();
+
+        assertThat(events.published()).containsExactly(
+                new CertificateVerified(verified.getId(), 7, verified.getVerifiedAt()));
+    }
+
+    @Test
+    void resolve_asNotAuthentic_publishesNothing() {
+        Certificate suspicious = suspiciousCertificate();
+
+        service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), false));
+
+        assertThat(events.published()).isEmpty();
+    }
+
+    @Test
     void resolve_ofUnknownCertificate_returnsNotFound() {
         Result<Certificate> result = service.handle(new ResolveCertificateDisputeCommand(999, true));
 
@@ -386,5 +408,6 @@ class CertificateCommandServiceImplTest {
                 new ResolveCertificateDisputeCommand(suspicious.getId(), true));
 
         assertFailure(result, CredentialVerificationError.DATABASE_ERROR);
+        assertThat(events.published()).isEmpty();
     }
 }

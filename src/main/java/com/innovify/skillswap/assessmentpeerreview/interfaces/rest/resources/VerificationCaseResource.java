@@ -19,6 +19,8 @@ import java.time.Instant;
  * @param evidenceUrl    the link to the student's repository or portfolio, if any
  * @param appealCount    how many times the student appealed the case (0 or 1)
  * @param openedAt       when the case was opened (UTC)
+ * @param reviewDueAt    when the review is due (UTC): 48 hours or 5 business days after opening, by the plan the
+ *                       student had then; null for the cases opened before the plans
  * @param assignedAt     when it was assigned (UTC)
  * @param resolvedAt     when it was resolved (UTC)
  */
@@ -26,5 +28,6 @@ public record VerificationCaseResource(int id, int attemptId, int studentId, Int
                                        int pathNodeId, String skillTag,
                                        @Schema(allowableValues = {"Quiz", "MiniProject"}) String caseType,
                                        String status, String decision, String rubricNotes, String evidenceUrl,
-                                       int appealCount, Instant openedAt, Instant assignedAt, Instant resolvedAt) {
+                                       int appealCount, Instant openedAt, Instant reviewDueAt, Instant assignedAt,
+                                       Instant resolvedAt) {
 }

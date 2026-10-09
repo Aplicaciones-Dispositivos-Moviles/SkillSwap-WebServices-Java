@@ -30,6 +30,10 @@ import java.util.Set;
  * declared {@link CareerGoal}. A node is locked until all its prerequisites are completed; a linked
  * certificate is supporting evidence only and never completes a node.
  *
+ * <p>A path is {@link PathStatus#ACTIVE} until all its nodes are completed. The plan of the student limits how many
+ * paths are active at once, so a path can be {@link PathStatus#PAUSED}: it keeps its progress and still receives
+ * the result of a review already in progress, but no new assessment can be started on it until it is resumed.
+ *
  * <p>The goal and the status are mapped to their columns by the auto-applied attribute converters of the
  * infrastructure layer.
  */
@@ -61,6 +65,10 @@ public class LearningPath {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** When the student last advanced: created, generated an assessment or completed a node. */
+    @Column(name = "last_progress_at", nullable = false)
+    private Instant lastProgressAt;
 
     /** Required by JPA. */
     protected LearningPath() {
@@ -105,6 +113,7 @@ public class LearningPath {
         this.status = PathStatus.ACTIVE;
         this.createdAt = Instant.now();
         this.updatedAt = createdAt;
+        this.lastProgressAt = createdAt;
     }
 
     public Integer getId() {
@@ -136,6 +145,48 @@ public class LearningPath {
         return updatedAt;
     }
 
+    /** When the student last advanced on the path; used to choose which path stays active after a downgrade. */
+    public Instant getLastProgressAt() {
+        return lastProgressAt;
+    }
+
+    public boolean isActive() {
+        return status == PathStatus.ACTIVE;
+    }
+
+    public boolean isPaused() {
+        return status == PathStatus.PAUSED;
+    }
+
+    /**
+     * Pauses an active path: its nodes keep their state, but no new assessment can be started on it.
+     *
+     * @throws DomainException when the path is not active
+     */
+    public LearningPath pause() {
+        if (status != PathStatus.ACTIVE) {
+            throw new DomainException("Only an active path can be paused.");
+        }
+        status = PathStatus.PAUSED;
+        updatedAt = Instant.now();
+        return this;
+    }
+
+    /**
+     * Makes a paused path active again. Whether the plan of the student allows another active path is checked by
+     * the application.
+     *
+     * @throws DomainException when the path is not paused
+     */
+    public LearningPath resume() {
+        if (status != PathStatus.PAUSED) {
+            throw new DomainException("Only a paused path can be resumed.");
+        }
+        status = PathStatus.ACTIVE;
+        updatedAt = Instant.now();
+        return this;
+    }
+
     /** The node with this id, if it belongs to the path. */
     public Optional<PathNode> getNode(int nodeId) {
         return nodes.stream().filter(node -> node.getId() != null && node.getId() == nodeId).findFirst();
@@ -143,7 +194,8 @@ public class LearningPath {
 
     /**
      * Completes an available node and unlocks every node whose prerequisites are now all completed. When the
-     * last node is completed, the whole path is completed.
+     * last node is completed, the whole path is completed. A paused path accepts it too: the review that approves
+     * the node may have started before the path was paused.
      *
      * @throws DomainException when the node is not part of the path, is locked or is already completed
      */
@@ -168,6 +220,7 @@ public class LearningPath {
             status = PathStatus.COMPLETED;
         }
         updatedAt = Instant.now();
+        lastProgressAt = updatedAt;
         return this;
     }
 
@@ -208,11 +261,14 @@ public class LearningPath {
     /**
      * Points an available node to its latest assessment. A new one replaces the previous.
      *
-     * @throws DomainException when the blueprint id is not valid or the node is not available
+     * @throws DomainException when the blueprint id is not valid, the path is paused or the node is not available
      */
     public LearningPath attachBlueprint(int nodeId, int blueprintId) {
         if (blueprintId <= 0) {
             throw new DomainException("The blueprint id is not valid.");
+        }
+        if (status == PathStatus.PAUSED) {
+            throw new DomainException("A paused path does not accept new assessments: resume it first.");
         }
 
         PathNode node = requireNode(nodeId);
@@ -222,6 +278,7 @@ public class LearningPath {
 
         node.attachBlueprint(blueprintId);
         updatedAt = Instant.now();
+        lastProgressAt = updatedAt;
         return this;
     }
 

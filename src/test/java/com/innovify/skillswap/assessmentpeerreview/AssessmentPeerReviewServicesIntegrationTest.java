@@ -42,7 +42,12 @@ import com.innovify.skillswap.learningpathengine.domain.model.queries.GetLearnin
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.shared.application.Result;
 import com.innovify.skillswap.support.PostgresIntegrationTest;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -106,6 +111,14 @@ class AssessmentPeerReviewServicesIntegrationTest extends PostgresIntegrationTes
         }
         Result<AssessmentBlueprint> generated = blueprintCommands.handle(
                 new GenerateAssessmentBlueprintCommand(node(studentId, SKILL).getId(), studentId));
+        assertThat(generated.isSuccess()).as(generated.message()).isTrue();
+        return learningPath.getBlueprint(generated.value().getId()).orElseThrow();
+    }
+
+    /** A new assessment for the node of another skill of the same path. */
+    private BlueprintView blueprintFor(int studentId, String skill) {
+        Result<AssessmentBlueprint> generated = blueprintCommands.handle(
+                new GenerateAssessmentBlueprintCommand(node(studentId, skill).getId(), studentId));
         assertThat(generated.isSuccess()).as(generated.message()).isTrue();
         return learningPath.getBlueprint(generated.value().getId()).orElseThrow();
     }
@@ -437,5 +450,44 @@ class AssessmentPeerReviewServicesIntegrationTest extends PostgresIntegrationTes
 
         assertThat(result.isFailure()).isTrue();
         assertThat(result.error()).isEqualTo(AssessmentPeerReviewError.OPEN_CASE_ALREADY_EXISTS);
+    }
+
+    // ---------- Monthly escalations of the plan ----------
+
+    @Test
+    void twoFailedAttemptsAtTheSameTime_forTheLastEscalationOfTheMonth_openOnlyOneCase() throws Exception {
+        BlueprintView networking = newBlueprint(1);
+        BlueprintView programming = blueprintFor(1, "programming-fundamentals");
+        for (int i = 0; i < 2; i++) {
+            execute("INSERT INTO verification_cases (attempt_id, student_id, path_node_id, skill_tag, case_type, "
+                    + "status, opened_at, appeal_count) VALUES (" + (9000 + i) + ", 1, " + (9000 + i)
+                    + ", 'sql-fundamentals', 'Quiz', 'Pending', now(), 0)");
+        }
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<SubmitAssessmentAttemptOutcome> outcomes = new ArrayList<>();
+        try {
+            List<Future<Result<SubmitAssessmentAttemptOutcome>>> futures = new ArrayList<>();
+            for (BlueprintView blueprint : List.of(networking, programming)) {
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    return submit(1, blueprint, failing(blueprint));
+                }));
+            }
+            start.countDown();
+            for (Future<Result<SubmitAssessmentAttemptOutcome>> future : futures) {
+                Result<SubmitAssessmentAttemptOutcome> result = future.get();
+                assertThat(result.isSuccess()).as(result.message()).isTrue();
+                outcomes.add(result.value());
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(outcomes.stream().filter(outcome -> outcome.verificationCase() != null)).hasSize(1);
+        assertThat(outcomes.stream().filter(outcome -> outcome.escalationLimitReached() != null)).hasSize(1);
+        assertThat(queryString("SELECT count(*) FROM verification_cases WHERE student_id = 1")).isEqualTo("3");
+        assertThat(queryString("SELECT count(*) FROM assessment_attempts WHERE student_id = 1")).isEqualTo("2");
     }
 }

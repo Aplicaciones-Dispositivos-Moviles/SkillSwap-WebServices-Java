@@ -4,7 +4,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathS
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
-/** Stores the status as the text the C# API wrote ("Active", "Completed"). */
+/** Stores the status as the text the C# API wrote ("Active", "Completed"), plus "Paused". */
 @Converter(autoApply = true)
 public class PathStatusConverter implements AttributeConverter<PathStatus, String> {
 

@@ -3,6 +3,7 @@ package com.innovify.skillswap.assessmentpeerreview.application.fakes;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -17,7 +18,13 @@ public class FakeVerificationCaseRepository implements VerificationCaseRepositor
 
     private final List<VerificationCase> cases = new ArrayList<>();
     private int nextId = 1;
+    private final List<Integer> lockedStudents = new ArrayList<>();
     private RuntimeException saveFailure;
+
+    /** The students whose escalations were locked, in order. */
+    public List<Integer> lockedStudents() {
+        return lockedStudents;
+    }
 
     public List<VerificationCase> cases() {
         return cases;
@@ -68,6 +75,18 @@ public class FakeVerificationCaseRepository implements VerificationCaseRepositor
                 .filter(c -> c.getStatus() == CaseStatus.PENDING && c.getSkillTag().equals(skillTag))
                 .sorted(Comparator.comparing(VerificationCase::getId))
                 .toList();
+    }
+
+    @Override
+    public int countOpenedByStudentSince(int studentId, Instant since) {
+        return (int) cases.stream()
+                .filter(c -> c.getStudentId() == studentId && !c.getOpenedAt().isBefore(since))
+                .count();
+    }
+
+    @Override
+    public void lockStudentEscalations(int studentId) {
+        lockedStudents.add(studentId);
     }
 
     @Override

@@ -6,6 +6,7 @@ import com.innovify.skillswap.assessmentpeerreview.application.commandservices.S
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeAssessmentAttemptRepository;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeDomainEventPublisher;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeLearningPathContextFacade;
+import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeSubscriptionContextFacade;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeVerificationCaseRepository;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeVerifierProfileRepository;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.TestMessages;
@@ -18,9 +19,13 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.events.Assessmen
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
+import com.innovify.skillswap.assessmentpeerreview.domain.services.EscalationCalendar;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionOutcome;
 import com.innovify.skillswap.shared.application.Result;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -43,6 +49,7 @@ class AssessmentAttemptCommandServiceImplTest {
     private final FakeVerifierProfileRepository profiles = new FakeVerifierProfileRepository();
     private final FakeLearningPathContextFacade learningPath = new FakeLearningPathContextFacade();
     private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
+    private final FakeSubscriptionContextFacade plans = new FakeSubscriptionContextFacade();
     private final AtomicInteger transactions = new AtomicInteger();
     private AssessmentAttemptCommandServiceImpl service;
 
@@ -59,7 +66,7 @@ class AssessmentAttemptCommandServiceImplTest {
         learningPath.addBlueprint();
         LocaleContextHolder.setLocale(Locale.US);
         service = new AssessmentAttemptCommandServiceImpl(attempts, cases, learningPath,
-                new CaseAssignmentServiceImpl(profiles, cases, new DefaultVerifierMatcher()), events, counting,
+                new CaseAssignmentServiceImpl(profiles, cases, new DefaultVerifierMatcher()), plans, events, counting,
                 TestMessages.source());
     }
 
@@ -149,6 +156,99 @@ class AssessmentAttemptCommandServiceImplTest {
         Result<SubmitAssessmentAttemptOutcome> result = submit(FAILING);
 
         assertThat(result.value().verificationCase().getStatus()).isEqualTo(CaseStatus.PENDING);
+    }
+
+    // ---------- Plan: monthly escalations and review deadline ----------
+
+    /** Cases the student 1 already opened this month, on other nodes. */
+    private void seedCasesOpenedThisMonth(int count) {
+        for (int i = 0; i < count; i++) {
+            cases.save(new VerificationCase(100 + i, 1, 50 + i, "sql-fundamentals", CaseType.QUIZ));
+        }
+    }
+
+    @Test
+    void submit_onTheFreePlan_opensTheCaseDueInFiveBusinessDays() {
+        Instant before = Instant.now();
+
+        VerificationCase opened = submit(FAILING).value().verificationCase();
+
+        assertThat(opened.getReviewDueAt()).isEqualTo(ReviewDeadline.businessDays(5).dueFrom(opened.getOpenedAt()));
+        assertThat(opened.getReviewDueAt()).isAfterOrEqualTo(before.plus(Duration.ofDays(5)));
+        assertThat(cases.lockedStudents()).containsExactly(1);
+    }
+
+    @Test
+    void submit_onThePaidPlan_opensTheCaseDueIn48Hours() {
+        plans.premium(1);
+
+        VerificationCase opened = submit(FAILING).value().verificationCase();
+
+        assertThat(opened.getReviewDueAt()).isEqualTo(opened.getOpenedAt().plus(Duration.ofHours(48)));
+    }
+
+    @Test
+    void submit_onTheFreePlanAfterThreeEscalationsThisMonth_recordsTheAttemptButOpensNoCase() {
+        seedCasesOpenedThisMonth(3);
+
+        Result<SubmitAssessmentAttemptOutcome> result = submit(FAILING);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().attempt().getId()).isNotNull();
+        assertThat(result.value().attempt().isPassed()).isFalse();
+        assertThat(attempts.attempts()).hasSize(1);
+        assertThat(result.value().verificationCase()).isNull();
+        assertThat(result.value().escalationLimitReached()).satisfies(limit -> {
+            assertThat(limit.plan()).isEqualTo("Free");
+            assertThat(limit.max()).isEqualTo(3);
+            assertThat(limit.current()).isEqualTo(3);
+            assertThat(limit.upgradeAvailable()).isTrue();
+        });
+        assertThat(cases.cases()).hasSize(3);
+    }
+
+    @Test
+    void submit_onTheFreePlanWithTwoEscalationsThisMonth_stillOpensTheThird() {
+        seedCasesOpenedThisMonth(2);
+
+        Result<SubmitAssessmentAttemptOutcome> result = submit(FAILING);
+
+        assertThat(result.value().verificationCase()).isNotNull();
+        assertThat(result.value().escalationLimitReached()).isNull();
+    }
+
+    @Test
+    void submit_casesOfPreviousMonthsDoNotCount() {
+        seedCasesOpenedThisMonth(3);
+        Instant lastMonth = EscalationCalendar.startOfMonth(Instant.now()).minus(Duration.ofDays(1));
+        cases.cases().forEach(c -> ReflectionTestUtils.setField(c, "openedAt", lastMonth));
+
+        assertThat(submit(FAILING).value().verificationCase()).isNotNull();
+    }
+
+    @Test
+    void submit_onThePaidPlan_allowsTenEscalationsAMonth() {
+        plans.premium(1);
+        seedCasesOpenedThisMonth(9);
+
+        assertThat(submit(FAILING).value().verificationCase()).isNotNull();
+
+        learningPath.addBlueprint(2, 11, 1, "http-basics", true, true);
+        Result<SubmitAssessmentAttemptOutcome> eleventh = submit(FAILING, 2, 1);
+        assertThat(eleventh.value().verificationCase()).isNull();
+        assertThat(eleventh.value().escalationLimitReached().max()).isEqualTo(10);
+        assertThat(eleventh.value().escalationLimitReached().upgradeAvailable()).isFalse();
+    }
+
+    @Test
+    void submit_aPassingAttempt_needsNoEscalation() {
+        seedCasesOpenedThisMonth(3);
+
+        Result<SubmitAssessmentAttemptOutcome> result = submit(PASSING);
+
+        assertThat(result.value().attempt().isPassed()).isTrue();
+        assertThat(result.value().escalationLimitReached()).isNull();
+        assertThat(cases.lockedStudents()).isEmpty();
     }
 
     // ---------- Rejections ----------

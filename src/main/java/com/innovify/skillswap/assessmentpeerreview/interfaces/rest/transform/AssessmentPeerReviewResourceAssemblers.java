@@ -1,11 +1,14 @@
 package com.innovify.skillswap.assessmentpeerreview.interfaces.rest.transform;
 
+import com.innovify.skillswap.assessmentpeerreview.application.commandservices.EscalationLimitReached;
+import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.AssessmentAttemptResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.FailedQuestionResource;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.PlanLimitReachedResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseDetailResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerifierProfileResource;
@@ -21,8 +24,18 @@ public final class AssessmentPeerReviewResourceAssemblers {
         return toResource(attempt, null);
     }
 
+    /** The attempt right after submitting it, with the case it opened or the limit that kept it from opening one. */
+    public static AssessmentAttemptResource toResource(SubmitAssessmentAttemptOutcome outcome) {
+        return toResource(outcome.attempt(), outcome.verificationCase(), outcome.escalationLimitReached());
+    }
+
     /** The attempt with the case it opened, if any. */
     public static AssessmentAttemptResource toResource(AssessmentAttempt attempt, VerificationCase verificationCase) {
+        return toResource(attempt, verificationCase, null);
+    }
+
+    private static AssessmentAttemptResource toResource(AssessmentAttempt attempt, VerificationCase verificationCase,
+                                                        EscalationLimitReached limitReached) {
         return new AssessmentAttemptResource(
                 attempt.getId(),
                 attempt.getBlueprintId(),
@@ -32,7 +45,9 @@ public final class AssessmentPeerReviewResourceAssemblers {
                 attempt.isPassed(),
                 attempt.getCompletedAt(),
                 verificationCase == null ? null : verificationCase.getId(),
-                verificationCase == null ? null : verificationCase.getStatus().value());
+                verificationCase == null ? null : verificationCase.getStatus().value(),
+                limitReached == null ? null : new PlanLimitReachedResource("MonthlyEscalations", limitReached.plan(),
+                        limitReached.max(), limitReached.current(), limitReached.upgradeAvailable()));
     }
 
     public static VerificationCaseResource toResource(VerificationCase verificationCase) {
@@ -50,6 +65,7 @@ public final class AssessmentPeerReviewResourceAssemblers {
                 verificationCase.getEvidenceUrl(),
                 verificationCase.getAppealCount(),
                 verificationCase.getOpenedAt(),
+                verificationCase.getReviewDueAt(),
                 verificationCase.getAssignedAt(),
                 verificationCase.getResolvedAt());
     }

@@ -68,6 +68,7 @@ class ApiDocumentationIntegrationTest extends PostgresIntegrationTest {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(Matchers.containsString("/api/v1/subscriptions/{id}/cancel")))
+                .andExpect(content().string(Matchers.containsString("/api/v1/learning-paths/{pathId}/resume")))
                 .andExpect(content().string(Matchers.containsString("/api/v1/subscriptions/webhooks/revenuecat")))
                 .andExpect(content().string(Matchers.containsString("\"StudentPlanResource\"")))
                 .andExpect(content().string(Matchers.containsString("\"name\":\"Subscriptions\"")))

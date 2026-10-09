@@ -18,7 +18,8 @@ import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class LearningPathPersistenceTest extends PostgresIntegrationTest {
 
@@ -27,6 +28,9 @@ class LearningPathPersistenceTest extends PostgresIntegrationTest {
 
     @Autowired
     private AssessmentBlueprintRepository blueprints;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private LearningPath load(int studentId) {
         return paths.findLatestByStudentId(studentId).orElseThrow();
@@ -150,14 +154,58 @@ class LearningPathPersistenceTest extends PostgresIntegrationTest {
         assertThat(latest.getNodes()).extracting(PathNode::getSkillTag).containsExactly("sql-fundamentals");
     }
 
-    // ---------- One active path per student ----------
+    // ---------- Several paths per student (the plan sets how many) ----------
 
     @Test
-    void database_rejectsASecondActivePathOfTheSameStudent() {
+    void database_allowsSeveralActivePathsOfTheSameStudent_thePlanLimitsThemInTheApplication() {
+        paths.save(TestData.newUnsavedPath(1, "authentication-jwt"));
+        paths.save(TestData.newUnsavedPath(1, "sql-fundamentals"));
+
+        assertThat(paths.countActiveByStudentId(1)).isEqualTo(2);
+        assertThat(paths.countByStudentId(1)).isEqualTo(2);
+    }
+
+    @Test
+    void pausedPath_isStoredAsPausedWithItsProgress() throws SQLException {
+        LearningPath saved = paths.save(TestData.newUnsavedPath(1, "authentication-jwt"));
+
+        paths.save(paths.findById(saved.getId()).orElseThrow().pause());
+
+        LearningPath loaded = paths.findById(saved.getId()).orElseThrow();
+        assertThat(loaded.getStatus()).isEqualTo(PathStatus.PAUSED);
+        assertThat(loaded.getLastProgressAt()).isNotNull();
+        assertThat(queryString("SELECT status FROM learning_paths")).isEqualTo("Paused");
+        assertThat(paths.countActiveByStudentId(1)).isZero();
+        assertThat(paths.countByStudentId(1)).isEqualTo(1);
+    }
+
+    @Test
+    void findByStudentId_listsEveryPathOfTheStudentNewestFirst() {
+        LearningPath first = paths.save(TestData.newUnsavedPath(1, "authentication-jwt"));
+        LearningPath second = paths.save(TestData.newUnsavedPath(1, "sql-fundamentals"));
+        paths.save(TestData.newUnsavedPath(2, "sql-fundamentals"));
+
+        assertThat(paths.findByStudentId(1)).extracting(LearningPath::getId)
+                .containsExactly(second.getId(), first.getId());
+    }
+
+    @Test
+    void database_refusesAnUnknownPathStatus() {
         paths.save(TestData.newUnsavedPath(1, "authentication-jwt"));
 
-        assertThatThrownBy(() -> paths.save(TestData.newUnsavedPath(1, "authentication-jwt")))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> execute("UPDATE learning_paths SET status = 'Archived'"))
+                .isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void lockStudentPaths_worksInsideATransactionEvenWithoutPaths() {
+        Integer count = new TransactionTemplate(transactionManager)
+                .execute(status -> {
+                    paths.lockStudentPaths(42);
+                    return paths.countByStudentId(42);
+                });
+
+        assertThat(count).isZero();
     }
 
     @Test

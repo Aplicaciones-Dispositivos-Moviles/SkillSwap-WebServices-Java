@@ -7,6 +7,7 @@ import com.innovify.skillswap.learningpathengine.application.fakes.FakeAssessmen
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeCredentialContextFacade;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeLearningPathRepository;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeSkillTaxonomyMatcher;
+import com.innovify.skillswap.learningpathengine.application.fakes.FakeSubscriptionContextFacade;
 import com.innovify.skillswap.learningpathengine.application.internal.commandservices.LearningPathCommandServiceImpl;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.AssessmentBlueprint;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
@@ -19,6 +20,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.support.TransactionOperations;
 
 class LearningPathContextFacadeImplTest {
 
@@ -34,7 +36,8 @@ class LearningPathContextFacadeImplTest {
 
         var commandService = new LearningPathCommandServiceImpl(paths, FakeSkillTaxonomyMatcher.sample(),
                 new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY),
-                new FakeCredentialContextFacade(), messages);
+                new FakeCredentialContextFacade(), new FakeSubscriptionContextFacade(),
+                TransactionOperations.withoutTransaction(), messages);
         facade = new LearningPathContextFacadeImpl(paths, blueprints, commandService);
     }
 
@@ -103,7 +106,28 @@ class LearningPathContextFacadeImplTest {
         assertThat(view.orElseThrow().nodeIsAvailable()).isFalse();
     }
 
+    @Test
+    void getBlueprint_ofAPausedPath_isNotAvailableForANewAttempt() {
+        LearningPath path = addPath(1);
+        PathNode node = availableNode(path);
+        AssessmentBlueprint blueprint = addBlueprint(path, node);
+        path.pause();
+
+        assertThat(facade.getBlueprint(blueprint.getId()).orElseThrow().nodeIsAvailable()).isFalse();
+    }
+
     // ---------- completeNode ----------
+
+    @Test
+    void completeNode_ofAPausedPath_stillCompletesIt_soAReviewInProgressCounts() {
+        LearningPath path = addPath(1);
+        PathNode node = availableNode(path);
+        path.pause();
+
+        assertThat(facade.completeNode(node.getId())).isEqualTo(NodeCompletionOutcome.COMPLETED);
+        assertThat(node.getStatus()).isEqualTo(NodeStatus.COMPLETED);
+        assertThat(path.isPaused()).isTrue();
+    }
 
     @Test
     void completeNode_ofAnAvailableNode_completesIt() {

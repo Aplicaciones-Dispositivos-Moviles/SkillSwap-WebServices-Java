@@ -18,8 +18,8 @@ public final class LearningPathActionResultAssembler {
         return switch (error) {
             case INVALID_GOAL, NONE -> HttpStatus.BAD_REQUEST;
             case GOAL_NOT_INTERPRETABLE -> HttpStatus.UNPROCESSABLE_CONTENT;
-            case GOAL_ALREADY_ACHIEVED, ACTIVE_PATH_ALREADY_EXISTS, NODE_LOCKED, NODE_ALREADY_COMPLETED,
-                 OPERATION_CANCELLED -> HttpStatus.CONFLICT;
+            case GOAL_ALREADY_ACHIEVED, PLAN_LIMIT_REACHED, PATH_NOT_ACTIVE, PATH_NOT_PAUSED, PATH_PAUSED, NODE_LOCKED,
+                 NODE_ALREADY_COMPLETED, OPERATION_CANCELLED -> HttpStatus.CONFLICT;
             case PATH_NOT_FOUND, NODE_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case NOT_PATH_OWNER -> HttpStatus.FORBIDDEN;
             case QUESTION_GENERATION_FAILED -> HttpStatus.SERVICE_UNAVAILABLE;

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.innovify.skillswap.iam.TestData;
@@ -16,6 +17,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.entities.Question;
 import com.innovify.skillswap.learningpathengine.domain.repositories.AssessmentBlueprintRepository;
 import com.innovify.skillswap.learningpathengine.domain.services.QuestionGenerationService;
 import com.innovify.skillswap.shared.infrastructure.json.Json;
+import com.innovify.skillswap.subscriptionbilling.domain.repositories.SubscriptionRepository;
 import com.innovify.skillswap.support.PostgresIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.nio.charset.StandardCharsets;
@@ -59,6 +61,9 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     private AssessmentBlueprintRepository blueprints;
+
+    @Autowired
+    private SubscriptionRepository subscriptions;
 
     private MockMvc mockMvc;
     private FakeQuestionGenerationService generator;
@@ -108,6 +113,11 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
             request.header("Authorization", "Bearer " + token);
         }
         return mockMvc.perform(request).andReturn();
+    }
+
+    private MvcResult patchPath(String token, int pathId, String action) throws Exception {
+        return mockMvc.perform(patch(PATHS + "/" + pathId + "/" + action).header("Authorization", "Bearer " + token))
+                .andReturn();
     }
 
     private MvcResult requestBlueprint(String token, int nodeId) throws Exception {
@@ -243,14 +253,92 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("A student cannot have two active paths")
-    void declare_whenThereIsAnActivePath_returns409() throws Exception {
+    @DisplayName("On the free plan a student cannot have two active paths")
+    void declare_onTheFreePlanWithAnActivePath_returns409PlanLimitReached() throws Exception {
         declareOk(anaToken, REST_AND_JWT);
 
         MvcResult result = declare(anaToken, "quiero aprender SQL");
 
         assertThat(status(result)).isEqualTo(409);
-        assertThat(title(result)).isEqualTo("ActivePathAlreadyExists");
+        assertThat(title(result)).isEqualTo("PlanLimitReached");
+        assertThat((String) read(result, "$.limit")).isEqualTo("ActiveRoutes");
+        assertThat((String) read(result, "$.plan")).isEqualTo("Free");
+        assertThat((Integer) read(result, "$.max")).isEqualTo(1);
+        assertThat((Integer) read(result, "$.current")).isEqualTo(1);
+        assertThat((Boolean) read(result, "$.upgradeAvailable")).isTrue();
+    }
+
+    @Test
+    void declare_onThePaidPlan_allowsASecondActivePath() throws Exception {
+        subscriptions.save(com.innovify.skillswap.subscriptionbilling.TestData.activeSubscription(ana.getId()));
+        declareOk(anaToken, REST_AND_JWT);
+
+        MvcResult second = declareOk(anaToken, "quiero aprender SQL");
+
+        assertThat((String) read(second, "$.status")).isEqualTo("Active");
+    }
+
+    @Test
+    void pauseAndResume_letTheFreeStudentSwitchTheActivePath() throws Exception {
+        int first = read(declareOk(anaToken, REST_AND_JWT), "$.id");
+        assertThat(status(patchPath(anaToken, first, "pause"))).isEqualTo(200);
+        int second = read(declareOk(anaToken, "quiero aprender SQL"), "$.id");
+
+        MvcResult blocked = patchPath(anaToken, first, "resume");
+        assertThat(status(blocked)).isEqualTo(409);
+        assertThat(title(blocked)).isEqualTo("PlanLimitReached");
+
+        MvcResult paused = patchPath(anaToken, second, "pause");
+        MvcResult resumed = patchPath(anaToken, first, "resume");
+
+        assertThat((String) read(paused, "$.status")).isEqualTo("Paused");
+        assertThat(status(resumed)).isEqualTo(200);
+        assertThat((String) read(resumed, "$.status")).isEqualTo("Active");
+        assertThat(queryString("SELECT count(*) FROM learning_paths WHERE status = 'Active'")).isEqualTo("1");
+    }
+
+    @Test
+    void pause_thePathOfAnotherStudent_returns403AndAPausedOne409() throws Exception {
+        int path = read(declareOk(anaToken, REST_AND_JWT), "$.id");
+
+        assertThat(status(patchPath(bobToken, path, "pause"))).isEqualTo(403);
+        patchPath(anaToken, path, "pause");
+        MvcResult again = patchPath(anaToken, path, "pause");
+        assertThat(status(again)).isEqualTo(409);
+        assertThat(title(again)).isEqualTo("PathNotActive");
+        assertThat(status(patchPath(anaToken, 999, "resume"))).isEqualTo(404);
+    }
+
+    @Test
+    void blueprint_ofAPausedPath_returns409PathPaused() throws Exception {
+        MvcResult path = declareOk(anaToken, REST_AND_JWT);
+        int pathId = read(path, "$.id");
+        int nodeId = read(path, "$.nodes[0].id");
+        patchPath(anaToken, pathId, "pause");
+
+        MvcResult result = requestBlueprint(anaToken, nodeId);
+
+        assertThat(status(result)).isEqualTo(409);
+        assertThat(title(result)).isEqualTo("PathPaused");
+    }
+
+    @Test
+    void listPaths_returnsEveryPathOfTheStudentNewestFirst() throws Exception {
+        int first = read(declareOk(anaToken, REST_AND_JWT), "$.id");
+        patchPath(anaToken, first, "pause");
+        int second = read(declareOk(anaToken, "quiero aprender SQL"), "$.id");
+
+        MvcResult result = mockMvc.perform(get(PATHS).param("studentId", String.valueOf(ana.getId()))
+                .header("Authorization", "Bearer " + anaToken)).andReturn();
+
+        assertThat(status(result)).isEqualTo(200);
+        List<Integer> ids = read(result, "$[*].id");
+        List<String> states = read(result, "$[*].status");
+        assertThat(ids).containsExactly(second, first);
+        assertThat(states).containsExactly("Active", "Paused");
+        MvcResult other = mockMvc.perform(get(PATHS).param("studentId", String.valueOf(ana.getId()))
+                .header("Authorization", "Bearer " + bobToken)).andReturn();
+        assertThat(status(other)).isEqualTo(403);
     }
 
     @Test

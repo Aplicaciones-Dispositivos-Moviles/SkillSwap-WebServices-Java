@@ -10,7 +10,8 @@ import java.util.List;
  * @param studentId       the owner of the path the node belongs to
  * @param skillTag        the skill demonstrated by the node
  * @param isLatest        whether it is the latest blueprint generated for the node
- * @param nodeIsAvailable whether the node can still be demonstrated (neither locked nor completed)
+ * @param nodeIsAvailable whether the node can still be demonstrated (neither locked nor completed, and its path is
+ *                        not paused)
  * @param questions       the questions in order, with their correct answers
  */
 public record BlueprintView(

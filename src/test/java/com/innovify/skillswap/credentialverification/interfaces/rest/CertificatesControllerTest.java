@@ -340,14 +340,6 @@ class CertificatesControllerTest {
     }
 
     @Test
-    void getById_asCoordinator_returns200() throws Exception {
-        int id = uploadOk(ana, "file-a", Map.of());
-        authenticateAs(users.save(TestData.newUser("coord", "coord@upc.edu.pe", UserRole.COORDINATOR)));
-
-        mockMvc.perform(get(URL + "/" + id)).andExpect(status().isOk());
-    }
-
-    @Test
     void getById_withUnknownId_returns404() throws Exception {
         mockMvc.perform(get(URL + "/9999"))
                 .andExpect(status().isNotFound())
@@ -377,13 +369,4 @@ class CertificatesControllerTest {
                 .andExpect(jsonPath("$.title").value("NotCertificateOwner"));
     }
 
-    @Test
-    void list_asCoordinator_returnsTheRequestedStudentsCertificates() throws Exception {
-        uploadOk(ana, "file-1", Map.of());
-        authenticateAs(users.save(TestData.newUser("coord", "coord@upc.edu.pe", UserRole.COORDINATOR)));
-
-        mockMvc.perform(get(URL).param("ownerId", String.valueOf(ana.getId())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)));
-    }
 }

@@ -15,6 +15,6 @@ public interface CertificateCommandService {
      */
     Result<Certificate> handle(UploadCertificateCommand command);
 
-    /** Applies the Coordinator's decision on a suspicious certificate. */
+    /** Applies the verifier's decision on a suspicious certificate. */
     Result<Certificate> handle(ResolveCertificateDisputeCommand command);
 }

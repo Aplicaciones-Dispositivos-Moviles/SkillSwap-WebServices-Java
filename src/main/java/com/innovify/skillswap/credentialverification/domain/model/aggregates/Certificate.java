@@ -5,8 +5,12 @@ import com.innovify.skillswap.credentialverification.domain.model.valueobjects.R
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationMethod;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
-import jakarta.persistence.*;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Locale;
@@ -174,7 +178,7 @@ public class Certificate {
     }
 
     /**
-     * Applies the Coordinator's decision on an escalated certificate, moving it to
+     * Applies the decision of the verifier who reviews an escalated certificate, moving it to
      * {@link VerificationStatus#VERIFIED} or {@link VerificationStatus#REJECTED}.
      *
      * @throws DomainException when the certificate is not suspicious
@@ -283,7 +287,7 @@ public class Certificate {
         return createdAt;
     }
 
-    /** Null until a Coordinator resolves the certificate. */
+    /** Null until a verifier resolves the certificate. */
     public Instant getVerifiedAt() {
         return verifiedAt;
     }

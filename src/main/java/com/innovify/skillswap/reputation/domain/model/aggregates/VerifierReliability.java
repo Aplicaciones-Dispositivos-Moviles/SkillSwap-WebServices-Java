@@ -3,6 +3,12 @@ package com.innovify.skillswap.reputation.domain.model.aggregates;
 import com.innovify.skillswap.reputation.domain.model.valueobjects.ReliabilityScore;
 import com.innovify.skillswap.reputation.domain.services.VerifierReliabilityCalculator;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -10,17 +16,34 @@ import java.util.Objects;
  * The accumulated reliability of a verifier. It only changes through events of other bounded contexts, never
  * because a user rates another, and every change recalculates the score so it always agrees with the counters.
  */
+@Entity
+@Table(name = "verifier_reliabilities")
 public class VerifierReliability {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Integer id;
+
+    @Column(name = "verifier_user_id", nullable = false)
     private int verifierUserId;
+
+    @Column(name = "resolved_cases_count", nullable = false)
     private int resolvedCasesCount;
+
+    @Column(name = "overturned_decisions_count", nullable = false)
     private int overturnedDecisionsCount;
+
+    @Column(name = "sanctions_count", nullable = false)
     private int sanctionsCount;
+
+    @Column(name = "score", nullable = false)
     private ReliabilityScore score;
+
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    /** Required by JPA once the aggregate is mapped. */
+    /** Required by JPA. */
     protected VerifierReliability() {
     }
 

@@ -20,9 +20,13 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("SkillSwap Platform API")
                         .version("v1")
-                        .description("Learning paths, certificate verification, peer review, reputation and "
-                                + "SkillCredits. Sign in at /api/v1/authentication/sign-in and use the token "
-                                + "with the Authorize button."))
+                        .description("""
+                                SkillSwap verifies what a student really knows: learning paths, certificate \
+                                verification, peer review, reputation and SkillCredits.
+
+                                **How to try it:** sign up and sign in at `/api/v1/authentication`, press \
+                                **Authorize** and paste only the token. Every resource belongs to its owner, \
+                                taken from the token."""))
                 .components(new Components().addSecuritySchemes(BEARER_SCHEME, new SecurityScheme()
                         .type(SecurityScheme.Type.HTTP)
                         .scheme("bearer")

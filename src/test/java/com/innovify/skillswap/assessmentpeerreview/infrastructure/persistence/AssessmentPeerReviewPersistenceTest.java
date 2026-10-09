@@ -7,12 +7,14 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Asses
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Score;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerifierProfileRepository;
 import com.innovify.skillswap.support.PostgresIntegrationTest;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +38,7 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
 
     /** Saves a new case; the id is assigned to the instance that was saved. */
     private VerificationCase addCase(int attemptId, int studentId, int nodeId, String skill) {
-        return cases.save(new VerificationCase(attemptId, studentId, nodeId, skill));
+        return cases.save(new VerificationCase(attemptId, studentId, nodeId, skill, CaseType.QUIZ));
     }
 
     private VerificationCase addCase(int attemptId, int studentId, int nodeId) {
@@ -178,6 +180,7 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         VerificationCase pending = loadCase(id);
         assertThat(pending.getStatus()).isEqualTo(CaseStatus.PENDING);
         assertThat(pending.getSkillTag()).isEqualTo("http-basics");
+        assertThat(pending.getCaseType()).isEqualTo(CaseType.QUIZ);
         assertThat(pending.getPathNodeId()).isEqualTo(10);
         assertThat(pending.getVerifierUserId()).isNull();
         assertThat(pending.getDecision()).isNull();
@@ -208,6 +211,27 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
 
         assertThat(queryString("SELECT status FROM verification_cases WHERE id = " + id)).isEqualTo("Resolved");
         assertThat(queryString("SELECT decision FROM verification_cases WHERE id = " + id)).isEqualTo("Rejected");
+    }
+
+    @Test
+    void case_storesTheTypeAsQuizOrMiniProject() throws Exception {
+        int quiz = addCase(1, 1, 10).getId();
+        int miniProject = cases.save(new VerificationCase(2, 1, 11, "http-basics", CaseType.MINI_PROJECT)).getId();
+
+        assertThat(queryString("SELECT case_type FROM verification_cases WHERE id = " + quiz)).isEqualTo("Quiz");
+        assertThat(queryString("SELECT case_type FROM verification_cases WHERE id = " + miniProject))
+                .isEqualTo("MiniProject");
+        assertThat(loadCase(miniProject).getCaseType()).isEqualTo(CaseType.MINI_PROJECT);
+    }
+
+    @Test
+    void case_withoutTypeOrWithAnUnknownOne_isRejectedByTheDatabase() {
+        String insert = "INSERT INTO verification_cases (attempt_id, student_id, path_node_id, skill_tag, status, "
+                + "opened_at%s) VALUES (1, 1, 10, 'http-basics', 'Pending', now()%s)";
+
+        assertThatThrownBy(() -> execute(insert.formatted("", ""))).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> execute(insert.formatted(", case_type", ", 'Essay'")))
+                .isInstanceOf(SQLException.class);
     }
 
     @Test

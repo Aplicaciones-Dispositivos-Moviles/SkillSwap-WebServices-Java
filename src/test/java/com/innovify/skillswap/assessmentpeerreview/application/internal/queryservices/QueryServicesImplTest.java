@@ -16,6 +16,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerificationCaseDetailQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerificationCasesByVerifierQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerifierProfileByUserIdQuery;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -59,7 +60,7 @@ class QueryServicesImplTest {
 
     @Test
     void caseQuery_byId_returnsTheCaseOrEmpty() {
-        VerificationCase verificationCase = cases.save(new VerificationCase(1, 1, 10, "http-basics"));
+        VerificationCase verificationCase = cases.save(new VerificationCase(1, 1, 10, "http-basics", CaseType.QUIZ));
 
         assertThat(caseService().handle(new GetVerificationCaseByIdQuery(verificationCase.getId())))
                 .containsSame(verificationCase);
@@ -68,9 +69,11 @@ class QueryServicesImplTest {
 
     @Test
     void caseQuery_byVerifier_returnsOnlyTheirCasesNewestFirst() {
-        VerificationCase first = cases.save(new VerificationCase(1, 1, 10, "http-basics").assignVerifier(2));
-        cases.save(new VerificationCase(2, 1, 11, "http-basics").assignVerifier(3));
-        VerificationCase second = cases.save(new VerificationCase(3, 4, 12, "http-basics").assignVerifier(2));
+        VerificationCase first = cases.save(new VerificationCase(1, 1, 10, "http-basics", CaseType.QUIZ)
+                .assignVerifier(2));
+        cases.save(new VerificationCase(2, 1, 11, "http-basics", CaseType.QUIZ).assignVerifier(3));
+        VerificationCase second = cases.save(new VerificationCase(3, 4, 12, "http-basics", CaseType.QUIZ)
+                .assignVerifier(2));
 
         List<VerificationCase> found = caseService().handle(new GetVerificationCasesByVerifierQuery(2));
 
@@ -81,7 +84,8 @@ class QueryServicesImplTest {
     void caseQuery_detail_listsTheFailedQuestionsWithTheChosenAnswer() {
         learningPath.addBlueprint();
         AssessmentAttempt attempt = addAttempt(List.of(1, 0, 3, 0, 2));
-        VerificationCase verificationCase = cases.save(new VerificationCase(attempt.getId(), 1, 10, "http-basics"));
+        VerificationCase verificationCase = cases.save(new VerificationCase(attempt.getId(), 1, 10, "http-basics",
+                CaseType.QUIZ));
 
         Optional<VerificationCaseDetail> detail =
                 caseService().handle(new GetVerificationCaseDetailQuery(verificationCase.getId()));
@@ -100,7 +104,8 @@ class QueryServicesImplTest {
     void caseQuery_detail_whenEverythingWasCorrect_hasNoFailedQuestions() {
         learningPath.addBlueprint();
         AssessmentAttempt attempt = addAttempt(List.of(1, 2, 3, 0, 1));
-        VerificationCase verificationCase = cases.save(new VerificationCase(attempt.getId(), 1, 10, "http-basics"));
+        VerificationCase verificationCase = cases.save(new VerificationCase(attempt.getId(), 1, 10, "http-basics",
+                CaseType.QUIZ));
 
         Optional<VerificationCaseDetail> detail =
                 caseService().handle(new GetVerificationCaseDetailQuery(verificationCase.getId()));
@@ -111,7 +116,8 @@ class QueryServicesImplTest {
     @Test
     void caseQuery_detail_whenTheBlueprintIsGone_hasNoFailedQuestions() {
         AssessmentAttempt attempt = addAttempt(List.of(1, 0, 3, 0, 2));
-        VerificationCase verificationCase = cases.save(new VerificationCase(attempt.getId(), 1, 10, "http-basics"));
+        VerificationCase verificationCase = cases.save(new VerificationCase(attempt.getId(), 1, 10, "http-basics",
+                CaseType.QUIZ));
 
         Optional<VerificationCaseDetail> detail =
                 caseService().handle(new GetVerificationCaseDetailQuery(verificationCase.getId()));
@@ -127,7 +133,7 @@ class QueryServicesImplTest {
 
     @Test
     void caseQuery_detail_whenTheAttemptIsMissing_returnsEmpty() {
-        VerificationCase verificationCase = cases.save(new VerificationCase(50, 1, 10, "http-basics"));
+        VerificationCase verificationCase = cases.save(new VerificationCase(50, 1, 10, "http-basics", CaseType.QUIZ));
 
         assertThat(caseService().handle(new GetVerificationCaseDetailQuery(verificationCase.getId()))).isEmpty();
     }

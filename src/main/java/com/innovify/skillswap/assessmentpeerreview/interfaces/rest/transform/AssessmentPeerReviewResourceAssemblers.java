@@ -43,6 +43,7 @@ public final class AssessmentPeerReviewResourceAssemblers {
                 verificationCase.getVerifierUserId(),
                 verificationCase.getPathNodeId(),
                 verificationCase.getSkillTag(),
+                verificationCase.getCaseType().value(),
                 verificationCase.getStatus().value(),
                 verificationCase.getDecision() == null ? null : verificationCase.getDecision().value(),
                 verificationCase.getRubricNotes(),

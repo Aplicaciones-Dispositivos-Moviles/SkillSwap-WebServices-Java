@@ -1,5 +1,6 @@
 package com.innovify.skillswap.assessmentpeerreview.domain.model.events;
 
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.shared.domain.events.DomainEvent;
 
@@ -11,11 +12,12 @@ import com.innovify.skillswap.shared.domain.events.DomainEvent;
  * @param verifierUserId the verifier who resolved it
  * @param pathNodeId     the node of the case
  * @param skillTag       the skill of the case
+ * @param caseType       what was reviewed, a quiz or a mini-project
  * @param decision       the decision
  * @param overturnedVerifierUserId the verifier whose rejection this decision overturned after an appeal;
  *                       null when nobody was overturned
  */
 public record VerificationCaseResolved(int caseId, int studentId, int verifierUserId, int pathNodeId,
-                                       String skillTag, ReviewDecision decision,
+                                       String skillTag, CaseType caseType, ReviewDecision decision,
                                        Integer overturnedVerifierUserId) implements DomainEvent {
 }

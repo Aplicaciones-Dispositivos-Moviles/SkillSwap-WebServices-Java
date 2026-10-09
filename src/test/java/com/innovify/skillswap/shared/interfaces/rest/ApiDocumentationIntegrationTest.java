@@ -55,6 +55,15 @@ class ApiDocumentationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void apiDocs_documentTheTypesOfAVerificationCase() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(Matchers.containsString("\"VerificationCaseResource\"")))
+                .andExpect(content().string(Matchers.containsString("\"caseType\"")))
+                .andExpect(content().string(Matchers.containsString("\"MiniProject\"")));
+    }
+
+    @Test
     void apiEndpoints_stillNeedAToken() throws Exception {
         mockMvc.perform(get("/api/v1/wallets/1")).andExpect(status().isUnauthorized());
     }

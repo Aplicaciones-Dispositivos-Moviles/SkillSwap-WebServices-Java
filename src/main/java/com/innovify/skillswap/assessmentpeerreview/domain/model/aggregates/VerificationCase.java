@@ -1,6 +1,7 @@
 package com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import jakarta.persistence.Column;
@@ -15,9 +16,10 @@ import java.time.Instant;
 import java.util.Locale;
 
 /**
- * Opened when an attempt is not approved. It is assigned to an enabled verifier, who resolves it with a
- * decision and the notes of the rubric. A student can add evidence while it is open. A rejected case can be
- * appealed once: it reopens and goes to a different verifier, whose decision is final.
+ * Opened when an attempt is not approved, with the type of the work under review (a quiz or a mini-project). It
+ * is assigned to an enabled verifier, who resolves it with a decision and the notes of the rubric. A student can
+ * add evidence while it is open. A rejected case can be appealed once: it reopens and goes to a different
+ * verifier, whose decision is final.
  */
 @Entity
 @Table(name = "verification_cases")
@@ -47,6 +49,10 @@ public class VerificationCase {
 
     @Column(name = "skill_tag", nullable = false, length = 100)
     private String skillTag;
+
+    /** Stored as "Quiz" or "MiniProject"; it never changes once the case is opened. */
+    @Column(name = "case_type", nullable = false, length = 20)
+    private CaseType caseType;
 
     /** Stored as the text the C# API wrote ("Pending", "Assigned", "Resolved"). */
     @Column(name = "status", nullable = false, length = 20)
@@ -83,8 +89,8 @@ public class VerificationCase {
     protected VerificationCase() {
     }
 
-    /** @throws DomainException when an id is not valid or the skill is empty */
-    public VerificationCase(int attemptId, int studentId, int pathNodeId, String skillTag) {
+    /** @throws DomainException when an id is not valid, the skill is empty or the type is missing */
+    public VerificationCase(int attemptId, int studentId, int pathNodeId, String skillTag, CaseType caseType) {
         if (attemptId <= 0) {
             throw new DomainException("The case must belong to a valid attempt.");
         }
@@ -97,11 +103,15 @@ public class VerificationCase {
         if (skillTag == null || skillTag.isBlank()) {
             throw new DomainException("The skill tag cannot be empty.");
         }
+        if (caseType == null) {
+            throw new DomainException("The case type is required.");
+        }
 
         this.attemptId = attemptId;
         this.studentId = studentId;
         this.pathNodeId = pathNodeId;
         this.skillTag = skillTag.strip();
+        this.caseType = caseType;
         this.status = CaseStatus.PENDING;
         this.openedAt = Instant.now();
     }
@@ -129,6 +139,10 @@ public class VerificationCase {
 
     public String getSkillTag() {
         return skillTag;
+    }
+
+    public CaseType getCaseType() {
+        return caseType;
     }
 
     public CaseStatus getStatus() {

@@ -2,6 +2,7 @@ package com.innovify.skillswap.reputation.application.eventhandlers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.reputation.application.commandservices.ReputationCommandService;
 import com.innovify.skillswap.reputation.domain.model.ReputationError;
 import com.innovify.skillswap.reputation.domain.model.aggregates.StudentEmployabilityScore;
@@ -24,7 +25,7 @@ class ReputationEventHandlersTest {
     private final RecordingReputationCommandService service = new RecordingReputationCommandService();
 
     private static VerificationCaseResolved resolved(ReviewDecision decision, Integer overturned) {
-        return new VerificationCaseResolved(10, 1, 2, 5, "http-basics", decision, overturned);
+        return new VerificationCaseResolved(10, 1, 2, 5, "http-basics", CaseType.QUIZ, decision, overturned);
     }
 
     @ParameterizedTest

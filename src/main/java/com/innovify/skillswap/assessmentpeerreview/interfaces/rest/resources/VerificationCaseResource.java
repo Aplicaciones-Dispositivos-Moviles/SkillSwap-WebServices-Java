@@ -1,5 +1,6 @@
 package com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 
 /**
@@ -11,6 +12,7 @@ import java.time.Instant;
  * @param verifierUserId the assigned verifier; null while it is pending
  * @param pathNodeId     the node the student wants to demonstrate
  * @param skillTag       the skill under review
+ * @param caseType       Quiz or MiniProject: what the student handed in for review
  * @param status         Pending, Assigned or Resolved
  * @param decision       Approved or Rejected; null until resolved
  * @param rubricNotes    the notes of the verifier; null until resolved
@@ -21,7 +23,8 @@ import java.time.Instant;
  * @param resolvedAt     when it was resolved (UTC)
  */
 public record VerificationCaseResource(int id, int attemptId, int studentId, Integer verifierUserId,
-                                       int pathNodeId, String skillTag, String status, String decision,
-                                       String rubricNotes, String evidenceUrl, int appealCount, Instant openedAt,
-                                       Instant assignedAt, Instant resolvedAt) {
+                                       int pathNodeId, String skillTag,
+                                       @Schema(allowableValues = {"Quiz", "MiniProject"}) String caseType,
+                                       String status, String decision, String rubricNotes, String evidenceUrl,
+                                       int appealCount, Instant openedAt, Instant assignedAt, Instant resolvedAt) {
 }

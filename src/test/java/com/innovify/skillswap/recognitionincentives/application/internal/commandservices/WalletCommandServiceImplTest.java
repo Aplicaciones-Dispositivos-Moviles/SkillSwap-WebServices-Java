@@ -13,6 +13,7 @@ import com.innovify.skillswap.recognitionincentives.domain.model.commands.Redeem
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.ResolvedCaseType;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
 import com.innovify.skillswap.recognitionincentives.domain.services.DefaultRedemptionPricing;
 import com.innovify.skillswap.shared.application.Result;
@@ -50,8 +51,13 @@ class WalletCommandServiceImplTest {
         return wallets.save(wallet);
     }
 
+    /** A resolved quiz case, the only type the platform opens today. */
     private Result<Wallet> credit(int verifierUserId, int caseId) {
-        return service.handle(new CreditVerifierCommand(verifierUserId, caseId));
+        return credit(verifierUserId, caseId, ResolvedCaseType.QUIZ);
+    }
+
+    private Result<Wallet> credit(int verifierUserId, int caseId, ResolvedCaseType caseType) {
+        return service.handle(new CreditVerifierCommand(verifierUserId, caseId, caseType));
     }
 
     private Result<CreditTransaction> redeem(int userId, RedemptionItem item) {
@@ -102,19 +108,44 @@ class WalletCommandServiceImplTest {
     // ---------- Credit verifier ----------
 
     @Test
-    void credit_aVerifierWithoutWallet_createsItWithTenCreditsAndTheMovement() {
+    void credit_aVerifierWithoutWallet_createsItWithTheQuizRewardAndTheMovement() {
         Result<Wallet> result = credit(2, 10);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.value().getBalance()).isEqualTo(10);
+        assertThat(result.value().getBalance()).isEqualTo(25);
         assertThat(wallets.items()).hasSize(1);
         assertThat(transactions.items()).hasSize(1);
         CreditTransaction movement = transactions.items().get(0);
         assertThat(movement.getWalletId()).isEqualTo(result.value().getId());
         assertThat(movement.getType()).isEqualTo(TransactionType.EARNED);
-        assertThat(movement.getAmount().value()).isEqualTo(10);
+        assertThat(movement.getAmount().value()).isEqualTo(25);
         assertThat(movement.getRelatedCaseId()).isEqualTo(10);
         assertThat(movement.getDescription()).isEqualTo("Verification case resolved");
+    }
+
+    @Test
+    void credit_aResolvedMiniProject_paysForty() {
+        Result<Wallet> result = credit(2, 10, ResolvedCaseType.MINI_PROJECT);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getBalance()).isEqualTo(40);
+        assertThat(transactions.items().get(0).getAmount().value()).isEqualTo(40);
+    }
+
+    @Test
+    void credit_aQuizAndAMiniProject_addBothRewards() {
+        credit(2, 10, ResolvedCaseType.QUIZ);
+        credit(2, 11, ResolvedCaseType.MINI_PROJECT);
+
+        assertThat(wallets.items().get(0).getBalance()).isEqualTo(65);
+        assertThat(transactions.items()).extracting(movement -> movement.getAmount().value()).containsExactly(25, 40);
+    }
+
+    @Test
+    void credit_withoutCaseType_failsAndChangesNothing() {
+        assertFailure(credit(2, 10, null), RecognitionIncentivesError.INTERNAL_SERVER_ERROR);
+        assertThat(wallets.items()).isEmpty();
+        assertThat(transactions.items()).isEmpty();
     }
 
     @Test
@@ -124,7 +155,7 @@ class WalletCommandServiceImplTest {
         Result<Wallet> result = credit(2, 10);
 
         assertThat(result.value()).isSameAs(existing);
-        assertThat(existing.getBalance()).isEqualTo(30);
+        assertThat(existing.getBalance()).isEqualTo(45);
         assertThat(wallets.lockedReads()).isEqualTo(1);
     }
 
@@ -135,7 +166,7 @@ class WalletCommandServiceImplTest {
         Result<Wallet> again = credit(2, 10);
 
         assertThat(again.isSuccess()).isTrue();
-        assertThat(again.value().getBalance()).isEqualTo(10);
+        assertThat(again.value().getBalance()).isEqualTo(25);
         assertThat(transactions.items()).hasSize(1);
     }
 
@@ -144,7 +175,7 @@ class WalletCommandServiceImplTest {
         credit(2, 10);
         credit(2, 11);
 
-        assertThat(wallets.items().get(0).getBalance()).isEqualTo(20);
+        assertThat(wallets.items().get(0).getBalance()).isEqualTo(50);
         assertThat(transactions.items()).hasSize(2);
     }
 
@@ -175,7 +206,7 @@ class WalletCommandServiceImplTest {
 
     @Test
     void redeem_withEnoughBalance_debitsTheCostAndRecordsTheMovement() {
-        Wallet wallet = walletWith(2, 30);
+        Wallet wallet = walletWith(2, 120);
 
         Result<CreditTransaction> result = redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE);
 
@@ -183,36 +214,36 @@ class WalletCommandServiceImplTest {
         assertThat(wallet.getBalance()).isZero();
         CreditTransaction movement = result.value();
         assertThat(movement.getType()).isEqualTo(TransactionType.REDEEMED);
-        assertThat(movement.getAmount().value()).isEqualTo(30);
+        assertThat(movement.getAmount().value()).isEqualTo(120);
         assertThat(movement.getDescription()).isEqualTo("Redeemed: contribution certificate");
         assertThat(movement.getRelatedCaseId()).isNull();
         assertThat(wallets.lockedReads()).isEqualTo(1);
     }
 
     @Test
-    void redeem_theAdvancedPathUnlock_costsFifty() {
-        Wallet wallet = walletWith(2, 80);
+    void redeem_theAdvancedPathUnlock_costsTwoHundred() {
+        Wallet wallet = walletWith(2, 230);
 
         Result<CreditTransaction> result = redeem(2, RedemptionItem.ADVANCED_PATH_UNLOCK);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(wallet.getBalance()).isEqualTo(30);
-        assertThat(result.value().getAmount().value()).isEqualTo(50);
+        assertThat(result.value().getAmount().value()).isEqualTo(200);
     }
 
     @Test
     void redeem_withInsufficientBalance_failsAndChangesNothing() {
-        Wallet wallet = walletWith(2, 20);
+        Wallet wallet = walletWith(2, 119);
 
         assertFailure(redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE),
                 RecognitionIncentivesError.INSUFFICIENT_BALANCE);
-        assertThat(wallet.getBalance()).isEqualTo(20);
+        assertThat(wallet.getBalance()).isEqualTo(119);
         assertThat(transactions.items()).isEmpty();
     }
 
     @Test
-    void redeem_theAdvancedPathUnlockWithFortyCredits_isInsufficient() {
-        walletWith(2, 40);
+    void redeem_theAdvancedPathUnlockWithTheOldPrice_isInsufficient() {
+        walletWith(2, 199);
 
         assertFailure(redeem(2, RedemptionItem.ADVANCED_PATH_UNLOCK),
                 RecognitionIncentivesError.INSUFFICIENT_BALANCE);
@@ -226,14 +257,14 @@ class WalletCommandServiceImplTest {
 
     @Test
     void redeem_withoutItem_returnsInvalidRedemptionItem() {
-        walletWith(2, 100);
+        walletWith(2, 300);
 
         assertFailure(redeem(2, null), RecognitionIncentivesError.INVALID_REDEMPTION_ITEM);
     }
 
     @Test
     void redeem_whenTheDatabaseFails_returnsDatabaseError() {
-        walletWith(2, 30);
+        walletWith(2, 120);
         transactions.failOnSave(new DataIntegrityViolationException("boom"));
 
         assertFailure(redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE),

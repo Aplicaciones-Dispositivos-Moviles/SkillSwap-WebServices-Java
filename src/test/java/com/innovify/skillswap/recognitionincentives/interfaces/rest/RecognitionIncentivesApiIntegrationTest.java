@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.iam.TestData;
 import com.innovify.skillswap.iam.application.internal.outboundservices.TokenGenerator;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
@@ -196,11 +197,11 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
         return call(post(CASES + "/" + caseId + "/appeal"), token, null);
     }
 
-    /** The verifier earns 10 SkillCredits for each case, as if they had resolved that many. */
-    private void earn(User verifier, int credits) {
-        for (int i = 0; i < credits / 10; i++) {
+    /** The verifier resolves that many cases of the type: 25 SkillCredits per quiz, 40 per mini-project. */
+    private void resolveCases(User verifier, CaseType caseType, int count) {
+        for (int i = 0; i < count; i++) {
             publisher.publish(new VerificationCaseResolved(nextCaseId++, ana.getId(), verifier.getId(), 1,
-                    SKILL, ReviewDecision.APPROVED, null));
+                    SKILL, caseType, ReviewDecision.APPROVED, null));
         }
     }
 
@@ -230,7 +231,8 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult resolved = decide(bobToken, caseId, "Approved", "Solid understanding of the network layers.");
 
         assertThat(status(resolved)).isEqualTo(200);
-        assertThat(balance(bobToken, bob)).isEqualTo(10);
+        assertThat((String) read(resolved, "$.caseType")).isEqualTo("Quiz");
+        assertThat(balance(bobToken, bob)).isEqualTo(25);
     }
 
     @Test
@@ -241,7 +243,26 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult resolved = decide(bobToken, caseId, "Rejected", "The explanation of the layers is incomplete.");
 
         assertThat(status(resolved)).isEqualTo(200);
-        assertThat(balance(bobToken, bob)).isEqualTo(10);
+        assertThat(balance(bobToken, bob)).isEqualTo(25);
+    }
+
+    @Test
+    void resolvingAQuizCase_recordsTheRewardOfAQuizInTheHistory() throws Exception {
+        enroll(bob, bobToken);
+        int caseId = failAssessment(ana, anaToken);
+
+        decide(bobToken, caseId, "Approved", "Solid understanding of the network layers.");
+
+        MvcResult result = history(bobToken, bob);
+        assertThat((int) read(result, "$[0].amount")).isEqualTo(25);
+        assertThat((int) read(result, "$[0].relatedCaseId")).isEqualTo(caseId);
+    }
+
+    @Test
+    void resolvedMiniProjects_payFortyEach() throws Exception {
+        resolveCases(bob, CaseType.MINI_PROJECT, 2);
+
+        assertThat(balance(bobToken, bob)).isEqualTo(80);
     }
 
     @Test
@@ -288,7 +309,7 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void history_listsTheMovementsFromTheMostRecent() throws Exception {
-        earn(bob, 30);
+        resolveCases(bob, CaseType.MINI_PROJECT, 3);
         assertThat(status(redeem(bobToken, "ContributionCertificate"))).isEqualTo(201);
 
         MvcResult result = history(bobToken, bob);
@@ -296,7 +317,7 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
         assertThat(status(result)).isEqualTo(200);
         assertThat((List<Object>) read(result, "$")).hasSize(4);
         assertThat((String) read(result, "$[0].type")).isEqualTo("Redeemed");
-        assertThat((int) read(result, "$[0].amount")).isEqualTo(30);
+        assertThat((int) read(result, "$[0].amount")).isEqualTo(120);
         assertThat((String) read(result, "$[3].type")).isEqualTo("Earned");
         assertThat((int) read(result, "$[3].relatedCaseId")).isEqualTo(1000);
     }
@@ -321,43 +342,44 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void redeem_withEnoughBalance_returns201AndTakesTheCost() throws Exception {
-        earn(bob, 30);
+        resolveCases(bob, CaseType.MINI_PROJECT, 3);
 
         MvcResult result = redeem(bobToken, "ContributionCertificate");
 
         assertThat(status(result)).isEqualTo(201);
         assertThat(result.getResponse().getHeader("Location")).isEqualTo(WALLETS + bob.getId() + "/transactions");
         assertThat((String) read(result, "$.type")).isEqualTo("Redeemed");
-        assertThat((int) read(result, "$.amount")).isEqualTo(30);
+        assertThat((int) read(result, "$.amount")).isEqualTo(120);
         assertThat((Object) read(result, "$.relatedCaseId")).isNull();
         assertThat(balance(bobToken, bob)).isZero();
     }
 
     @Test
     void redeem_withInsufficientBalance_returns409AndKeepsTheBalance() throws Exception {
-        earn(bob, 20);
+        resolveCases(bob, CaseType.QUIZ, 4);
 
         MvcResult result = redeem(bobToken, "ContributionCertificate");
 
         assertThat(status(result)).isEqualTo(409);
         assertThat(title(result)).isEqualTo("InsufficientBalance");
-        assertThat(balance(bobToken, bob)).isEqualTo(20);
+        assertThat(balance(bobToken, bob)).isEqualTo(100);
     }
 
     @Test
-    void redeem_theAdvancedPathUnlock_costsFiftyCredits() throws Exception {
-        earn(bob, 40);
+    void redeem_theAdvancedPathUnlock_costsTwoHundredCredits() throws Exception {
+        resolveCases(bob, CaseType.QUIZ, 4);
+        resolveCases(bob, CaseType.MINI_PROJECT, 2);
         MvcResult notEnough = redeem(bobToken, "AdvancedPathUnlock");
         assertThat(status(notEnough)).isEqualTo(409);
         assertThat(title(notEnough)).isEqualTo("InsufficientBalance");
 
-        earn(bob, 10);
+        resolveCases(bob, CaseType.QUIZ, 1);
 
         MvcResult result = redeem(bobToken, "AdvancedPathUnlock");
 
         assertThat(status(result)).isEqualTo(201);
-        assertThat((int) read(result, "$.amount")).isEqualTo(50);
-        assertThat(balance(bobToken, bob)).isZero();
+        assertThat((int) read(result, "$.amount")).isEqualTo(200);
+        assertThat(balance(bobToken, bob)).isEqualTo(5);
     }
 
     @Test
@@ -394,7 +416,7 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void redeem_acceptsTheNameInAnyCase() throws Exception {
-        earn(bob, 30);
+        resolveCases(bob, CaseType.MINI_PROJECT, 3);
 
         assertThat(status(redeem(bobToken, "contributioncertificate"))).isEqualTo(201);
     }

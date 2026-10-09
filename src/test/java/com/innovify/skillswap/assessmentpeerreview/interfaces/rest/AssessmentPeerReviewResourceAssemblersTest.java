@@ -7,6 +7,7 @@ import com.innovify.skillswap.assessmentpeerreview.application.queryservices.Ver
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.AssessmentAttemptResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseDetailResource;
@@ -28,7 +29,7 @@ class AssessmentPeerReviewResourceAssemblersTest {
     }
 
     private static VerificationCase verificationCase() {
-        VerificationCase verificationCase = new VerificationCase(3, 7, 10, "http-basics");
+        VerificationCase verificationCase = new VerificationCase(3, 7, 10, "http-basics", CaseType.QUIZ);
         ReflectionTestUtils.setField(verificationCase, "id", 9);
         return verificationCase;
     }
@@ -68,6 +69,7 @@ class AssessmentPeerReviewResourceAssemblersTest {
 
         assertThat(resource.id()).isEqualTo(9);
         assertThat(resource.verifierUserId()).isEqualTo(2);
+        assertThat(resource.caseType()).isEqualTo("Quiz");
         assertThat(resource.status()).isEqualTo("Resolved");
         assertThat(resource.decision()).isEqualTo("Rejected");
         assertThat(resource.rubricNotes()).isEqualTo("Needs work.");

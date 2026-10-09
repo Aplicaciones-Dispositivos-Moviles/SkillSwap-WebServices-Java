@@ -4,11 +4,14 @@ import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Cr
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 
-/** Advanced path unlock = 50 SkillCredits; contribution certificate = 30 SkillCredits. */
+/**
+ * Advanced path unlock = 200 SkillCredits; contribution certificate = 120 SkillCredits. Scaled to the rewards (25
+ * per quiz, 40 per mini-project), so a benefit still takes several resolved cases.
+ */
 public class DefaultRedemptionPricing implements RedemptionPricing {
 
-    public static final int ADVANCED_PATH_UNLOCK_COST = 50;
-    public static final int CONTRIBUTION_CERTIFICATE_COST = 30;
+    public static final int ADVANCED_PATH_UNLOCK_COST = 200;
+    public static final int CONTRIBUTION_CERTIFICATE_COST = 120;
 
     @Override
     public Credits calculateCost(RedemptionItem item) {

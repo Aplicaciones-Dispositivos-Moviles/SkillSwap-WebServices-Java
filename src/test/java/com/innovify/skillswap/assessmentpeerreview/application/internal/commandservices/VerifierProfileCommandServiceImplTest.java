@@ -13,6 +13,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Verif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.CreateVerifierProfileCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.UpdateVerifierAvailabilityCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import com.innovify.skillswap.shared.application.Result;
 import java.util.Locale;
@@ -132,8 +133,8 @@ class VerifierProfileCommandServiceImplTest {
 
     @Test
     void create_assignsThePendingCasesOfTheSkill() {
-        VerificationCase pending = cases.save(new VerificationCase(1, 1, 10, SKILL));
-        VerificationCase other = cases.save(new VerificationCase(2, 1, 11, "sql-fundamentals"));
+        VerificationCase pending = cases.save(new VerificationCase(1, 1, 10, SKILL, CaseType.QUIZ));
+        VerificationCase other = cases.save(new VerificationCase(2, 1, 11, "sql-fundamentals", CaseType.QUIZ));
 
         create(SKILL);
 
@@ -164,7 +165,7 @@ class VerifierProfileCommandServiceImplTest {
     @Test
     void setAvailability_switchedOn_assignsThePendingCases() {
         profiles.save(new VerifierProfile(2, SKILL).setAvailability(false));
-        VerificationCase pending = cases.save(new VerificationCase(1, 1, 10, SKILL));
+        VerificationCase pending = cases.save(new VerificationCase(1, 1, 10, SKILL, CaseType.QUIZ));
 
         Result<VerifierProfile> result = setAvailability(true);
 
@@ -176,7 +177,7 @@ class VerifierProfileCommandServiceImplTest {
     @Test
     void setAvailability_switchedOff_keepsTheCasesAlreadyAssigned() {
         create(SKILL);
-        VerificationCase assigned = cases.save(new VerificationCase(1, 1, 10, SKILL).assignVerifier(2));
+        VerificationCase assigned = cases.save(new VerificationCase(1, 1, 10, SKILL, CaseType.QUIZ).assignVerifier(2));
 
         setAvailability(false);
 

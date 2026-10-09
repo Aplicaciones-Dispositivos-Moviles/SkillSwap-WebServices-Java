@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Score;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.CaseStatusConverter;
+import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.CaseTypeConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.IntegerListConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.ReviewDecisionConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.ScoreConverter;
@@ -22,6 +24,7 @@ class AssessmentPeerReviewConvertersTest {
     private final StringListConverter strings = new StringListConverter();
     private final ScoreConverter scores = new ScoreConverter();
     private final CaseStatusConverter statuses = new CaseStatusConverter();
+    private final CaseTypeConverter types = new CaseTypeConverter();
     private final ReviewDecisionConverter decisions = new ReviewDecisionConverter();
 
     @Test
@@ -83,6 +86,26 @@ class AssessmentPeerReviewConvertersTest {
     }
 
     @ParameterizedTest
+    @EnumSource(CaseType.class)
+    void caseType_roundTripsAsThePascalCaseText(CaseType type) {
+        String text = types.convertToDatabaseColumn(type);
+
+        assertThat(text).isEqualTo(type.value());
+        assertThat(types.convertToEntityAttribute(text)).isEqualTo(type);
+    }
+
+    @Test
+    void caseType_isStoredAsQuizOrMiniProject() {
+        assertThat(types.convertToDatabaseColumn(CaseType.QUIZ)).isEqualTo("Quiz");
+        assertThat(types.convertToDatabaseColumn(CaseType.MINI_PROJECT)).isEqualTo("MiniProject");
+    }
+
+    @Test
+    void caseType_withAnUnknownText_isRejected() {
+        assertThatThrownBy(() -> types.convertToEntityAttribute("Essay")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
     @EnumSource(ReviewDecision.class)
     void reviewDecision_roundTripsAsThePascalCaseText(ReviewDecision decision) {
         String text = decisions.convertToDatabaseColumn(decision);
@@ -97,6 +120,8 @@ class AssessmentPeerReviewConvertersTest {
         assertThat(scores.convertToEntityAttribute(null)).isNull();
         assertThat(statuses.convertToDatabaseColumn(null)).isNull();
         assertThat(statuses.convertToEntityAttribute(null)).isNull();
+        assertThat(types.convertToDatabaseColumn(null)).isNull();
+        assertThat(types.convertToEntityAttribute(null)).isNull();
         assertThat(decisions.convertToDatabaseColumn(null)).isNull();
         assertThat(decisions.convertToEntityAttribute(null)).isNull();
     }

@@ -14,10 +14,10 @@ import org.springframework.context.annotation.Import;
 /**
  * Base class of the tests that run the whole application against a real PostgreSQL, started by Testcontainers
  * through its JDBC URL (jdbc:tc:...). The schema comes from iam-test-schema.sql,
- * credential-verification-test-schema.sql and learning-path-test-schema.sql, copies of what the C# API's
- * migrations create, and Hibernate only validates it. The file storage and the question generator are in-memory
- * fakes. All the subclasses share one Spring context and one container. They are skipped when Docker is not
- * available.
+ * credential-verification-test-schema.sql, learning-path-test-schema.sql and
+ * assessment-peer-review-test-schema.sql, copies of what the C# API's migrations create, and Hibernate only
+ * validates it. The file storage and the question generator are in-memory fakes. All the subclasses share one
+ * Spring context and one container. They are skipped when Docker is not available.
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///skillswap?stringtype=unspecified",
@@ -26,7 +26,8 @@ import org.springframework.context.annotation.Import;
         "spring.sql.init.mode=always",
         "spring.sql.init.schema-locations=classpath:iam-test-schema.sql,"
                 + "classpath:credential-verification-test-schema.sql,"
-                + "classpath:learning-path-test-schema.sql",
+                + "classpath:learning-path-test-schema.sql,"
+                + "classpath:assessment-peer-review-test-schema.sql",
         "token.settings.secret=test-secret-with-at-least-32-characters-long!",
         "cloudinary.cloud-name=test-cloud",
         "cloudinary.api-key=test-key",
@@ -42,8 +43,8 @@ public abstract class PostgresIntegrationTest {
 
     @BeforeEach
     protected void cleanDatabase() throws SQLException {
-        execute("TRUNCATE TABLE users, certificates, path_nodes, learning_paths, assessment_blueprints "
-                + "RESTART IDENTITY");
+        execute("TRUNCATE TABLE users, certificates, path_nodes, learning_paths, assessment_blueprints, "
+                + "assessment_attempts, verification_cases, verifier_profiles RESTART IDENTITY");
     }
 
     protected void execute(String sql) throws SQLException {

@@ -16,7 +16,8 @@ import java.util.Locale;
 
 /**
  * Opened when an attempt is not approved. It is assigned to an enabled verifier, who resolves it with a
- * decision and the notes of the rubric. A student can add evidence while it is open.
+ * decision and the notes of the rubric. A student can add evidence while it is open. A rejected case can be
+ * appealed once: it reopens and goes to a different verifier, whose decision is final.
  */
 @Entity
 @Table(name = "verification_cases")
@@ -24,6 +25,8 @@ public class VerificationCase {
 
     public static final int MAX_EVIDENCE_URL_LENGTH = 500;
     public static final int MAX_RUBRIC_NOTES_LENGTH = 2000;
+    /** How many times the student can appeal a rejected case. */
+    public static final int MAX_APPEALS = 1;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -67,6 +70,14 @@ public class VerificationCase {
 
     @Column(name = "resolved_at")
     private Instant resolvedAt;
+
+    /** How many times the case was appealed; 0 for the cases that never were. */
+    @Column(name = "appeal_count", nullable = false)
+    private int appealCount;
+
+    /** The verifier who resolved the case before the appeal; they cannot review it again. */
+    @Column(name = "previous_verifier_user_id")
+    private Integer previousVerifierUserId;
 
     /** Required by JPA. */
     protected VerificationCase() {
@@ -148,12 +159,30 @@ public class VerificationCase {
         return resolvedAt;
     }
 
+    public int getAppealCount() {
+        return appealCount;
+    }
+
+    /** The verifier who rejected the case before the appeal; null when it was never appealed. */
+    public Integer getPreviousVerifierUserId() {
+        return previousVerifierUserId;
+    }
+
     public boolean isOpen() {
         return status != CaseStatus.RESOLVED;
     }
 
     public boolean isAssignedTo(int userId) {
         return verifierUserId != null && verifierUserId == userId;
+    }
+
+    /** True when the case is resolved with a rejection and the student has appeals left. */
+    public boolean canBeAppealed() {
+        return status == CaseStatus.RESOLVED && decision == ReviewDecision.REJECTED && hasAppealsLeft();
+    }
+
+    public boolean hasAppealsLeft() {
+        return appealCount < MAX_APPEALS;
     }
 
     /**
@@ -170,6 +199,9 @@ public class VerificationCase {
         }
         if (verifierUserId == studentId) {
             throw new DomainException("A student cannot review their own case.");
+        }
+        if (previousVerifierUserId != null && verifierUserId == previousVerifierUserId) {
+            throw new DomainException("A verifier cannot review again a case they already resolved.");
         }
 
         this.verifierUserId = verifierUserId;
@@ -232,6 +264,31 @@ public class VerificationCase {
         this.rubricNotes = notes;
         this.status = CaseStatus.RESOLVED;
         this.resolvedAt = Instant.now();
+        return this;
+    }
+
+    /**
+     * Reopens a rejected case so another verifier reviews it. The decision and the notes of the first review
+     * are cleared, the evidence stays, and the case goes back to pending without a verifier.
+     *
+     * @throws DomainException when the case is not rejected, or the appeals are used up
+     */
+    public VerificationCase appeal() {
+        if (status != CaseStatus.RESOLVED || decision != ReviewDecision.REJECTED) {
+            throw new DomainException("Only a rejected case can be appealed.");
+        }
+        if (!hasAppealsLeft()) {
+            throw new DomainException("The case was already appealed.");
+        }
+
+        this.previousVerifierUserId = verifierUserId;
+        this.appealCount++;
+        this.verifierUserId = null;
+        this.decision = null;
+        this.rubricNotes = null;
+        this.assignedAt = null;
+        this.resolvedAt = null;
+        this.status = CaseStatus.PENDING;
         return this;
     }
 

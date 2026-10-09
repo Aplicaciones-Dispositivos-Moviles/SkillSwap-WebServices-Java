@@ -6,6 +6,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.repositories.Verificat
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerifierProfileRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.VerifierCandidate;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.VerifierMatcher;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,8 +43,15 @@ public class CaseAssignmentServiceImpl implements CaseAssignmentService {
                         openCases.getOrDefault(profile.getVerifierUserId(), 0)))
                 .toList();
 
+        // The parties of the case never review it: its student and, after an appeal, the first verifier.
+        Set<Integer> excluded = new HashSet<>();
+        excluded.add(verificationCase.getStudentId());
+        if (verificationCase.getPreviousVerifierUserId() != null) {
+            excluded.add(verificationCase.getPreviousVerifierUserId());
+        }
+
         Optional<VerifierProfile> chosen = verifierMatcher.findVerifier(
-                verificationCase.getSkillTag(), verificationCase.getStudentId(), candidates);
+                verificationCase.getSkillTag(), excluded, candidates);
         if (chosen.isEmpty()) {
             return false;
         }

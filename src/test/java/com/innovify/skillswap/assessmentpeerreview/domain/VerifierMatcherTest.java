@@ -7,6 +7,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifi
 import com.innovify.skillswap.assessmentpeerreview.domain.services.VerifierCandidate;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.VerifierMatcher;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class VerifierMatcherTest {
@@ -73,5 +74,18 @@ class VerifierMatcherTest {
     @Test
     void findVerifier_withoutCandidates_returnsEmpty() {
         assertThat(matcher.findVerifier(SKILL, 1, List.of())).isEmpty();
+    }
+
+    @Test
+    void findVerifier_neverChoosesAnExcludedUser() {
+        var chosen = matcher.findVerifier(SKILL, Set.of(1, 2),
+                List.of(candidate(2, 0), candidate(3, 5), candidate(1, 0)));
+
+        assertThat(chosen).hasValueSatisfying(profile -> assertThat(profile.getVerifierUserId()).isEqualTo(3));
+    }
+
+    @Test
+    void findVerifier_whenEveryoneIsExcluded_returnsEmpty() {
+        assertThat(matcher.findVerifier(SKILL, Set.of(2, 3), List.of(candidate(2, 0), candidate(3, 0)))).isEmpty();
     }
 }

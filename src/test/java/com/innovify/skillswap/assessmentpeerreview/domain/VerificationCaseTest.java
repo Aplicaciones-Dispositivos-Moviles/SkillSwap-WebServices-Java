@@ -182,4 +182,64 @@ class VerificationCaseTest {
     void resolve_withoutADecision_throwsDomainException() {
         assertThatThrownBy(() -> assignedCase().resolve(null, "Notes")).isInstanceOf(DomainException.class);
     }
+
+    // ---------- Appeal ----------
+
+    private static VerificationCase rejectedCase() {
+        return assignedCase().resolve(ReviewDecision.REJECTED, "Needs more work.");
+    }
+
+    @Test
+    void canBeAppealed_onlyForARejectedCaseWithAppealsLeft() {
+        assertThat(newCase().canBeAppealed()).isFalse();
+        assertThat(assignedCase().canBeAppealed()).isFalse();
+        assertThat(assignedCase().resolve(ReviewDecision.APPROVED, "Good.").canBeAppealed()).isFalse();
+        assertThat(rejectedCase().canBeAppealed()).isTrue();
+    }
+
+    @Test
+    void appeal_reopensTheCaseWithoutVerifierNorDecision() {
+        VerificationCase verificationCase = assignedCase();
+        verificationCase.attachEvidence("https://github.com/student/project");
+        verificationCase.resolve(ReviewDecision.REJECTED, "Needs more work.");
+
+        verificationCase.appeal();
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.getVerifierUserId()).isNull();
+        assertThat(verificationCase.getDecision()).isNull();
+        assertThat(verificationCase.getRubricNotes()).isNull();
+        assertThat(verificationCase.getAssignedAt()).isNull();
+        assertThat(verificationCase.getResolvedAt()).isNull();
+        assertThat(verificationCase.getAppealCount()).isEqualTo(1);
+        assertThat(verificationCase.getPreviousVerifierUserId()).isEqualTo(VERIFIER_ID);
+        assertThat(verificationCase.getEvidenceUrl()).isEqualTo("https://github.com/student/project");
+        assertThat(verificationCase.isOpen()).isTrue();
+    }
+
+    @Test
+    void appeal_aCaseThatIsNotRejected_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().appeal()).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> assignedCase().appeal()).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> assignedCase().resolve(ReviewDecision.APPROVED, "Good.").appeal())
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void appeal_twice_throwsDomainException() {
+        VerificationCase verificationCase = rejectedCase().appeal().assignVerifier(3)
+                .resolve(ReviewDecision.REJECTED, "Still not enough.");
+
+        assertThat(verificationCase.canBeAppealed()).isFalse();
+        assertThatThrownBy(verificationCase::appeal).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void assignVerifier_afterAnAppeal_toTheFirstVerifier_throwsDomainException() {
+        VerificationCase verificationCase = rejectedCase().appeal();
+
+        assertThatThrownBy(() -> verificationCase.assignVerifier(VERIFIER_ID))
+                .isInstanceOf(DomainException.class);
+        assertThat(verificationCase.assignVerifier(3).getVerifierUserId()).isEqualTo(3);
+    }
 }

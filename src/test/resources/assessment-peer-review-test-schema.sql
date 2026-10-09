@@ -27,7 +27,9 @@ CREATE TABLE verification_cases (
     evidence_url character varying(500),
     opened_at timestamp with time zone NOT NULL,
     assigned_at timestamp with time zone,
-    resolved_at timestamp with time zone
+    resolved_at timestamp with time zone,
+    appeal_count integer NOT NULL DEFAULT 0,
+    previous_verifier_user_id integer
 );
 
 CREATE TABLE verifier_profiles (

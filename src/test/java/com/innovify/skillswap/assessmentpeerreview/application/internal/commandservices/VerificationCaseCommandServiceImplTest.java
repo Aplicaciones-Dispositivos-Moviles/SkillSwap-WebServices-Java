@@ -10,11 +10,14 @@ import com.innovify.skillswap.assessmentpeerreview.application.fakes.TestMessage
 import com.innovify.skillswap.assessmentpeerreview.domain.model.AssessmentPeerReviewError;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
+import com.innovify.skillswap.assessmentpeerreview.application.internal.CaseAssignmentServiceImpl;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.AppealVerificationCaseCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.AttachCaseEvidenceCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.ResolveVerificationCaseCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
+import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionOutcome;
 import com.innovify.skillswap.shared.application.Result;
 import java.util.Locale;
@@ -42,7 +45,8 @@ class VerificationCaseCommandServiceImplTest {
     @BeforeEach
     void setUp() {
         LocaleContextHolder.setLocale(Locale.US);
-        service = new VerificationCaseCommandServiceImpl(cases, profiles, learningPath, events,
+        service = new VerificationCaseCommandServiceImpl(cases, profiles,
+                new CaseAssignmentServiceImpl(profiles, cases, new DefaultVerifierMatcher()), learningPath, events,
                 TransactionOperations.withoutTransaction(), TestMessages.source());
     }
 
@@ -304,5 +308,112 @@ class VerificationCaseCommandServiceImplTest {
 
         assertFailure(resolve(verificationCase.getId()), AssessmentPeerReviewError.DATABASE_ERROR);
         assertThat(events.published()).isEmpty();
+    }
+
+    // ---------- Appeal ----------
+
+    private VerificationCase addRejectedCase() {
+        return cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics").assignVerifier(VERIFIER_ID)
+                .resolve(ReviewDecision.REJECTED, "Needs more work."));
+    }
+
+    private Result<VerificationCase> appeal(int caseId, int studentId) {
+        return service.handle(new AppealVerificationCaseCommand(caseId, studentId));
+    }
+
+    @Test
+    void appeal_assignsTheCaseToAnotherVerifier() {
+        VerificationCase verificationCase = addRejectedCase();
+        addVerifier(VERIFIER_ID);
+        addVerifier(3);
+
+        Result<VerificationCase> result = appeal(verificationCase.getId(), STUDENT_ID);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getStatus()).isEqualTo(CaseStatus.ASSIGNED);
+        assertThat(result.value().getVerifierUserId()).isEqualTo(3);
+        assertThat(result.value().getPreviousVerifierUserId()).isEqualTo(VERIFIER_ID);
+        assertThat(result.value().getAppealCount()).isEqualTo(1);
+        assertThat(result.value().getDecision()).isNull();
+    }
+
+    @Test
+    void appeal_withNobodyElseAvailable_leavesTheCasePending() {
+        VerificationCase verificationCase = addRejectedCase();
+        addVerifier(VERIFIER_ID);
+
+        Result<VerificationCase> result = appeal(verificationCase.getId(), STUDENT_ID);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(result.value().getVerifierUserId()).isNull();
+    }
+
+    @Test
+    void appeal_aMissingCase_failsWithCaseNotFound() {
+        assertFailure(appeal(99, STUDENT_ID), AssessmentPeerReviewError.CASE_NOT_FOUND);
+    }
+
+    @Test
+    void appeal_byAnotherUser_failsWithNotCaseOwner() {
+        VerificationCase verificationCase = addRejectedCase();
+
+        assertFailure(appeal(verificationCase.getId(), 77), AssessmentPeerReviewError.NOT_CASE_OWNER);
+        assertFailure(appeal(verificationCase.getId(), VERIFIER_ID), AssessmentPeerReviewError.NOT_CASE_OWNER);
+    }
+
+    @Test
+    void appeal_anOpenCase_failsWithCaseNotAppealable() {
+        VerificationCase verificationCase = addAssignedCase();
+
+        assertFailure(appeal(verificationCase.getId(), STUDENT_ID), AssessmentPeerReviewError.CASE_NOT_APPEALABLE);
+    }
+
+    @Test
+    void appeal_anApprovedCase_failsWithCaseNotAppealable() {
+        VerificationCase verificationCase = addAssignedCase().resolve(ReviewDecision.APPROVED, "Good.");
+
+        assertFailure(appeal(verificationCase.getId(), STUDENT_ID), AssessmentPeerReviewError.CASE_NOT_APPEALABLE);
+    }
+
+    @Test
+    void appeal_twice_failsWithAppealAlreadyUsed() {
+        VerificationCase verificationCase = addRejectedCase();
+        addVerifier(3);
+        appeal(verificationCase.getId(), STUDENT_ID);
+        verificationCase.resolve(ReviewDecision.REJECTED, "Still not enough.");
+
+        assertFailure(appeal(verificationCase.getId(), STUDENT_ID), AssessmentPeerReviewError.APPEAL_ALREADY_USED);
+    }
+
+    @Test
+    void appeal_whenTheStudentHasAnotherOpenCaseForTheNode_failsWithOpenCaseAlreadyExists() {
+        VerificationCase rejected = addRejectedCase();
+        cases.save(new VerificationCase(2, STUDENT_ID, 10, "http-basics"));
+
+        assertFailure(appeal(rejected.getId(), STUDENT_ID), AssessmentPeerReviewError.OPEN_CASE_ALREADY_EXISTS);
+        assertThat(rejected.getStatus()).isEqualTo(CaseStatus.RESOLVED);
+    }
+
+    @Test
+    void appeal_whenPersistenceFails_failsWithDatabaseError() {
+        VerificationCase verificationCase = addRejectedCase();
+        cases.failOnSave(new DataIntegrityViolationException("failure"));
+
+        assertFailure(appeal(verificationCase.getId(), STUDENT_ID), AssessmentPeerReviewError.DATABASE_ERROR);
+    }
+
+    @Test
+    void appeal_thenTheSecondVerifierResolves_finalDecisionIsRecorded() {
+        VerificationCase verificationCase = addRejectedCase();
+        addVerifier(VERIFIER_ID);
+        addVerifier(3);
+        appeal(verificationCase.getId(), STUDENT_ID);
+
+        Result<VerificationCase> result = resolve(verificationCase.getId(), 3, ReviewDecision.APPROVED, "Now it is fine.");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getDecision()).isEqualTo(ReviewDecision.APPROVED);
+        assertThat(learningPath.completedNodes()).contains(10);
     }
 }

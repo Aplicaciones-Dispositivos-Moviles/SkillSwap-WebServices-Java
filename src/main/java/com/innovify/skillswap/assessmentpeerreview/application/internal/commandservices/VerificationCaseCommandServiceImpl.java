@@ -4,6 +4,8 @@ import com.innovify.skillswap.assessmentpeerreview.application.commandservices.V
 import com.innovify.skillswap.assessmentpeerreview.domain.model.AssessmentPeerReviewError;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
+import com.innovify.skillswap.assessmentpeerreview.application.internal.CaseAssignmentService;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.AppealVerificationCaseCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.AttachCaseEvidenceCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.ResolveVerificationCaseCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
@@ -33,6 +35,7 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
 
     private final VerificationCaseRepository caseRepository;
     private final VerifierProfileRepository profileRepository;
+    private final CaseAssignmentService assignmentService;
     private final LearningPathContextFacade learningPathFacade;
     private final DomainEventPublisher eventPublisher;
     private final TransactionOperations transactions;
@@ -40,12 +43,14 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
 
     public VerificationCaseCommandServiceImpl(VerificationCaseRepository caseRepository,
                                               VerifierProfileRepository profileRepository,
+                                              CaseAssignmentService assignmentService,
                                               LearningPathContextFacade learningPathFacade,
                                               DomainEventPublisher eventPublisher,
                                               TransactionOperations transactions,
                                               MessageSource messageSource) {
         this.caseRepository = caseRepository;
         this.profileRepository = profileRepository;
+        this.assignmentService = assignmentService;
         this.learningPathFacade = learningPathFacade;
         this.eventPublisher = eventPublisher;
         this.transactions = transactions;
@@ -139,6 +144,40 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
             return failures.failure(AssessmentPeerReviewFailures.fromNodeCompletion(exception.outcome()));
         } catch (RuntimeException exception) {
             log.error("Could not resolve the case {}", command.caseId(), exception);
+            return failures.failure(AssessmentPeerReviewFailures.toError(exception));
+        }
+    }
+
+    @Override
+    public Result<VerificationCase> handle(AppealVerificationCaseCommand command) {
+        try {
+            Optional<VerificationCase> found = caseRepository.findById(command.caseId());
+            if (found.isEmpty()) {
+                return failures.failure(AssessmentPeerReviewError.CASE_NOT_FOUND);
+            }
+            VerificationCase verificationCase = found.get();
+            if (verificationCase.getStudentId() != command.studentId()) {
+                return failures.failure(AssessmentPeerReviewError.NOT_CASE_OWNER);
+            }
+            if (!verificationCase.canBeAppealed()) {
+                // A rejected case with no appeals left is a different problem from one that cannot be appealed.
+                boolean rejected = !verificationCase.isOpen()
+                        && verificationCase.getDecision() == ReviewDecision.REJECTED;
+                return failures.failure(rejected
+                        ? AssessmentPeerReviewError.APPEAL_ALREADY_USED
+                        : AssessmentPeerReviewError.CASE_NOT_APPEALABLE);
+            }
+            // The student may have retaken the assessment: reopening this case would be a second open one.
+            if (caseRepository.findOpenByStudentAndNode(command.studentId(),
+                    verificationCase.getPathNodeId()).isPresent()) {
+                return failures.failure(AssessmentPeerReviewError.OPEN_CASE_ALREADY_EXISTS);
+            }
+
+            verificationCase.appeal();
+            assignmentService.tryAssign(verificationCase);
+            return Result.success(caseRepository.save(verificationCase));
+        } catch (RuntimeException exception) {
+            log.error("Could not appeal the case {}", command.caseId(), exception);
             return failures.failure(AssessmentPeerReviewFailures.toError(exception));
         }
     }

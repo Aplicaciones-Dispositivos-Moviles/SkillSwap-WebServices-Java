@@ -7,6 +7,7 @@ import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeVerifie
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -114,5 +115,40 @@ class CaseAssignmentServiceImplTest {
         addVerifier(2);
 
         assertThat(service.assignPending(List.of(SKILL))).isZero();
+    }
+
+    @Test
+    void tryAssign_anAppealedCase_neverGoesBackToTheVerifierWhoRejectedIt() {
+        addVerifier(2);
+        addVerifier(3);
+        VerificationCase verificationCase = addCase(1, SKILL).assignVerifier(2)
+                .resolve(ReviewDecision.REJECTED, "Needs more work.").appeal();
+        // Verifier 2 has no open cases, so only the exclusion keeps them away.
+
+        assertThat(service.tryAssign(verificationCase)).isTrue();
+        assertThat(verificationCase.getVerifierUserId()).isEqualTo(3);
+    }
+
+    @Test
+    void tryAssign_anAppealedCase_withOnlyTheFirstVerifierAvailable_staysPending() {
+        addVerifier(2);
+        VerificationCase verificationCase = addCase(1, SKILL).assignVerifier(2)
+                .resolve(ReviewDecision.REJECTED, "Needs more work.").appeal();
+
+        assertThat(service.tryAssign(verificationCase)).isFalse();
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+    }
+
+    @Test
+    void assignPending_givesAnAppealedCaseToANewVerifierWhenOneShowsUp() {
+        addVerifier(2);
+        VerificationCase verificationCase = addCase(1, SKILL).assignVerifier(2)
+                .resolve(ReviewDecision.REJECTED, "Needs more work.").appeal();
+
+        assertThat(service.assignPending(List.of(SKILL))).isZero();
+
+        addVerifier(3);
+        assertThat(service.assignPending(List.of(SKILL))).isEqualTo(1);
+        assertThat(verificationCase.getVerifierUserId()).isEqualTo(3);
     }
 }

@@ -301,4 +301,45 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
     void case_countOpenByVerifierUserIds_withoutUsers_isEmpty() {
         assertThat(cases.countOpenByVerifierUserIds(List.of())).isEmpty();
     }
+
+    @Test
+    void case_anAppeal_roundTripsTheCountAndThePreviousVerifier() {
+        int id = addCase(1, 1, 10).getId();
+        changeCase(id, c -> c.assignVerifier(2).attachEvidence("https://github.com/student/app")
+                .resolve(ReviewDecision.REJECTED, "Needs work."));
+
+        changeCase(id, VerificationCase::appeal);
+
+        VerificationCase appealed = loadCase(id);
+        assertThat(appealed.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(appealed.getVerifierUserId()).isNull();
+        assertThat(appealed.getDecision()).isNull();
+        assertThat(appealed.getRubricNotes()).isNull();
+        assertThat(appealed.getResolvedAt()).isNull();
+        assertThat(appealed.getAppealCount()).isEqualTo(1);
+        assertThat(appealed.getPreviousVerifierUserId()).isEqualTo(2);
+        assertThat(appealed.getEvidenceUrl()).isEqualTo("https://github.com/student/app");
+    }
+
+    @Test
+    void case_aRowWithoutAppeals_isReadWithZeroAppealsAndNoPreviousVerifier() {
+        int id = addCase(1, 1, 10).getId();
+
+        VerificationCase stored = loadCase(id);
+
+        assertThat(stored.getAppealCount()).isZero();
+        assertThat(stored.getPreviousVerifierUserId()).isNull();
+    }
+
+    @Test
+    void case_anAppealedCaseCountsAsOpenAndIsFoundAsPending() {
+        int id = addCase(1, 1, 10).getId();
+        changeCase(id, c -> c.assignVerifier(2).resolve(ReviewDecision.REJECTED, "Needs work."));
+        changeCase(id, VerificationCase::appeal);
+
+        assertThat(cases.findOpenByStudentAndNode(1, 10)).isPresent();
+        assertThat(cases.findPendingBySkillTag("http-basics")).extracting(VerificationCase::getId)
+                .containsExactly(id);
+        assertThat(cases.countOpenByVerifierUserIds(List.of(2))).isEmpty();
+    }
 }

@@ -15,6 +15,7 @@ import com.innovify.skillswap.assessmentpeerreview.application.queryservices.Ver
 import com.innovify.skillswap.assessmentpeerreview.domain.model.AssessmentPeerReviewError;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.AppealVerificationCaseCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.AttachCaseEvidenceCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.CreateVerifierProfileCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.ResolveVerificationCaseCommand;
@@ -355,5 +356,86 @@ class AssessmentPeerReviewServicesIntegrationTest extends PostgresIntegrationTes
         VerifierProfile profile = profileQueries.handle(new GetVerifierProfileByUserIdQuery(2)).orElseThrow();
         assertThat(profile.getRating()).isEqualTo(4.5);
         assertThat(profile.getReviewCount()).isZero();
+    }
+
+    // ---------- Appeals ----------
+
+    private Result<VerificationCase> appeal(int caseId, int studentId) {
+        return caseCommands.handle(new AppealVerificationCaseCommand(caseId, studentId));
+    }
+
+    private void reject(int caseId, int verifierId) {
+        Result<VerificationCase> result = caseCommands.handle(
+                new ResolveVerificationCaseCommand(caseId, verifierId, ReviewDecision.REJECTED, "Needs more practice."));
+        assertThat(result.isSuccess()).as(result.message()).isTrue();
+    }
+
+    @Test
+    void appeal_goesToAnotherVerifierWhoseApprovalCompletesTheNode() {
+        enrollVerifier(2);
+        enrollVerifier(3);
+        int caseId = failAssessment(1).verificationCase().getId();
+        assertThat(reload(caseId).getVerifierUserId()).isEqualTo(2);
+        reject(caseId, 2);
+
+        Result<VerificationCase> appealed = appeal(caseId, 1);
+
+        assertThat(appealed.isSuccess()).as(appealed.message()).isTrue();
+        VerificationCase stored = reload(caseId);
+        assertThat(stored.getStatus()).isEqualTo(CaseStatus.ASSIGNED);
+        assertThat(stored.getVerifierUserId()).isEqualTo(3);
+        assertThat(stored.getPreviousVerifierUserId()).isEqualTo(2);
+        assertThat(stored.getAppealCount()).isEqualTo(1);
+
+        Result<VerificationCase> resolved = caseCommands.handle(
+                new ResolveVerificationCaseCommand(caseId, 3, ReviewDecision.APPROVED, "It does meet the rubric."));
+
+        assertThat(resolved.isSuccess()).as(resolved.message()).isTrue();
+        assertThat(node(1, SKILL).getStatus()).isEqualTo(NodeStatus.COMPLETED);
+        assertThat(appeal(caseId, 1).isFailure()).isTrue();
+    }
+
+    @Test
+    void appeal_withoutAnotherVerifier_waitsUntilOneIsEnrolled() {
+        enrollVerifier(2);
+        int caseId = failAssessment(1).verificationCase().getId();
+        reject(caseId, 2);
+
+        Result<VerificationCase> appealed = appeal(caseId, 1);
+
+        assertThat(appealed.isSuccess()).as(appealed.message()).isTrue();
+        assertThat(reload(caseId).getStatus()).isEqualTo(CaseStatus.PENDING);
+
+        enrollVerifier(3);
+
+        VerificationCase stored = reload(caseId);
+        assertThat(stored.getStatus()).isEqualTo(CaseStatus.ASSIGNED);
+        assertThat(stored.getVerifierUserId()).isEqualTo(3);
+    }
+
+    @Test
+    void appeal_ofAnotherStudentsCase_isRejected() {
+        enrollVerifier(2);
+        int caseId = failAssessment(1).verificationCase().getId();
+        reject(caseId, 2);
+
+        Result<VerificationCase> result = appeal(caseId, 5);
+
+        assertThat(result.isFailure()).isTrue();
+        assertThat(result.error()).isEqualTo(AssessmentPeerReviewError.NOT_CASE_OWNER);
+        assertThat(reload(caseId).getStatus()).isEqualTo(CaseStatus.RESOLVED);
+    }
+
+    @Test
+    void appeal_afterTheStudentTriedAgainAndFailed_isRejectedBecauseTheNodeHasAnOpenCase() {
+        enrollVerifier(2);
+        int firstCase = failAssessment(1).verificationCase().getId();
+        reject(firstCase, 2);
+        failAssessment(1);
+
+        Result<VerificationCase> result = appeal(firstCase, 1);
+
+        assertThat(result.isFailure()).isTrue();
+        assertThat(result.error()).isEqualTo(AssessmentPeerReviewError.OPEN_CASE_ALREADY_EXISTS);
     }
 }

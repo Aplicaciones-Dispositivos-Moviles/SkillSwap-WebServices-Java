@@ -9,6 +9,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathStatus;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -325,5 +326,80 @@ class LearningPathTest {
         copy.clear();
 
         assertThat(path.getNodes()).hasSize(5);
+    }
+
+    // ---------- Pause and resume ----------
+
+    @Test
+    void constructor_startsTheProgressAtTheCreation() {
+        LearningPath path = TestData.newPath();
+
+        assertThat(path.getLastProgressAt()).isEqualTo(path.getCreatedAt());
+        assertThat(path.isActive()).isTrue();
+        assertThat(path.isPaused()).isFalse();
+    }
+
+    @Test
+    void pause_keepsTheNodesAndBlocksNewAssessments() {
+        LearningPath path = TestData.newPath();
+        List<NodeStatus> before = path.getNodes().stream().map(PathNode::getStatus).toList();
+        Instant progress = path.getLastProgressAt();
+
+        path.pause();
+
+        assertThat(path.getStatus()).isEqualTo(PathStatus.PAUSED);
+        assertThat(path.isPaused()).isTrue();
+        assertThat(path.getNodes()).extracting(PathNode::getStatus).containsExactlyElementsOf(before);
+        assertThat(path.getLastProgressAt()).isEqualTo(progress);
+        assertThatThrownBy(() -> path.attachBlueprint(1, 10)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void pause_aPausedOrCompletedPath_throwsDomainException() {
+        LearningPath paused = TestData.newPath().pause();
+        LearningPath completed = TestData.newPath(1, "networking-basics");
+        completed.completeNode(1);
+
+        assertThatThrownBy(paused::pause).isInstanceOf(DomainException.class);
+        assertThat(completed.getStatus()).isEqualTo(PathStatus.COMPLETED);
+        assertThatThrownBy(completed::pause).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void resume_makesAPausedPathActiveAgain() {
+        LearningPath path = TestData.newPath().pause().resume();
+
+        assertThat(path.getStatus()).isEqualTo(PathStatus.ACTIVE);
+        assertThat(path.attachBlueprint(1, 10).getNode(1).orElseThrow().getAssessmentBlueprintId()).isEqualTo(10);
+    }
+
+    @Test
+    void resume_anActivePath_throwsDomainException() {
+        assertThatThrownBy(() -> TestData.newPath().resume()).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void completeNode_onAPausedPath_isStillAccepted_forTheReviewsAlreadyInProgress() {
+        LearningPath path = TestData.newPath().pause();
+
+        path.completeNode(1);
+
+        assertThat(path.getNode(1).orElseThrow().getStatus()).isEqualTo(NodeStatus.COMPLETED);
+        assertThat(path.isPaused()).isTrue();
+    }
+
+    @Test
+    void progress_isRecordedWhenANodeIsCompletedOrAnAssessmentIsGenerated() throws Exception {
+        LearningPath path = TestData.newPath();
+        Instant created = path.getLastProgressAt();
+
+        Thread.sleep(2);
+        path.attachBlueprint(1, 10);
+        Instant afterBlueprint = path.getLastProgressAt();
+        Thread.sleep(2);
+        path.completeNode(1);
+
+        assertThat(afterBlueprint).isAfter(created);
+        assertThat(path.getLastProgressAt()).isAfter(afterBlueprint);
     }
 }

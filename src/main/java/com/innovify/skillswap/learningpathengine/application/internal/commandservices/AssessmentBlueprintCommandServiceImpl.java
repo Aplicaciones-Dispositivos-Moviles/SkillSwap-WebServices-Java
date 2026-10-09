@@ -66,6 +66,11 @@ public class AssessmentBlueprintCommandServiceImpl implements AssessmentBlueprin
                 return failures.failure(LearningPathError.NOT_PATH_OWNER);
             }
 
+            // A paused path keeps its progress but accepts no new assessment until it is resumed.
+            if (path.isPaused()) {
+                return failures.failure(LearningPathError.PATH_PAUSED);
+            }
+
             PathNode node = path.getNode(command.pathNodeId()).orElseThrow();
             if (node.getStatus() == NodeStatus.COMPLETED) {
                 return failures.failure(LearningPathError.NODE_ALREADY_COMPLETED);

@@ -3,6 +3,7 @@ package com.innovify.skillswap.learningpathengine.application.fakes;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
+import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathStatus;
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -18,7 +19,13 @@ public class FakeLearningPathRepository implements LearningPathRepository {
     private int nextId = 1;
     private int nextNodeId = 1;
     private int saveCalls;
+    private final List<Integer> lockedStudents = new ArrayList<>();
     private RuntimeException saveFailure;
+
+    /** The students whose paths were locked, in order. */
+    public List<Integer> lockedStudents() {
+        return lockedStudents;
+    }
 
     public List<LearningPath> paths() {
         return paths;
@@ -51,6 +58,35 @@ public class FakeLearningPathRepository implements LearningPathRepository {
             paths.add(path);
         }
         return path;
+    }
+
+    @Override
+    public Optional<LearningPath> findById(int id) {
+        return paths.stream().filter(p -> p.getId() == id).findFirst();
+    }
+
+    @Override
+    public List<LearningPath> findByStudentId(int studentId) {
+        return paths.stream().filter(p -> p.getStudentId() == studentId)
+                .sorted(Comparator.comparing(LearningPath::getId).reversed())
+                .toList();
+    }
+
+    @Override
+    public int countByStudentId(int studentId) {
+        return (int) paths.stream().filter(p -> p.getStudentId() == studentId).count();
+    }
+
+    @Override
+    public int countActiveByStudentId(int studentId) {
+        return (int) paths.stream()
+                .filter(p -> p.getStudentId() == studentId && p.getStatus() == PathStatus.ACTIVE)
+                .count();
+    }
+
+    @Override
+    public void lockStudentPaths(int studentId) {
+        lockedStudents.add(studentId);
     }
 
     @Override

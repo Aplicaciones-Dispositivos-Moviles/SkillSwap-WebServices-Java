@@ -132,12 +132,13 @@ class LearningPathServicesIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void declare_twice_returnsActivePathAlreadyExists() {
+    void declare_twiceOnTheFreePlan_returnsPlanLimitReached() {
         declare(REST_AND_JWT);
 
         Result<LearningPath> result = declare("quiero aprender SQL");
 
-        assertThat(result.error().name()).isEqualTo("ACTIVE_PATH_ALREADY_EXISTS");
+        assertThat(result.error().name()).isEqualTo("PLAN_LIMIT_REACHED");
+        assertThat(result.details()).containsEntry("limit", "ActiveRoutes").containsEntry("plan", "Free");
     }
 
     @Test

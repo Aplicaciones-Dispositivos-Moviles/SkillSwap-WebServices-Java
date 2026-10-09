@@ -3,6 +3,7 @@ package com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,6 +21,9 @@ import java.util.Locale;
  * is assigned to an enabled verifier, who resolves it with a decision and the notes of the rubric. A student can
  * add evidence while it is open. A rejected case can be appealed once: it reopens and goes to a different
  * verifier, whose decision is final.
+ *
+ * <p>The review is due by the deadline of the plan the student had when the case was opened; a later change of plan
+ * does not move it.
  */
 @Entity
 @Table(name = "verification_cases")
@@ -71,6 +75,10 @@ public class VerificationCase {
     @Column(name = "opened_at", nullable = false)
     private Instant openedAt;
 
+    /** When the review is due; null for the cases opened before the plans set a deadline. */
+    @Column(name = "review_due_at")
+    private Instant reviewDueAt;
+
     @Column(name = "assigned_at")
     private Instant assignedAt;
 
@@ -89,8 +97,23 @@ public class VerificationCase {
     protected VerificationCase() {
     }
 
-    /** @throws DomainException when an id is not valid, the skill is empty or the type is missing */
+    /**
+     * Opens a case without a review deadline, as the cases opened before the plans set one.
+     *
+     * @throws DomainException when an id is not valid, the skill is empty or the type is missing
+     */
     public VerificationCase(int attemptId, int studentId, int pathNodeId, String skillTag, CaseType caseType) {
+        this(attemptId, studentId, pathNodeId, skillTag, caseType, null);
+    }
+
+    /**
+     * Opens a case whose review is due by the deadline of the current plan of the student.
+     *
+     * @param reviewDeadline the deadline of the plan, or null for none
+     * @throws DomainException when an id is not valid, the skill is empty or the type is missing
+     */
+    public VerificationCase(int attemptId, int studentId, int pathNodeId, String skillTag, CaseType caseType,
+                            ReviewDeadline reviewDeadline) {
         if (attemptId <= 0) {
             throw new DomainException("The case must belong to a valid attempt.");
         }
@@ -114,6 +137,7 @@ public class VerificationCase {
         this.caseType = caseType;
         this.status = CaseStatus.PENDING;
         this.openedAt = Instant.now();
+        this.reviewDueAt = reviewDeadline == null ? null : reviewDeadline.dueFrom(openedAt);
     }
 
     public Integer getId() {
@@ -163,6 +187,11 @@ public class VerificationCase {
 
     public Instant getOpenedAt() {
         return openedAt;
+    }
+
+    /** When the review is due, fixed when the case was opened; null for the cases opened before the plans. */
+    public Instant getReviewDueAt() {
+        return reviewDueAt;
     }
 
     public Instant getAssignedAt() {

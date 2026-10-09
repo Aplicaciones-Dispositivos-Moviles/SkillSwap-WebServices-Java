@@ -54,7 +54,8 @@ public class LearningPathContextFacadeImpl implements LearningPathContextFacade 
                 path.get().getStudentId(),
                 blueprint.getSkillTag(),
                 Objects.equals(node.get().getAssessmentBlueprintId(), blueprint.getId()),
-                node.get().getStatus() == NodeStatus.AVAILABLE,
+                // A paused path keeps its nodes, but no new attempt can be made on them until it is resumed.
+                node.get().getStatus() == NodeStatus.AVAILABLE && path.get().isActive(),
                 questions));
     }
 

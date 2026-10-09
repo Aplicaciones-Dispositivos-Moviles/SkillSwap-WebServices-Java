@@ -3,6 +3,7 @@ package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.j
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,6 +16,9 @@ import org.springframework.stereotype.Repository;
 /** Implements the domain {@link VerificationCaseRepository} port on top of Spring Data JPA. */
 @Repository
 public class VerificationCaseRepositoryAdapter implements VerificationCaseRepository {
+
+    /** First key of the advisory locks on the escalations of a student, so they never collide with other locks. */
+    static final int STUDENT_ESCALATIONS_LOCK_NAMESPACE = 1002;
 
     private final VerificationCaseJpaRepository jpaRepository;
 
@@ -46,6 +50,16 @@ public class VerificationCaseRepositoryAdapter implements VerificationCaseReposi
     @Override
     public List<VerificationCase> findPendingBySkillTag(String skillTag) {
         return jpaRepository.findByStatusAndSkillTagOrderByIdAsc(CaseStatus.PENDING, skillTag);
+    }
+
+    @Override
+    public int countOpenedByStudentSince(int studentId, Instant since) {
+        return Math.toIntExact(jpaRepository.countByStudentIdAndOpenedAtGreaterThanEqual(studentId, since));
+    }
+
+    @Override
+    public void lockStudentEscalations(int studentId) {
+        jpaRepository.lockStudent(STUDENT_ESCALATIONS_LOCK_NAMESPACE, studentId);
     }
 
     @Override

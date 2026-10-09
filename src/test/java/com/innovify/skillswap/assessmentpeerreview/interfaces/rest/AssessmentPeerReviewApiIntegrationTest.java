@@ -19,6 +19,8 @@ import com.innovify.skillswap.learningpathengine.domain.services.QuestionGenerat
 import com.innovify.skillswap.support.PostgresIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
@@ -233,6 +235,39 @@ class AssessmentPeerReviewApiIntegrationTest extends PostgresIntegrationTest {
 
         assertThat((String) read(getCase(anaToken, caseId), "$.verificationCase.caseType")).isEqualTo("Quiz");
         assertThat(queryString("SELECT case_type FROM verification_cases WHERE id = " + caseId)).isEqualTo("Quiz");
+    }
+
+    @Test
+    void submit_failingAnswers_opensACaseDueByTheDeadlineOfTheFreePlan() throws Exception {
+        int caseId = failAssessment(ana, anaToken);
+
+        MvcResult stored = getCase(anaToken, caseId);
+        Instant openedAt = Instant.parse(read(stored, "$.verificationCase.openedAt"));
+        Instant dueAt = Instant.parse(read(stored, "$.verificationCase.reviewDueAt"));
+        assertThat(Duration.between(openedAt, dueAt)).isBetween(Duration.ofDays(5), Duration.ofDays(7));
+    }
+
+    @Test
+    void submit_failingAnswersAfterTheEscalationsOfTheMonth_recordsTheAttemptAndReportsTheLimit() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            execute("INSERT INTO verification_cases (attempt_id, student_id, path_node_id, skill_tag, case_type, "
+                    + "status, opened_at, appeal_count) VALUES (" + (9000 + i) + ", " + ana.getId() + ", "
+                    + (9000 + i) + ", 'sql-fundamentals', 'Quiz', 'Pending', now(), 0)");
+        }
+        BlueprintView blueprint = newBlueprint(ana, anaToken);
+
+        MvcResult result = submit(anaToken, blueprint.blueprintId(), failing(blueprint));
+
+        assertThat(status(result)).isEqualTo(201);
+        assertThat((Boolean) read(result, "$.passed")).isFalse();
+        assertThat((Object) read(result, "$.verificationCaseId")).isNull();
+        assertThat((String) read(result, "$.planLimitReached.limit")).isEqualTo("MonthlyEscalations");
+        assertThat((String) read(result, "$.planLimitReached.plan")).isEqualTo("Free");
+        assertThat((Integer) read(result, "$.planLimitReached.max")).isEqualTo(3);
+        assertThat((Integer) read(result, "$.planLimitReached.current")).isEqualTo(3);
+        assertThat((Boolean) read(result, "$.planLimitReached.upgradeAvailable")).isTrue();
+        assertThat(queryString("SELECT count(*) FROM assessment_attempts")).isEqualTo("1");
+        assertThat(queryString("SELECT count(*) FROM verification_cases")).isEqualTo("3");
     }
 
     @Test

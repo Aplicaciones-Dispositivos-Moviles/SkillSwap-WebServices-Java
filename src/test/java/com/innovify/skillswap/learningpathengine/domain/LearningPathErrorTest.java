@@ -16,8 +16,9 @@ class LearningPathErrorTest {
     @Test
     void codes_matchTheNamesOfTheCSharpApi() {
         assertThat(Arrays.stream(LearningPathError.values()).map(ErrorCodes::of)).containsExactly(
-                "None", "InvalidGoal", "GoalNotInterpretable", "GoalAlreadyAchieved", "ActivePathAlreadyExists",
-                "PathNotFound", "NotPathOwner", "NodeNotFound", "NodeLocked", "NodeAlreadyCompleted",
+                "None", "InvalidGoal", "GoalNotInterpretable", "GoalAlreadyAchieved", "PlanLimitReached",
+                "PathNotFound", "PathNotActive", "PathNotPaused", "PathPaused", "NotPathOwner", "NodeNotFound",
+                "NodeLocked", "NodeAlreadyCompleted",
                 "QuestionGenerationFailed", "OperationCancelled", "DatabaseError", "InternalServerError");
     }
 
@@ -31,7 +32,7 @@ class LearningPathErrorTest {
 
     @Test
     void pathStatus_usesTheStoredValues() {
-        assertThat(Arrays.stream(PathStatus.values()).map(PathStatus::value)).containsExactly("Active", "Completed");
+        assertThat(Arrays.stream(PathStatus.values()).map(PathStatus::value)).containsExactly("Active", "Paused", "Completed");
         assertThat(PathStatus.fromValue("COMPLETED")).isEqualTo(PathStatus.COMPLETED);
         assertThatThrownBy(() -> PathStatus.fromValue("Other")).isInstanceOf(IllegalArgumentException.class);
     }

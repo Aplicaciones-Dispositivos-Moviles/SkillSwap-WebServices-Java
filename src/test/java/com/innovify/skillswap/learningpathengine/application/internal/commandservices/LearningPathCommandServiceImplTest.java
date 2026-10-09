@@ -7,11 +7,15 @@ import com.innovify.skillswap.learningpathengine.TestData;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeCredentialContextFacade;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeLearningPathRepository;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeSkillTaxonomyMatcher;
+import com.innovify.skillswap.learningpathengine.application.fakes.FakeSubscriptionContextFacade;
 import com.innovify.skillswap.learningpathengine.domain.model.LearningPathError;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.CompletePathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.DeclareGoalCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.EnforcePlanLimitsCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.PauseLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RefreshCertificateLinksCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.ResumeLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.CareerGoal;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
@@ -19,6 +23,8 @@ import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathS
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultLearningPathBuilder;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultSkillGapAnalyzer;
 import com.innovify.skillswap.shared.application.Result;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.AfterEach;
@@ -29,6 +35,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 
 class LearningPathCommandServiceImplTest {
 
@@ -36,6 +45,8 @@ class LearningPathCommandServiceImplTest {
 
     private final FakeCredentialContextFacade credentials = new FakeCredentialContextFacade();
     private final FakeLearningPathRepository paths = new FakeLearningPathRepository();
+    private final FakeSubscriptionContextFacade plans = new FakeSubscriptionContextFacade();
+    private int transactions;
     private LearningPathCommandServiceImpl service;
 
     @BeforeEach
@@ -45,10 +56,18 @@ class LearningPathCommandServiceImplTest {
         messages.setDefaultEncoding("UTF-8");
         messages.setFallbackToSystemLocale(false);
 
+        TransactionOperations counting = new TransactionOperations() {
+            @Override
+            public <T> T execute(TransactionCallback<T> action) {
+                transactions++;
+                return TransactionOperations.withoutTransaction().execute(action);
+            }
+        };
+
         LocaleContextHolder.setLocale(Locale.US);
         service = new LearningPathCommandServiceImpl(paths, FakeSkillTaxonomyMatcher.sample(),
                 new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY),
-                credentials, messages);
+                credentials, plans, counting, messages);
     }
 
     @AfterEach
@@ -146,12 +165,232 @@ class LearningPathCommandServiceImplTest {
         assertThat(paths.saveCalls()).isZero();
     }
 
+    // ---------- Plan limits ----------
+
+    /** A saved path of the student with that status. */
+    private LearningPath seedPath(int studentId, PathStatus status) {
+        LearningPath path = paths.save(TestData.newUnsavedPath(studentId, "http-basics"));
+        if (status == PathStatus.PAUSED) {
+            path.pause();
+        } else if (status == PathStatus.COMPLETED) {
+            ReflectionTestUtils.setField(path, "status", PathStatus.COMPLETED);
+        }
+        return path;
+    }
+
+    private static void assertPlanLimit(Result<?> result, String limit, String plan, int max, int current) {
+        assertFailure(result, LearningPathError.PLAN_LIMIT_REACHED);
+        assertThat(result.details()).containsEntry("limit", limit)
+                .containsEntry("plan", plan)
+                .containsEntry("max", max)
+                .containsEntry("current", current)
+                .containsEntry("upgradeAvailable", "Free".equals(plan));
+    }
+
     @Test
-    void declare_whenTheStudentHasAnActivePath_returnsActivePathAlreadyExists() {
+    void declare_onTheFreePlanWithAnActivePath_returnsPlanLimitReachedForTheActiveRoutes() {
         declare();
 
-        assertFailure(declare("I want to learn SQL"), LearningPathError.ACTIVE_PATH_ALREADY_EXISTS);
+        Result<LearningPath> result = declare("I want to learn SQL");
+
+        assertPlanLimit(result, "ActiveRoutes", "Free", 1, 1);
         assertThat(paths.paths()).hasSize(1);
+    }
+
+    @Test
+    void declare_onTheFreePlanWithThreePaths_returnsPlanLimitReachedForTheTotalRoutes() {
+        seedPath(1, PathStatus.PAUSED);
+        seedPath(1, PathStatus.COMPLETED);
+        seedPath(1, PathStatus.PAUSED);
+
+        Result<LearningPath> result = declare();
+
+        assertPlanLimit(result, "TotalRoutes", "Free", 3, 3);
+        assertThat(paths.paths()).hasSize(3);
+    }
+
+    @Test
+    void declare_onTheFreePlanWithAPausedPath_isAllowedWhileUnderTheTotal() {
+        seedPath(1, PathStatus.PAUSED);
+
+        Result<LearningPath> result = declare();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getStatus()).isEqualTo(PathStatus.ACTIVE);
+    }
+
+    @Test
+    void declare_onThePaidPlan_allowsThreeActivePathsAndNoTotalCap() {
+        plans.premium(1);
+        seedPath(1, PathStatus.COMPLETED);
+        seedPath(1, PathStatus.COMPLETED);
+        seedPath(1, PathStatus.PAUSED);
+        seedPath(1, PathStatus.ACTIVE);
+        seedPath(1, PathStatus.ACTIVE);
+
+        assertThat(declare().isSuccess()).isTrue();
+        assertPlanLimit(declare("I want to learn SQL"), "ActiveRoutes", "Premium", 3, 3);
+        assertThat(paths.countByStudentId(1)).isEqualTo(6);
+    }
+
+    @Test
+    void declare_checksTheLimitAgainUnderTheLockOfTheStudent() {
+        Result<LearningPath> result = declare();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(paths.lockedStudents()).containsExactly(1);
+        assertThat(transactions).isEqualTo(1);
+    }
+
+    @Test
+    void declare_overTheLimit_doesNotInterpretTheGoalNorLock() {
+        declare();
+        paths.lockedStudents().clear();
+
+        assertFailure(declare("this matches no skill at all"), LearningPathError.PLAN_LIMIT_REACHED);
+        assertThat(paths.lockedStudents()).isEmpty();
+    }
+
+    // ---------- Pause and resume ----------
+
+    @Test
+    void pause_anActivePath_pausesItAndKeepsItsNodes() {
+        LearningPath path = declare().value();
+        List<NodeStatus> before = path.getNodes().stream().map(PathNode::getStatus).toList();
+
+        Result<LearningPath> result = service.handle(new PauseLearningPathCommand(path.getId(), 1));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getStatus()).isEqualTo(PathStatus.PAUSED);
+        assertThat(result.value().getNodes()).extracting(PathNode::getStatus).containsExactlyElementsOf(before);
+    }
+
+    @Test
+    void pause_aPathThatIsNotActive_returnsPathNotActive() {
+        LearningPath paused = seedPath(1, PathStatus.PAUSED);
+        LearningPath completed = seedPath(1, PathStatus.COMPLETED);
+
+        assertFailure(service.handle(new PauseLearningPathCommand(paused.getId(), 1)),
+                LearningPathError.PATH_NOT_ACTIVE);
+        assertFailure(service.handle(new PauseLearningPathCommand(completed.getId(), 1)),
+                LearningPathError.PATH_NOT_ACTIVE);
+    }
+
+    @Test
+    void pause_thePathOfAnotherStudent_returnsNotPathOwner() {
+        LearningPath path = seedPath(2, PathStatus.ACTIVE);
+
+        assertFailure(service.handle(new PauseLearningPathCommand(path.getId(), 1)), LearningPathError.NOT_PATH_OWNER);
+        assertThat(path.isActive()).isTrue();
+    }
+
+    @Test
+    void pauseOrResume_anUnknownPath_returnsPathNotFound() {
+        assertFailure(service.handle(new PauseLearningPathCommand(99, 1)), LearningPathError.PATH_NOT_FOUND);
+        assertFailure(service.handle(new ResumeLearningPathCommand(99, 1)), LearningPathError.PATH_NOT_FOUND);
+    }
+
+    @Test
+    void resume_onTheFreePlan_needsTheActivePathToBePausedFirst() {
+        LearningPath paused = seedPath(1, PathStatus.PAUSED);
+        LearningPath active = seedPath(1, PathStatus.ACTIVE);
+
+        assertPlanLimit(service.handle(new ResumeLearningPathCommand(paused.getId(), 1)), "ActiveRoutes", "Free", 1,
+                1);
+        assertThat(paused.isPaused()).isTrue();
+
+        service.handle(new PauseLearningPathCommand(active.getId(), 1));
+        Result<LearningPath> resumed = service.handle(new ResumeLearningPathCommand(paused.getId(), 1));
+
+        assertThat(resumed.isSuccess()).isTrue();
+        assertThat(paused.isActive()).isTrue();
+        assertThat(active.isPaused()).isTrue();
+        assertThat(paths.lockedStudents()).contains(1);
+    }
+
+    @Test
+    void resume_onThePaidPlan_allowsUpToThreeActivePaths() {
+        plans.premium(1);
+        seedPath(1, PathStatus.ACTIVE);
+        LearningPath second = seedPath(1, PathStatus.PAUSED);
+
+        assertThat(service.handle(new ResumeLearningPathCommand(second.getId(), 1)).isSuccess()).isTrue();
+    }
+
+    @Test
+    void resume_aPathThatIsNotPaused_returnsPathNotPaused() {
+        LearningPath active = seedPath(1, PathStatus.ACTIVE);
+
+        assertFailure(service.handle(new ResumeLearningPathCommand(active.getId(), 1)),
+                LearningPathError.PATH_NOT_PAUSED);
+    }
+
+    @Test
+    void resume_thePathOfAnotherStudent_returnsNotPathOwner() {
+        LearningPath path = seedPath(2, PathStatus.PAUSED);
+
+        assertFailure(service.handle(new ResumeLearningPathCommand(path.getId(), 1)),
+                LearningPathError.NOT_PATH_OWNER);
+    }
+
+    // ---------- Downgrade ----------
+
+    private static void progressedAt(LearningPath path, Instant moment) {
+        ReflectionTestUtils.setField(path, "lastProgressAt", moment);
+    }
+
+    @Test
+    void enforcePlanLimits_onTheFreePlan_keepsTheMostRecentProgressActiveAndPausesTheRest() {
+        Instant now = Instant.now();
+        LearningPath oldest = seedPath(1, PathStatus.ACTIVE);
+        LearningPath mostRecent = seedPath(1, PathStatus.ACTIVE);
+        LearningPath middle = seedPath(1, PathStatus.ACTIVE);
+        LearningPath completed = seedPath(1, PathStatus.COMPLETED);
+        progressedAt(oldest, now.minus(Duration.ofDays(9)));
+        progressedAt(mostRecent, now.minus(Duration.ofMinutes(5)));
+        progressedAt(middle, now.minus(Duration.ofDays(1)));
+
+        Result<List<LearningPath>> result = service.handle(new EnforcePlanLimitsCommand(1));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value()).containsExactlyInAnyOrder(oldest, middle);
+        assertThat(mostRecent.isActive()).isTrue();
+        assertThat(oldest.isPaused()).isTrue();
+        assertThat(middle.isPaused()).isTrue();
+        assertThat(completed.getStatus()).isEqualTo(PathStatus.COMPLETED);
+        assertThat(paths.paths()).hasSize(4);
+        assertThat(paths.lockedStudents()).containsExactly(1);
+    }
+
+    @Test
+    void enforcePlanLimits_withinTheLimit_changesNothing() {
+        LearningPath active = seedPath(1, PathStatus.ACTIVE);
+        seedPath(1, PathStatus.PAUSED);
+
+        Result<List<LearningPath>> result = service.handle(new EnforcePlanLimitsCommand(1));
+
+        assertThat(result.value()).isEmpty();
+        assertThat(active.isActive()).isTrue();
+    }
+
+    @Test
+    void enforcePlanLimits_onThePaidPlan_keepsThreeActive() {
+        plans.premium(1);
+        for (int i = 0; i < 4; i++) {
+            seedPath(1, PathStatus.ACTIVE);
+        }
+
+        assertThat(service.handle(new EnforcePlanLimitsCommand(1)).value()).hasSize(1);
+        assertThat(paths.countActiveByStudentId(1)).isEqualTo(3);
+    }
+
+    @Test
+    void enforcePlanLimits_whenSavingFails_returnsDatabaseError() {
+        seedPath(1, PathStatus.ACTIVE);
+        seedPath(1, PathStatus.ACTIVE);
+        paths.failOnSave(new org.springframework.dao.DataAccessResourceFailureException("down"));
+
+        assertFailure(service.handle(new EnforcePlanLimitsCommand(1)), LearningPathError.DATABASE_ERROR);
     }
 
     @Test

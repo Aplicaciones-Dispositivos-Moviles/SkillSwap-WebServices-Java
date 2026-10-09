@@ -8,7 +8,10 @@ import com.innovify.skillswap.learningpathengine.domain.model.LearningPathError;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.CompletePathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.DeclareGoalCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.EnforcePlanLimitsCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.PauseLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RefreshCertificateLinksCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.ResumeLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.CareerGoal;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
@@ -18,7 +21,11 @@ import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPat
 import com.innovify.skillswap.learningpathengine.domain.services.LearningPathBuilder;
 import com.innovify.skillswap.learningpathengine.domain.services.SkillGapAnalyzer;
 import com.innovify.skillswap.shared.application.Result;
+import com.innovify.skillswap.subscriptionbilling.application.acl.PlanLimitsView;
+import com.innovify.skillswap.subscriptionbilling.application.acl.SubscriptionContextFacade;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,12 +33,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Learning path command service.
  *
  * <p>It is deliberately not {@code @Transactional}: {@link LearningPathRepository#save} commits on its own, so
- * a persistence failure is caught here and returned as a {@link Result}.
+ * a persistence failure is caught here and returned as a {@link Result}. The changes that depend on the limits of
+ * the plan of the student (a new path, a resumed path, the paths paused after a downgrade) run in the given
+ * {@link TransactionOperations} after {@link LearningPathRepository#lockStudentPaths}: two requests of the same
+ * student wait for each other, so they cannot both see room under the limit.
  */
 @Service
 public class LearningPathCommandServiceImpl implements LearningPathCommandService {
@@ -43,6 +54,8 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
     private final SkillGapAnalyzer skillGapAnalyzer;
     private final LearningPathBuilder learningPathBuilder;
     private final CredentialContextFacade credentialContextFacade;
+    private final SubscriptionContextFacade subscriptionContextFacade;
+    private final TransactionOperations transactions;
     private final LearningPathFailures failures;
 
     public LearningPathCommandServiceImpl(LearningPathRepository learningPathRepository,
@@ -50,12 +63,16 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
                                           SkillGapAnalyzer skillGapAnalyzer,
                                           LearningPathBuilder learningPathBuilder,
                                           CredentialContextFacade credentialContextFacade,
+                                          SubscriptionContextFacade subscriptionContextFacade,
+                                          TransactionOperations transactions,
                                           MessageSource messageSource) {
         this.learningPathRepository = learningPathRepository;
         this.taxonomyMatcher = taxonomyMatcher;
         this.skillGapAnalyzer = skillGapAnalyzer;
         this.learningPathBuilder = learningPathBuilder;
         this.credentialContextFacade = credentialContextFacade;
+        this.subscriptionContextFacade = subscriptionContextFacade;
+        this.transactions = transactions;
         this.failures = new LearningPathFailures(messageSource);
     }
 
@@ -67,9 +84,10 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
         }
 
         try {
-            Optional<LearningPath> latest = learningPathRepository.findLatestByStudentId(command.studentId());
-            if (latest.isPresent() && latest.get().getStatus() == PathStatus.ACTIVE) {
-                return failures.failure(LearningPathError.ACTIVE_PATH_ALREADY_EXISTS);
+            // Checked first so the app can offer the paid plan right away; checked again under the lock below.
+            Optional<PlanLimitBreach> early = newPathBreach(command.studentId());
+            if (early.isPresent()) {
+                return failures.failure(LearningPathError.PLAN_LIMIT_REACHED, early.get().toDetails());
             }
 
             List<String> skillTags = taxonomyMatcher.match(text);
@@ -88,7 +106,15 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
             LearningPath path = new LearningPath(command.studentId(), goal, learningPathBuilder.buildPath(gap));
             linkEvidence(path, command.studentId());
 
-            return Result.success(learningPathRepository.save(path));
+            return transactions.execute(status -> {
+                learningPathRepository.lockStudentPaths(command.studentId());
+                Optional<PlanLimitBreach> breach = newPathBreach(command.studentId());
+                if (breach.isPresent()) {
+                    return failures.<LearningPath>failure(LearningPathError.PLAN_LIMIT_REACHED,
+                            breach.get().toDetails());
+                }
+                return Result.success(learningPathRepository.save(path));
+            });
         } catch (RuntimeException exception) {
             return failureFrom(exception, "declare the goal of student " + command.studentId());
         }
@@ -116,6 +142,86 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
             return Result.success(learningPathRepository.save(path));
         } catch (RuntimeException exception) {
             return failureFrom(exception, "complete the node " + command.pathNodeId());
+        }
+    }
+
+    @Override
+    public Result<LearningPath> handle(PauseLearningPathCommand command) {
+        try {
+            Optional<LearningPath> found = learningPathRepository.findById(command.pathId());
+            if (found.isEmpty()) {
+                return failures.failure(LearningPathError.PATH_NOT_FOUND);
+            }
+            LearningPath path = found.get();
+            if (path.getStudentId() != command.studentId()) {
+                return failures.failure(LearningPathError.NOT_PATH_OWNER);
+            }
+            if (!path.isActive()) {
+                return failures.failure(LearningPathError.PATH_NOT_ACTIVE);
+            }
+
+            return Result.success(learningPathRepository.save(path.pause()));
+        } catch (RuntimeException exception) {
+            return failureFrom(exception, "pause the path " + command.pathId());
+        }
+    }
+
+    @Override
+    public Result<LearningPath> handle(ResumeLearningPathCommand command) {
+        try {
+            Optional<LearningPath> found = learningPathRepository.findById(command.pathId());
+            if (found.isEmpty()) {
+                return failures.failure(LearningPathError.PATH_NOT_FOUND);
+            }
+            if (found.get().getStudentId() != command.studentId()) {
+                return failures.failure(LearningPathError.NOT_PATH_OWNER);
+            }
+
+            return transactions.execute(status -> {
+                learningPathRepository.lockStudentPaths(command.studentId());
+                // Read again under the lock: another request may have changed it meanwhile.
+                LearningPath path = learningPathRepository.findById(command.pathId()).orElseThrow();
+                if (!path.isPaused()) {
+                    return failures.<LearningPath>failure(LearningPathError.PATH_NOT_PAUSED);
+                }
+
+                PlanLimitsView limits = subscriptionContextFacade.getPlanLimits(command.studentId());
+                int active = learningPathRepository.countActiveByStudentId(command.studentId());
+                if (active >= limits.maxActiveRoutes()) {
+                    return failures.<LearningPath>failure(LearningPathError.PLAN_LIMIT_REACHED,
+                            PlanLimitBreach.activeRoutes(limits, active).toDetails());
+                }
+                return Result.success(learningPathRepository.save(path.resume()));
+            });
+        } catch (RuntimeException exception) {
+            return failureFrom(exception, "resume the path " + command.pathId());
+        }
+    }
+
+    @Override
+    public Result<List<LearningPath>> handle(EnforcePlanLimitsCommand command) {
+        try {
+            return transactions.execute(status -> {
+                learningPathRepository.lockStudentPaths(command.studentId());
+                PlanLimitsView limits = subscriptionContextFacade.getPlanLimits(command.studentId());
+
+                // The path the student advanced on most recently stays active; ties go to the newest path.
+                List<LearningPath> active = learningPathRepository.findByStudentId(command.studentId()).stream()
+                        .filter(LearningPath::isActive)
+                        .sorted(Comparator.comparing(LearningPath::getLastProgressAt)
+                                .thenComparing(LearningPath::getId).reversed())
+                        .toList();
+
+                List<LearningPath> paused = new ArrayList<>();
+                for (LearningPath path : active.subList(Math.min(limits.maxActiveRoutes(), active.size()),
+                        active.size())) {
+                    paused.add(learningPathRepository.save(path.pause()));
+                }
+                return Result.success(List.copyOf(paused));
+            });
+        } catch (RuntimeException exception) {
+            log.error("Could not apply the plan limits to the paths of student {}", command.studentId(), exception);
+            return failures.failure(LearningPathFailures.toError(exception));
         }
     }
 
@@ -167,6 +273,23 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
             log.warn("Certificates could not be linked to the path of student {}", studentId, exception);
         }
         return linkedAny;
+    }
+
+    /** Why the plan does not allow the student another active path, if it does not. */
+    private Optional<PlanLimitBreach> newPathBreach(int studentId) {
+        PlanLimitsView limits = subscriptionContextFacade.getPlanLimits(studentId);
+        // The total is checked first: pausing the active path does not help with it.
+        if (limits.maxTotalRoutes() != null) {
+            int total = learningPathRepository.countByStudentId(studentId);
+            if (total >= limits.maxTotalRoutes()) {
+                return Optional.of(PlanLimitBreach.totalRoutes(limits, total));
+            }
+        }
+        int active = learningPathRepository.countActiveByStudentId(studentId);
+        if (active >= limits.maxActiveRoutes()) {
+            return Optional.of(PlanLimitBreach.activeRoutes(limits, active));
+        }
+        return Optional.empty();
     }
 
     private Result<LearningPath> failureFrom(RuntimeException exception, String operation) {

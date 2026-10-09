@@ -19,6 +19,7 @@ class IamErrorTest {
                 "InvalidInstitutionalEmail", "InvalidUsername", "WeakPassword", "UserNotFound",
                 "NotProfileOwner", "BioTooLong", "EmailNotVerified", "InvalidVerificationToken",
                 "VerificationTokenExpired", "InvalidDeviceToken", "InterestTopicsRequired", "TooManyInterestTopics",
-                "InvalidInterestTopic", "OperationCancelled", "DatabaseError", "InternalServerError");
+                "InvalidInterestTopic", "InvalidFullName", "OperationCancelled", "DatabaseError",
+                "InternalServerError");
     }
 }

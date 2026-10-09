@@ -23,7 +23,8 @@ import java.util.Locale;
  * verifier, whose decision is final.
  *
  * <p>The review is due by the deadline of the plan the student had when the case was opened; a later change of plan
- * does not move it.
+ * does not move it. When the assigned verifier lets it pass, the breach is recorded once and the case is reassigned to
+ * another verifier, who gets the same deadline counted from the reassignment.
  */
 @Entity
 @Table(name = "verification_cases")
@@ -93,6 +94,21 @@ public class VerificationCase {
     @Column(name = "previous_verifier_user_id")
     private Integer previousVerifierUserId;
 
+    /** The deadline the case was opened with; null for the cases opened before it was stored. */
+    @Column(name = "review_deadline_amount")
+    private Integer reviewDeadlineAmount;
+
+    @Column(name = "review_deadline_unit", length = 20)
+    private String reviewDeadlineUnit;
+
+    /** When the current verifier was found past the deadline; null otherwise. */
+    @Column(name = "deadline_missed_at")
+    private Instant deadlineMissedAt;
+
+    /** How many times the case was reassigned because a verifier missed the deadline. */
+    @Column(name = "reassignment_count", nullable = false)
+    private int reassignmentCount;
+
     /** Required by JPA. */
     protected VerificationCase() {
     }
@@ -138,6 +154,10 @@ public class VerificationCase {
         this.status = CaseStatus.PENDING;
         this.openedAt = Instant.now();
         this.reviewDueAt = reviewDeadline == null ? null : reviewDeadline.dueFrom(openedAt);
+        if (reviewDeadline != null) {
+            this.reviewDeadlineAmount = reviewDeadline.amount();
+            this.reviewDeadlineUnit = reviewDeadline.unit().value();
+        }
     }
 
     public Integer getId() {
@@ -209,6 +229,82 @@ public class VerificationCase {
     /** The verifier who rejected the case before the appeal; null when it was never appealed. */
     public Integer getPreviousVerifierUserId() {
         return previousVerifierUserId;
+    }
+
+    /** The deadline the case was opened with; null for the cases opened before it was stored. */
+    public ReviewDeadline getReviewDeadline() {
+        if (reviewDeadlineAmount == null || reviewDeadlineUnit == null) {
+            return null;
+        }
+        return new ReviewDeadline(reviewDeadlineAmount, ReviewDeadline.Unit.fromValue(reviewDeadlineUnit));
+    }
+
+    /** When the current verifier was found past the deadline; null while they are within it. */
+    public Instant getDeadlineMissedAt() {
+        return deadlineMissedAt;
+    }
+
+    public int getReassignmentCount() {
+        return reassignmentCount;
+    }
+
+    /** Whether the case is assigned and its review was due before that moment. */
+    public boolean isOverdue(Instant now) {
+        return status == CaseStatus.ASSIGNED && reviewDueAt != null && now != null && !now.isBefore(reviewDueAt);
+    }
+
+    /**
+     * Records that the assigned verifier let the deadline pass. It is recorded once per assignment, however many times
+     * the case is checked.
+     *
+     * @return true when the breach was recorded now; false when it already was
+     * @throws DomainException when the case is not overdue
+     */
+    public boolean recordMissedDeadline(Instant now) {
+        if (!isOverdue(now)) {
+            throw new DomainException("Only an assigned case past its deadline can miss it.");
+        }
+        if (deadlineMissedAt != null) {
+            return false;
+        }
+        this.deadlineMissedAt = now;
+        return true;
+    }
+
+    /**
+     * Gives an overdue case to another verifier, with the deadline it was opened with counted from now.
+     *
+     * @param deadline the deadline to apply when the case has none stored (the one of the current plan)
+     * @throws DomainException when the missed deadline was not recorded, or the verifier is not valid, is the student,
+     *                         the verifier who missed it or the one who resolved it before an appeal
+     */
+    public VerificationCase reassignAfterMissedDeadline(int newVerifierUserId, ReviewDeadline deadline, Instant now) {
+        if (status != CaseStatus.ASSIGNED || deadlineMissedAt == null) {
+            throw new DomainException("Only an assigned case whose deadline was missed can be reassigned.");
+        }
+        if (newVerifierUserId <= 0) {
+            throw new DomainException("The verifier must be a valid user.");
+        }
+        if (newVerifierUserId == studentId) {
+            throw new DomainException("A student cannot review their own case.");
+        }
+        if (isAssignedTo(newVerifierUserId)) {
+            throw new DomainException("The case must go to a verifier other than the one who missed the deadline.");
+        }
+        if (previousVerifierUserId != null && newVerifierUserId == previousVerifierUserId) {
+            throw new DomainException("A verifier cannot review again a case they already resolved.");
+        }
+        ReviewDeadline applied = getReviewDeadline() != null ? getReviewDeadline() : deadline;
+        if (applied == null) {
+            throw new DomainException("The deadline of the reassigned case is required.");
+        }
+
+        this.verifierUserId = newVerifierUserId;
+        this.assignedAt = now;
+        this.reviewDueAt = applied.dueFrom(now);
+        this.deadlineMissedAt = null;
+        this.reassignmentCount++;
+        return this;
     }
 
     public boolean isOpen() {

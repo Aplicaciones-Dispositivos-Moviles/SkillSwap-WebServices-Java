@@ -32,6 +32,8 @@ SkillSwap runs as a **Web Service** with **Runtime: Docker** (the `Dockerfile` a
 | `APP_VERIFICATION_TOKEN_TTL` | no | How long a verification link is valid. Default `24h`. |
 | `APP_VERIFICATION_RESEND_COOLDOWN` | no | Minimum time between two verification emails to the same account. Default `2m`. |
 | `FIREBASE_CREDENTIALS_BASE64` | no | Service account JSON of the Firebase project in Base64 (`base64 -w0 service-account.json`), for the push notifications. **Empty (or invalid) = push notifications are not sent**, they are written to the log. |
+| `REVIEW_DEADLINE_CHECK_INTERVAL` | no | How often the assigned verification cases whose review deadline passed are reassigned to another verifier (the breach counts in the reliability of the original one). Default `15m`. |
+| `MODERATION_ASSIGNMENT_RETRY_INTERVAL` | no | How often the suspicious certificates escalated while no verifier was available are offered again to a Verificador senior (or another verifier). Default `15m`. |
 
 Not used anymore (delete them): `SEED_COORDINATOR_*`, `ASPNETCORE_*`, `ConnectionStrings__*`.
 

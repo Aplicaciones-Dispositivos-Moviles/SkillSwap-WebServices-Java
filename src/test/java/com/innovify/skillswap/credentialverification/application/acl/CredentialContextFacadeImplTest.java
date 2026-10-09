@@ -2,6 +2,14 @@ package com.innovify.skillswap.credentialverification.application.acl;
 
 import com.innovify.skillswap.credentialverification.TestData;
 import com.innovify.skillswap.credentialverification.application.fakes.FakeCertificateRepository;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeDomainEventPublisher;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeIamContextFacade;
+import com.innovify.skillswap.credentialverification.application.internal.commandservices.CertificateCommandServiceImpl;
+import com.innovify.skillswap.credentialverification.application.internal.queryservices.CertificateQueryServiceImpl;
+import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
+import com.innovify.skillswap.credentialverification.domain.services.DefaultCertificateRiskScorer;
+import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.RiskAssessment;
 import org.junit.jupiter.api.Test;
@@ -15,7 +23,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CredentialContextFacadeImplTest {
 
     private final FakeCertificateRepository repository = new FakeCertificateRepository();
-    private final CredentialContextFacadeImpl facade = new CredentialContextFacadeImpl(repository);
+    private final FakeFileStorageService storage = new FakeFileStorageService();
+    private final CredentialContextFacadeImpl facade = new CredentialContextFacadeImpl(repository,
+            new CertificateCommandServiceImpl(repository, new DefaultCertificateRiskScorer(), new HolderNameMatcher(),
+                    storage, new FakeIamContextFacade(), new FakeDomainEventPublisher(), TestMessagesHolder.SOURCE),
+            new CertificateQueryServiceImpl(repository, storage));
+
+    /** The real message bundles. */
+    private static final class TestMessagesHolder {
+        static final org.springframework.context.support.ResourceBundleMessageSource SOURCE = create();
+
+        private static org.springframework.context.support.ResourceBundleMessageSource create() {
+            var messages = new org.springframework.context.support.ResourceBundleMessageSource();
+            messages.setBasename("messages");
+            messages.setDefaultEncoding("UTF-8");
+            messages.setFallbackToSystemLocale(false);
+            return messages;
+        }
+    }
 
     private Certificate stored(int ownerId, String hash, int riskScore) {
         Certificate certificate = TestData.newCertificate(ownerId, hash).assessRisk(new RiskAssessment(riskScore));

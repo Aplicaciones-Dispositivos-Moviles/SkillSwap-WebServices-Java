@@ -14,7 +14,9 @@ import com.innovify.skillswap.credentialverification.application.fakes.FakeDomai
 import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
 import com.innovify.skillswap.credentialverification.application.internal.commandservices.CertificateCommandServiceImpl;
 import com.innovify.skillswap.credentialverification.application.internal.queryservices.CertificateQueryServiceImpl;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeIamContextFacade;
 import com.innovify.skillswap.credentialverification.domain.services.DefaultCertificateRiskScorer;
+import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
 import com.innovify.skillswap.iam.TestData;
 import com.innovify.skillswap.iam.application.fakes.FakeUserRepository;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
@@ -67,8 +69,8 @@ class CertificatesControllerTest {
 
         var certificates = new FakeCertificateRepository();
         var storage = new FakeFileStorageService();
-        var commands = new CertificateCommandServiceImpl(certificates, new DefaultCertificateRiskScorer(), storage,
-                new FakeDomainEventPublisher(), messages);
+        var commands = new CertificateCommandServiceImpl(certificates, new DefaultCertificateRiskScorer(),
+                new HolderNameMatcher(), storage, new FakeIamContextFacade(), new FakeDomainEventPublisher(), messages);
         var queries = new CertificateQueryServiceImpl(certificates, storage);
 
         mockMvc = MockMvcBuilders

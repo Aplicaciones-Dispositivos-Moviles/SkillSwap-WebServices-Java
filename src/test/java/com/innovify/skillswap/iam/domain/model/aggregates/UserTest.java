@@ -220,4 +220,14 @@ class UserTest {
         user.verify();
         assertThat(user.canReceiveVerificationEmail(NOW.plus(Duration.ofDays(1)), Duration.ofMinutes(2))).isFalse();
     }
+
+    @Test
+    void updateFullName_normalizesTheSpacesAndRejectsInvalidNames() {
+        var user = TestData.newUser();
+
+        assertThat(user.updateFullName("  Ana \t María  ").getFullName()).isEqualTo("Ana María");
+        assertThat(user.updateFullName(null).getFullName()).isNull();
+        assertThatThrownBy(() -> user.updateFullName("x".repeat(151))).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> user.updateFullName("Ana\u0007")).isInstanceOf(DomainException.class);
+    }
 }

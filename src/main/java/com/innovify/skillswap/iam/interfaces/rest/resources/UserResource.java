@@ -12,10 +12,11 @@ import java.util.List;
  * @param role       the account role: Student
  * @param isVerified whether the institutional validation has been completed
  * @param bio        the profile description
+ * @param fullName   the registered real name, compared with the holder of the certificates; null when not given
  * @param interests  the interest topics of the profile
  * @param skillVector the catalog skill tags the interests and the description refer to
  */
 public record UserResource(int id, String username, String email, String role,
-                           @JsonProperty("isVerified") boolean isVerified, String bio, List<String> interests,
-                           List<String> skillVector) {
+                           @JsonProperty("isVerified") boolean isVerified, String bio, String fullName,
+                           List<String> interests, List<String> skillVector) {
 }

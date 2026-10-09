@@ -1,6 +1,7 @@
 package com.innovify.skillswap.recognitionincentives.application.fakes;
 
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.CreditTransactionRepository;
 import java.util.ArrayList;
@@ -49,5 +50,14 @@ public class FakeCreditTransactionRepository implements CreditTransactionReposit
         return items.stream().anyMatch(t -> t.getWalletId() == walletId
                 && t.getType() == TransactionType.EARNED
                 && t.getRelatedCaseId() != null && t.getRelatedCaseId() == caseId);
+    }
+
+    @Override
+    public List<Integer> findRedemptionIds(int walletId, RedemptionItem item) {
+        return items.stream()
+                .filter(t -> t.getWalletId() == walletId && t.getRedemptionItem() == item)
+                .map(CreditTransaction::getId)
+                .sorted()
+                .toList();
     }
 }

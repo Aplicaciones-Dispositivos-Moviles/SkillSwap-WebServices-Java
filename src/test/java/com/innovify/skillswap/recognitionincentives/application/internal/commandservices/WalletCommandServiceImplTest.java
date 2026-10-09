@@ -3,6 +3,7 @@ package com.innovify.skillswap.recognitionincentives.application.internal.comman
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.innovify.skillswap.recognitionincentives.application.fakes.FakeCreditTransactionRepository;
+import com.innovify.skillswap.recognitionincentives.application.fakes.FakeDomainEventPublisher;
 import com.innovify.skillswap.recognitionincentives.application.fakes.FakeWalletRepository;
 import com.innovify.skillswap.recognitionincentives.application.fakes.TestMessages;
 import com.innovify.skillswap.recognitionincentives.domain.model.RecognitionIncentivesError;
@@ -29,13 +30,14 @@ class WalletCommandServiceImplTest {
 
     private final FakeWalletRepository wallets = new FakeWalletRepository();
     private final FakeCreditTransactionRepository transactions = new FakeCreditTransactionRepository();
+    private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
     private WalletCommandServiceImpl service;
 
     @BeforeEach
     void setUp() {
         LocaleContextHolder.setLocale(Locale.US);
         service = new WalletCommandServiceImpl(wallets, transactions, new DefaultRedemptionPricing(),
-                TransactionOperations.withoutTransaction(), TestMessages.source());
+                TransactionOperations.withoutTransaction(), events, TestMessages.source());
     }
 
     @AfterEach
@@ -279,5 +281,40 @@ class WalletCommandServiceImplTest {
         Result<CreditTransaction> result = redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE);
 
         assertThat(result.message()).isEqualTo("Tus SkillCredits no alcanzan para canjear este beneficio.");
+    }
+
+    @org.junit.jupiter.api.Test
+    void redeem_anAdvancedPathUnlock_recordsTheBenefitAndAnnouncesIt() {
+        var wallet = wallets.save(new com.innovify.skillswap.recognitionincentives.domain.model.aggregates.Wallet(4));
+        wallet.credit(new com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits(250));
+
+        var result = service.handle(new com.innovify.skillswap.recognitionincentives.domain.model.commands
+                .RedeemCommand(4, com.innovify.skillswap.recognitionincentives.domain.model.valueobjects
+                        .RedemptionItem.ADVANCED_PATH_UNLOCK));
+
+        org.assertj.core.api.Assertions.assertThat(result.isSuccess()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(result.value().getRedemptionItem()).isEqualTo(
+                com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem
+                        .ADVANCED_PATH_UNLOCK);
+        org.assertj.core.api.Assertions.assertThat(events.published()).containsExactly(
+                new com.innovify.skillswap.recognitionincentives.domain.model.events.AdvancedPathUnlockRedeemed(
+                        4, result.value().getId()));
+    }
+
+    @org.junit.jupiter.api.Test
+    void redeem_aContributionCertificateOrWithoutBalance_announcesNothing() {
+        var wallet = wallets.save(new com.innovify.skillswap.recognitionincentives.domain.model.aggregates.Wallet(4));
+        wallet.credit(new com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits(150));
+
+        var certificate = service.handle(new com.innovify.skillswap.recognitionincentives.domain.model.commands
+                .RedeemCommand(4, com.innovify.skillswap.recognitionincentives.domain.model.valueobjects
+                        .RedemptionItem.CONTRIBUTION_CERTIFICATE));
+        var unlock = service.handle(new com.innovify.skillswap.recognitionincentives.domain.model.commands
+                .RedeemCommand(4, com.innovify.skillswap.recognitionincentives.domain.model.valueobjects
+                        .RedemptionItem.ADVANCED_PATH_UNLOCK));
+
+        org.assertj.core.api.Assertions.assertThat(certificate.isSuccess()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(unlock.isFailure()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(events.published()).isEmpty();
     }
 }

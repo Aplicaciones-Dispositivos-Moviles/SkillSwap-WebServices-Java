@@ -6,6 +6,7 @@ import com.innovify.skillswap.reputation.domain.model.aggregates.StudentEmployab
 import com.innovify.skillswap.reputation.domain.model.aggregates.VerifierReliability;
 import com.innovify.skillswap.reputation.domain.model.commands.RecordAutomaticApprovalCommand;
 import com.innovify.skillswap.reputation.domain.model.commands.RecordCaseResolutionCommand;
+import com.innovify.skillswap.reputation.domain.model.commands.RecordMissedDeadlineCommand;
 import com.innovify.skillswap.reputation.domain.model.commands.RecordOverturnCommand;
 import com.innovify.skillswap.reputation.domain.repositories.StudentEmployabilityScoreRepository;
 import com.innovify.skillswap.reputation.domain.repositories.VerifierReliabilityRepository;
@@ -97,6 +98,24 @@ public class ReputationCommandServiceImpl implements ReputationCommandService {
             return Result.success(saved);
         } catch (RuntimeException exception) {
             log.error("Could not record the overturned decision of the verifier {}", command.verifierUserId(),
+                    exception);
+            return failures.failure(ReputationFailures.toError(exception));
+        }
+    }
+
+    @Override
+    public Result<VerifierReliability> handle(RecordMissedDeadlineCommand command) {
+        try {
+            VerifierReliability reliability = reliabilityRepository.findByVerifierUserId(command.verifierUserId())
+                    .orElseGet(() -> new VerifierReliability(command.verifierUserId()));
+            reliability.recordMissedDeadline(reliabilityCalculator);
+
+            VerifierReliability saved = transactions.execute(status -> reliabilityRepository.save(reliability));
+
+            syncRating(saved);
+            return Result.success(saved);
+        } catch (RuntimeException exception) {
+            log.error("Could not record the missed deadline of the verifier {}", command.verifierUserId(),
                     exception);
             return failures.failure(ReputationFailures.toError(exception));
         }

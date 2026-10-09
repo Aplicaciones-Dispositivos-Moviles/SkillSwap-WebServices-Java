@@ -3,6 +3,9 @@ package com.innovify.skillswap.assessmentpeerreview.application.internal.command
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeDomainEventPublisher;
+import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeReviewDeadlinePolicyRepository;
+import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeSubscriptionContextFacade;
+import com.innovify.skillswap.assessmentpeerreview.application.internal.ReviewDeadlineResolver;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeLearningPathContextFacade;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeVerificationCaseRepository;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeVerifierProfileRepository;
@@ -41,14 +44,17 @@ class VerificationCaseCommandServiceImplTest {
     private final FakeVerifierProfileRepository profiles = new FakeVerifierProfileRepository();
     private final FakeLearningPathContextFacade learningPath = new FakeLearningPathContextFacade();
     private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
+    private final FakeReviewDeadlinePolicyRepository policies = new FakeReviewDeadlinePolicyRepository();
+    private final FakeSubscriptionContextFacade plans = new FakeSubscriptionContextFacade();
     private VerificationCaseCommandServiceImpl service;
 
     @BeforeEach
     void setUp() {
         LocaleContextHolder.setLocale(Locale.US);
         service = new VerificationCaseCommandServiceImpl(cases, profiles,
-                new CaseAssignmentServiceImpl(profiles, cases, new DefaultVerifierMatcher()), learningPath, events,
-                TransactionOperations.withoutTransaction(), TestMessages.source());
+                new CaseAssignmentServiceImpl(profiles, cases, new DefaultVerifierMatcher()), learningPath,
+                new ReviewDeadlineResolver(policies, plans), events, TransactionOperations.withoutTransaction(),
+                TestMessages.source());
     }
 
     @AfterEach
@@ -451,5 +457,88 @@ class VerificationCaseCommandServiceImplTest {
         var published = (VerificationCaseResolved) events.published().get(0);
         assertThat(published.decision()).isEqualTo(ReviewDecision.REJECTED);
         assertThat(published.overturnedVerifierUserId()).isNull();
+    }
+
+    // ---------- Overdue cases (US39 E2) ----------
+
+    private VerificationCase addOverdueCase(int verifierId) {
+        VerificationCase verificationCase = cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics",
+                CaseType.QUIZ, com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline
+                .hours(48)).assignVerifier(verifierId));
+        org.springframework.test.util.ReflectionTestUtils.setField(verificationCase, "reviewDueAt",
+                java.time.Instant.now().minusSeconds(60));
+        return verificationCase;
+    }
+
+    private Result<VerificationCase> reassign(int caseId) {
+        return service.handle(new com.innovify.skillswap.assessmentpeerreview.domain.model.commands
+                .ReassignOverdueCaseCommand(caseId));
+    }
+
+    @Test
+    void reassign_anOverdueCase_givesItToAnotherVerifierAndAnnouncesTheBreach() {
+        addVerifier(VERIFIER_ID);
+        addVerifier(3);
+        VerificationCase overdue = addOverdueCase(VERIFIER_ID);
+        java.time.Instant missedDueAt = overdue.getReviewDueAt();
+
+        Result<VerificationCase> result = reassign(overdue.getId());
+
+        assertThat(result.value().isAssignedTo(3)).isTrue();
+        assertThat(result.value().getReassignmentCount()).isEqualTo(1);
+        assertThat(cases.lockedCases()).containsExactly(overdue.getId());
+        assertThat(events.published()).containsExactly(new com.innovify.skillswap.assessmentpeerreview.domain.model
+                .events.VerificationCaseDeadlineMissed(overdue.getId(), VERIFIER_ID, STUDENT_ID, missedDueAt, 3));
+
+        reassign(overdue.getId());
+        assertThat(events.published()).hasSize(1);
+    }
+
+    @Test
+    void reassign_withoutAnotherVerifier_keepsTheCaseAndAnnouncesTheBreachOnce() {
+        addVerifier(VERIFIER_ID);
+        VerificationCase overdue = addOverdueCase(VERIFIER_ID);
+
+        reassign(overdue.getId());
+        reassign(overdue.getId());
+
+        assertThat(overdue.isAssignedTo(VERIFIER_ID)).isTrue();
+        assertThat(overdue.getDeadlineMissedAt()).isNotNull();
+        assertThat(events.published()).hasSize(1);
+
+        addVerifier(3);
+        reassign(overdue.getId());
+        assertThat(overdue.isAssignedTo(3)).isTrue();
+        assertThat(events.published()).hasSize(1);
+    }
+
+    @Test
+    void reassign_aCaseOpenedWithoutAStoredDeadline_usesTheDeadlineOfThePlan() {
+        addVerifier(VERIFIER_ID);
+        addVerifier(3);
+        plans.premium(STUDENT_ID);
+        policies.save(new com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.ReviewDeadlinePolicy(
+                "Premium", com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline
+                .hours(12), 9));
+        VerificationCase legacy = cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics", CaseType.QUIZ)
+                .assignVerifier(VERIFIER_ID));
+        org.springframework.test.util.ReflectionTestUtils.setField(legacy, "reviewDueAt",
+                java.time.Instant.now().minusSeconds(60));
+
+        reassign(legacy.getId());
+
+        assertThat(java.time.Duration.between(legacy.getAssignedAt(), legacy.getReviewDueAt()))
+                .isEqualTo(java.time.Duration.ofHours(12));
+    }
+
+    @Test
+    void reassign_aCaseThatIsNotOverdueOrDoesNotExist_changesNothing() {
+        addVerifier(VERIFIER_ID);
+        addVerifier(3);
+        VerificationCase onTime = addAssignedCase();
+
+        assertThat(reassign(onTime.getId()).value().isAssignedTo(VERIFIER_ID)).isTrue();
+        assertThat(reassign(99).error()).isEqualTo(AssessmentPeerReviewError.CASE_NOT_FOUND);
+        assertThat(events.published()).isEmpty();
     }
 }

@@ -1,14 +1,17 @@
 package com.innovify.skillswap.learningpathengine.application.commandservices;
 
+import com.innovify.skillswap.learningpathengine.domain.model.aggregates.AdvancedPathUnlock;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.CompletePathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.DeclareGoalCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.EnforcePlanLimitsCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.LinkCertificateToNodeCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.GrantAdvancedPathUnlockCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.PauseLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RecognizeValidatedCertificateCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RefreshCertificateLinksCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.ResumeLearningPathCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.SyncAdvancedPathUnlocksCommand;
 import com.innovify.skillswap.shared.application.Result;
 import java.util.List;
 
@@ -17,8 +20,9 @@ public interface LearningPathCommandService {
 
     /**
      * Interprets the goal, computes the skill gap and creates the active path, if the plan of the student allows
-     * another active path and another path in total (PLAN_LIMIT_REACHED otherwise). The skills covered by a
-     * certificate the student already had validated are completed and linked to it.
+     * another active path and another path in total (PLAN_LIMIT_REACHED otherwise). An advanced path skips those
+     * limits and spends an available advanced path unlock instead (ADVANCED_PATH_UNLOCK_REQUIRED without one). The
+     * skills covered by a certificate the student already had validated are completed and linked to it.
      */
     Result<LearningPath> handle(DeclareGoalCommand command);
 
@@ -52,6 +56,15 @@ public interface LearningPathCommandService {
      * others. Returns the paths it paused.
      */
     Result<List<LearningPath>> handle(EnforcePlanLimitsCommand command);
+
+    /** Grants the advanced path a student redeemed with SkillCredits; a repeated redemption grants nothing new. */
+    Result<AdvancedPathUnlock> handle(GrantAdvancedPathUnlockCommand command);
+
+    /**
+     * Grants the redeemed advanced paths that were not granted yet and answers every unlock of the student, oldest
+     * first.
+     */
+    Result<List<AdvancedPathUnlock>> handle(SyncAdvancedPathUnlocksCommand command);
 
     /** Completes a node, issued once the student approved the node's assessment. */
     Result<LearningPath> handle(CompletePathNodeCommand command);

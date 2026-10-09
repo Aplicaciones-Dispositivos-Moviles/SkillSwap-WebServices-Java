@@ -23,4 +23,15 @@ public interface CredentialContextFacade {
 
     /** A certificate, whatever its owner and status; empty when it does not exist. */
     Optional<CertificateEvidence> getCertificate(int certificateId);
+
+    /** The data a verifier reviews to decide on a certificate; empty when it does not exist. */
+    Optional<CertificateReviewView> getCertificateForReview(int certificateId);
+
+    /**
+     * Applies the decision of the verifier on a suspicious certificate: authentic moves it to Verified, otherwise
+     * to Rejected. The reason is the observation of the reviewer, sent to the student with the push notification
+     * of a rejection (ignored when authentic). It joins the transaction of the caller, if any, and never throws: a
+     * failure is reported.
+     */
+    CertificateReviewOutcome resolveSuspiciousCertificate(int certificateId, boolean authentic, String reason);
 }

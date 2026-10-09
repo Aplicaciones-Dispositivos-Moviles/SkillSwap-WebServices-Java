@@ -11,6 +11,7 @@ public final class SignUpCommandFromResourceAssembler {
 
     /** The password is passed through untouched: trimming it would change what the user typed. */
     public static SignUpCommand toCommandFromResource(SignUpResource resource, UserRole role) {
-        return new SignUpCommand(resource.username().trim(), resource.email().trim(), resource.password(), role);
+        return new SignUpCommand(resource.username().trim(), resource.email().trim(), resource.password(), role,
+                resource.fullName());
     }
 }

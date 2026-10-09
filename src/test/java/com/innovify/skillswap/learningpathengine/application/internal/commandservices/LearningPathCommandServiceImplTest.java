@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.innovify.skillswap.credentialverification.application.acl.CertificateSummary;
 import com.innovify.skillswap.learningpathengine.TestData;
+import com.innovify.skillswap.learningpathengine.application.fakes.FakeAdvancedPathUnlockRepository;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeCertificateSkillAffinityScorer;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeCredentialContextFacade;
+import com.innovify.skillswap.learningpathengine.application.fakes.FakeRecognitionContextFacade;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeLearningPathRepository;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeSkillTaxonomyMatcher;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeSubscriptionContextFacade;
@@ -47,6 +49,8 @@ class LearningPathCommandServiceImplTest {
     private final FakeCredentialContextFacade credentials = new FakeCredentialContextFacade();
     private final FakeLearningPathRepository paths = new FakeLearningPathRepository();
     private final FakeSubscriptionContextFacade plans = new FakeSubscriptionContextFacade();
+    private final FakeAdvancedPathUnlockRepository unlocks = new FakeAdvancedPathUnlockRepository();
+    private final FakeRecognitionContextFacade redemptions = new FakeRecognitionContextFacade();
     private int transactions;
     private LearningPathCommandServiceImpl service;
 
@@ -69,7 +73,7 @@ class LearningPathCommandServiceImplTest {
         service = new LearningPathCommandServiceImpl(paths, FakeSkillTaxonomyMatcher.sample(),
                 FakeCertificateSkillAffinityScorer.sample(),
                 new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY),
-                credentials, plans, counting, messages);
+                credentials, plans, unlocks, redemptions, counting, messages);
     }
 
     @AfterEach
@@ -621,5 +625,77 @@ class LearningPathCommandServiceImplTest {
         Result<LearningPath> result = declare("");
 
         assertThat(result.message()).isEqualTo("La meta debe tener entre 1 y 500 caracteres.");
+    }
+
+    // ---------- Advanced path redeemed with SkillCredits (US05 E4 and E6) ----------
+
+    private Result<LearningPath> declareAdvanced(String text) {
+        return service.handle(new DeclareGoalCommand(1, text, true));
+    }
+
+    @Test
+    void declareAdvanced_withoutAnUnlock_isRejected() {
+        assertFailure(declareAdvanced(REST_AND_JWT), LearningPathError.ADVANCED_PATH_UNLOCK_REQUIRED);
+        assertThat(paths.paths()).isEmpty();
+    }
+
+    @Test
+    void declareAdvanced_onTheFreePlanWithAnActivePath_spendsTheUnlockAndIsNotCounted() {
+        assertThat(declare("I want to learn SQL").isSuccess()).isTrue();
+        redemptions.redeemed(1, 40);
+
+        Result<LearningPath> advanced = declareAdvanced(REST_AND_JWT);
+
+        assertThat(advanced.isSuccess()).isTrue();
+        assertThat(advanced.value().isAdvanced()).isTrue();
+        assertThat(unlocks.unlocks()).singleElement().satisfies(unlock -> {
+            assertThat(unlock.getRedemptionId()).isEqualTo(40);
+            assertThat(unlock.isAvailable()).isFalse();
+            assertThat(unlock.getLearningPathId()).isEqualTo(advanced.value().getId());
+        });
+        assertThat(paths.countActiveByStudentId(1)).isEqualTo(1);
+        assertThat(paths.lockedStudents()).contains(1);
+        assertFailure(declareAdvanced("I want to learn HTTP"), LearningPathError.ADVANCED_PATH_UNLOCK_REQUIRED);
+    }
+
+    @Test
+    void grant_theSameRedemptionTwice_grantsASingleUnlock() {
+        var first = service.handle(new com.innovify.skillswap.learningpathengine.domain.model.commands
+                .GrantAdvancedPathUnlockCommand(1, 40));
+        var second = service.handle(new com.innovify.skillswap.learningpathengine.domain.model.commands
+                .GrantAdvancedPathUnlockCommand(1, 40));
+
+        assertThat(first.value().getId()).isEqualTo(second.value().getId());
+        assertThat(unlocks.unlocks()).hasSize(1);
+    }
+
+    @Test
+    void sync_grantsTheRedemptionsThatWereNotGrantedYet() {
+        redemptions.redeemed(1, 40).redeemed(1, 41).redeemed(2, 50);
+        service.handle(new com.innovify.skillswap.learningpathengine.domain.model.commands
+                .GrantAdvancedPathUnlockCommand(1, 40));
+
+        var result = service.handle(new com.innovify.skillswap.learningpathengine.domain.model.commands
+                .SyncAdvancedPathUnlocksCommand(1));
+
+        assertThat(result.value()).extracting(
+                com.innovify.skillswap.learningpathengine.domain.model.aggregates.AdvancedPathUnlock::getRedemptionId)
+                .containsExactly(40, 41);
+    }
+
+    @Test
+    void enforcePlanLimits_neverPausesTheAdvancedPath() {
+        plans.premium(1);
+        redemptions.redeemed(1, 40);
+        LearningPath advanced = declareAdvanced(REST_AND_JWT).value();
+        LearningPath sql = declare("I want to learn SQL").value();
+        LearningPath http = declare("I want to learn HTTP").value();
+        plans.free(1);
+
+        Result<List<LearningPath>> paused = service.handle(new EnforcePlanLimitsCommand(1));
+
+        assertThat(paused.value()).hasSize(1);
+        assertThat(advanced.isActive()).isTrue();
+        assertThat(List.of(sql.isActive(), http.isActive())).containsExactlyInAnyOrder(true, false);
     }
 }

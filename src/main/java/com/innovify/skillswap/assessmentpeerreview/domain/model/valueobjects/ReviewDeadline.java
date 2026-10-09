@@ -17,8 +17,29 @@ import java.time.temporal.ChronoUnit;
 public record ReviewDeadline(int amount, Unit unit) {
 
     public enum Unit {
-        HOURS,
-        BUSINESS_DAYS
+        HOURS("Hours"),
+        BUSINESS_DAYS("BusinessDays");
+
+        private final String value;
+
+        Unit(String value) {
+            this.value = value;
+        }
+
+        /** The representation stored in the database and exposed by the API. */
+        public String value() {
+            return value;
+        }
+
+        /** Case-insensitive lookup by {@link #value()}. */
+        public static Unit fromValue(String value) {
+            for (Unit candidate : values()) {
+                if (candidate.value.equalsIgnoreCase(value)) {
+                    return candidate;
+                }
+            }
+            throw new IllegalArgumentException("Unknown ReviewDeadline.Unit: " + value);
+        }
     }
 
     public ReviewDeadline {

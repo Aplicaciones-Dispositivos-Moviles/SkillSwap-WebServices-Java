@@ -2,6 +2,9 @@ package com.innovify.skillswap.credentialverification.application.internal.comma
 
 import com.innovify.skillswap.credentialverification.application.fakes.FakeCertificateRepository;
 import com.innovify.skillswap.credentialverification.application.fakes.FakeDomainEventPublisher;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeIamContextFacade;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateFlaggedSuspicious;
+import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
 import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
 import com.innovify.skillswap.credentialverification.domain.model.CredentialVerificationError;
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
@@ -42,6 +45,7 @@ class CertificateCommandServiceImplTest {
 
     private final FakeCertificateRepository repository = new FakeCertificateRepository();
     private final FakeFileStorageService storage = new FakeFileStorageService();
+    private final FakeIamContextFacade iam = new FakeIamContextFacade();
     private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
     private CertificateCommandServiceImpl service;
 
@@ -53,8 +57,8 @@ class CertificateCommandServiceImplTest {
         messages.setFallbackToSystemLocale(false);
 
         LocaleContextHolder.setLocale(Locale.US);
-        service = new CertificateCommandServiceImpl(repository, new DefaultCertificateRiskScorer(), storage,
-                events, messages);
+        service = new CertificateCommandServiceImpl(repository, new DefaultCertificateRiskScorer(),
+                new HolderNameMatcher(), storage, iam, events, messages);
     }
 
     @AfterEach
@@ -106,6 +110,50 @@ class CertificateCommandServiceImplTest {
     }
 
     // ---------- Upload ----------
+
+    @Test
+    void upload_withAHolderWhoIsNotTheRegisteredStudent_isSuspiciousAndAnnounced() {
+        iam.withFullName(7, "Ana María Pérez García");
+
+        Result<Certificate> result = service.handle(upload(7, JPEG, "image/jpeg", "Luis Gómez", "n-1", "c-1"));
+
+        Certificate certificate = result.value();
+        assertThat(certificate.getStatus()).isEqualTo(VerificationStatus.SUSPICIOUS);
+        assertThat(certificate.hasHolderNameMismatch()).isTrue();
+        assertThat(certificate.getRiskAssessment().level()).isEqualTo(RiskLevel.HIGH_RISK);
+        assertThat(events.published()).containsExactly(
+                new CertificateFlaggedSuspicious(certificate.getId(), 7, java.util.List.of("HolderNameMismatch")));
+    }
+
+    @Test
+    void upload_withTheHolderWrittenDifferently_matchesTheRegisteredStudent() {
+        iam.withFullName(7, "Ana María Pérez García");
+
+        Result<Certificate> result = service.handle(upload(7, JPEG, "image/jpeg", "PÉREZ GARCÍA, ANA", "n-1", "c-1"));
+
+        assertThat(result.value().getStatus()).isEqualTo(VerificationStatus.UNVERIFIED);
+        assertThat(result.value().hasHolderNameMismatch()).isFalse();
+        assertThat(events.published()).isEmpty();
+    }
+
+    @Test
+    void upload_byAStudentWithoutARegisteredName_doesNotCompareTheHolder() {
+        Result<Certificate> result = service.handle(upload(7, JPEG, "image/jpeg", "Luis Gómez", "n-1", "c-1"));
+
+        assertThat(result.value().getStatus()).isEqualTo(VerificationStatus.UNVERIFIED);
+        assertThat(result.value().hasHolderNameMismatch()).isFalse();
+    }
+
+    @Test
+    void upload_ofAFileAnotherStudentRegistered_isSuspiciousAndAnnouncedWithItsReasons() {
+        seedOtherUser(8, JPEG, "OTHER", "OTHER");
+
+        Result<Certificate> result = service.handle(upload(7, JPEG));
+
+        assertThat(result.value().getStatus()).isEqualTo(VerificationStatus.SUSPICIOUS);
+        assertThat(events.published()).containsExactly(
+                new CertificateFlaggedSuspicious(result.value().getId(), 7, java.util.List.of("DuplicateFile")));
+    }
 
     @Test
     void upload_withValidData_createsUnverifiedCertificateWithNoRisk() {
@@ -328,9 +376,12 @@ class CertificateCommandServiceImplTest {
 
     // ---------- Resolve dispute ----------
 
+    /** A suspicious certificate of the student 7; the events of its upload are discarded. */
     private Certificate suspiciousCertificate() {
         seedOtherUser(1, OTHER_JPEG, "CERT-001", "CODE-XYZ");
-        return service.handle(upload(7, JPEG)).value();
+        Certificate suspicious = service.handle(upload(7, JPEG)).value();
+        events.published().clear();
+        return suspicious;
     }
 
     @ParameterizedTest
@@ -468,9 +519,11 @@ class CertificateCommandServiceImplTest {
     }
 
     @Test
-    void upload_publishesNothing() {
-        suspiciousCertificate();
+    void upload_publishesNoResolutionEvent() {
+        seedOtherUser(1, OTHER_JPEG, "CERT-001", "CODE-XYZ");
+        service.handle(upload(7, JPEG));
 
-        assertThat(events.published()).isEmpty();
+        assertThat(events.published()).noneMatch(event -> event instanceof CertificateVerificationResolved
+                || event instanceof CertificateVerified);
     }
 }

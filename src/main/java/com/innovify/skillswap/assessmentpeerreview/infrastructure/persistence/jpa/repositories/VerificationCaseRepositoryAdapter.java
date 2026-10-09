@@ -37,6 +37,16 @@ public class VerificationCaseRepositoryAdapter implements VerificationCaseReposi
     }
 
     @Override
+    public Optional<VerificationCase> findByIdForUpdate(int id) {
+        return jpaRepository.findForUpdateById(id);
+    }
+
+    @Override
+    public List<Integer> findOverdueAssignedIds(Instant now) {
+        return jpaRepository.findIdsByStatusAndReviewDueAtNotAfter(CaseStatus.ASSIGNED, now);
+    }
+
+    @Override
     public List<VerificationCase> findByVerifierUserId(int verifierUserId) {
         return jpaRepository.findByVerifierUserIdOrderByIdDesc(verifierUserId);
     }

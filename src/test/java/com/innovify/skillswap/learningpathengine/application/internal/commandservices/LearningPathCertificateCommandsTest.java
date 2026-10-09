@@ -6,7 +6,9 @@ import com.innovify.skillswap.credentialverification.application.acl.Certificate
 import com.innovify.skillswap.learningpathengine.TestData;
 import com.innovify.skillswap.learningpathengine.application.commandservices.CertificateLinkOutcome;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeCertificateSkillAffinityScorer;
+import com.innovify.skillswap.learningpathengine.application.fakes.FakeAdvancedPathUnlockRepository;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeCredentialContextFacade;
+import com.innovify.skillswap.learningpathengine.application.fakes.FakeRecognitionContextFacade;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeLearningPathRepository;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeSkillTaxonomyMatcher;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeSubscriptionContextFacade;
@@ -61,8 +63,8 @@ class LearningPathCertificateCommandsTest {
         service = new LearningPathCommandServiceImpl(paths, FakeSkillTaxonomyMatcher.sample(),
                 FakeCertificateSkillAffinityScorer.sample(),
                 new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY),
-                credentials, new FakeSubscriptionContextFacade(), TransactionOperations.withoutTransaction(),
-                messages);
+                credentials, new FakeSubscriptionContextFacade(), new FakeAdvancedPathUnlockRepository(),
+                new FakeRecognitionContextFacade(), TransactionOperations.withoutTransaction(), messages);
     }
 
     @AfterEach

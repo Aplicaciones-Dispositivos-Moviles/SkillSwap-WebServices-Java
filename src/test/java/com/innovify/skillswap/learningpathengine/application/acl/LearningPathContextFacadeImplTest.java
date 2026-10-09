@@ -39,6 +39,8 @@ class LearningPathContextFacadeImplTest {
                 FakeCertificateSkillAffinityScorer.sample(),
                 new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY),
                 new FakeCredentialContextFacade(), new FakeSubscriptionContextFacade(),
+                new com.innovify.skillswap.learningpathengine.application.fakes.FakeAdvancedPathUnlockRepository(),
+                new com.innovify.skillswap.learningpathengine.application.fakes.FakeRecognitionContextFacade(),
                 TransactionOperations.withoutTransaction(), messages);
         facade = new LearningPathContextFacadeImpl(paths, blueprints, commandService);
     }

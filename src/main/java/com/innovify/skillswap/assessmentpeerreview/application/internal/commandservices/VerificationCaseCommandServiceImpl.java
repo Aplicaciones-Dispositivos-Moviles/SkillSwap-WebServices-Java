@@ -5,9 +5,12 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.AssessmentPeerRe
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.application.internal.CaseAssignmentService;
+import com.innovify.skillswap.assessmentpeerreview.application.internal.ReviewDeadlineResolver;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.AppealVerificationCaseCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.AttachCaseEvidenceCommand;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.ReassignOverdueCaseCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.ResolveVerificationCaseCommand;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseDeadlineMissed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
@@ -17,6 +20,7 @@ import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionO
 import com.innovify.skillswap.shared.application.Result;
 import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +31,10 @@ import org.springframework.transaction.support.TransactionOperations;
 /**
  * Verification case command service. Not {@code @Transactional}: resolving a case saves the case and the
  * profile, and completes the node when approved, as a unit in the given {@link TransactionOperations}.
+ *
+ * <p>Resolving a case and reassigning it after a missed deadline both read the case with a lock inside their
+ * transaction, so a verifier never resolves a case that was just taken from them, and two instances of the scheduler
+ * never handle the same overdue case twice.
  */
 @Service
 public class VerificationCaseCommandServiceImpl implements VerificationCaseCommandService {
@@ -37,6 +45,7 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
     private final VerifierProfileRepository profileRepository;
     private final CaseAssignmentService assignmentService;
     private final LearningPathContextFacade learningPathFacade;
+    private final ReviewDeadlineResolver deadlineResolver;
     private final DomainEventPublisher eventPublisher;
     private final TransactionOperations transactions;
     private final AssessmentPeerReviewFailures failures;
@@ -45,6 +54,7 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
                                               VerifierProfileRepository profileRepository,
                                               CaseAssignmentService assignmentService,
                                               LearningPathContextFacade learningPathFacade,
+                                              ReviewDeadlineResolver deadlineResolver,
                                               DomainEventPublisher eventPublisher,
                                               TransactionOperations transactions,
                                               MessageSource messageSource) {
@@ -52,6 +62,7 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
         this.profileRepository = profileRepository;
         this.assignmentService = assignmentService;
         this.learningPathFacade = learningPathFacade;
+        this.deadlineResolver = deadlineResolver;
         this.eventPublisher = eventPublisher;
         this.transactions = transactions;
         this.failures = new AssessmentPeerReviewFailures(messageSource);
@@ -119,9 +130,18 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
             }
 
             VerificationCase resolved = transactions.execute(status -> {
-                verificationCase.resolve(command.decision(), notes);
+                // Read again under the lock: the case may have been reassigned or resolved meanwhile.
+                VerificationCase locked = caseRepository.findByIdForUpdate(command.caseId()).orElseThrow();
+                if (!locked.isAssignedTo(command.verifierUserId())) {
+                    throw new CaseChangedException(AssessmentPeerReviewError.NOT_ASSIGNED_VERIFIER);
+                }
+                if (!locked.isOpen()) {
+                    throw new CaseChangedException(AssessmentPeerReviewError.CASE_ALREADY_RESOLVED);
+                }
+
+                locked.resolve(command.decision(), notes);
                 profile.get().incrementReviewCount();
-                VerificationCase stored = caseRepository.save(verificationCase);
+                VerificationCase stored = caseRepository.save(locked);
                 profileRepository.save(profile.get());
 
                 if (command.decision() == ReviewDecision.APPROVED) {
@@ -140,6 +160,8 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
                     resolved.getCaseType(), command.decision(), resolved.overturnedVerifierUserId()));
 
             return Result.success(resolved);
+        } catch (CaseChangedException exception) {
+            return failures.failure(exception.error());
         } catch (NodeCompletionFailedException exception) {
             return failures.failure(AssessmentPeerReviewFailures.fromNodeCompletion(exception.outcome()));
         } catch (RuntimeException exception) {
@@ -179,6 +201,74 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
         } catch (RuntimeException exception) {
             log.error("Could not appeal the case {}", command.caseId(), exception);
             return failures.failure(AssessmentPeerReviewFailures.toError(exception));
+        }
+    }
+
+    @Override
+    public Result<VerificationCase> handle(ReassignOverdueCaseCommand command) {
+        try {
+            Instant now = Instant.now();
+            Reassignment reassignment = transactions.execute(status -> {
+                Optional<VerificationCase> found = caseRepository.findByIdForUpdate(command.caseId());
+                if (found.isEmpty()) {
+                    return null;
+                }
+                VerificationCase verificationCase = found.get();
+                // Resolved, or already reassigned with a new deadline, by someone else in the meantime.
+                if (!verificationCase.isOverdue(now)) {
+                    return new Reassignment(verificationCase, null, null);
+                }
+
+                int verifierWhoMissedIt = verificationCase.getVerifierUserId();
+                boolean newBreach = verificationCase.recordMissedDeadline(now);
+                Instant missedDueAt = verificationCase.getReviewDueAt();
+                Optional<Integer> replacement = assignmentService.findReplacementVerifier(verificationCase);
+                if (replacement.isPresent()) {
+                    verificationCase.reassignAfterMissedDeadline(replacement.get(),
+                            deadlineResolver.forStudent(verificationCase.getStudentId()), now);
+                }
+                VerificationCase stored = caseRepository.save(verificationCase);
+                VerificationCaseDeadlineMissed breach = newBreach
+                        ? new VerificationCaseDeadlineMissed(stored.getId(), verifierWhoMissedIt,
+                                stored.getStudentId(), missedDueAt, replacement.orElse(null))
+                        : null;
+                return new Reassignment(stored, breach, replacement.orElse(null));
+            });
+
+            if (reassignment == null) {
+                return failures.failure(AssessmentPeerReviewError.CASE_NOT_FOUND);
+            }
+            if (reassignment.breach() != null) {
+                eventPublisher.publish(reassignment.breach());
+            }
+            if (reassignment.newVerifierUserId() != null) {
+                log.info("The overdue case {} was reassigned to the verifier {}", command.caseId(),
+                        reassignment.newVerifierUserId());
+            }
+            return Result.success(reassignment.verificationCase());
+        } catch (RuntimeException exception) {
+            log.error("Could not reassign the overdue case {}", command.caseId(), exception);
+            return failures.failure(AssessmentPeerReviewFailures.toError(exception));
+        }
+    }
+
+    /** What handling an overdue case did: the breach to announce, if new, and who took the case, if anybody. */
+    private record Reassignment(VerificationCase verificationCase, VerificationCaseDeadlineMissed breach,
+                                Integer newVerifierUserId) {
+    }
+
+    /** Thrown inside a transaction when the case changed after the checks, so nothing is saved. */
+    private static final class CaseChangedException extends RuntimeException {
+
+        private final transient AssessmentPeerReviewError error;
+
+        CaseChangedException(AssessmentPeerReviewError error) {
+            super("The case changed: " + error);
+            this.error = error;
+        }
+
+        AssessmentPeerReviewError error() {
+            return error;
         }
     }
 }

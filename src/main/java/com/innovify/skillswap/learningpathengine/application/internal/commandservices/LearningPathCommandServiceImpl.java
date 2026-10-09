@@ -9,24 +9,29 @@ import com.innovify.skillswap.learningpathengine.application.internal.outboundse
 import com.innovify.skillswap.learningpathengine.application.internal.outboundservices.CertificateSkillAffinityScorer;
 import com.innovify.skillswap.learningpathengine.application.internal.outboundservices.SkillTaxonomyMatcher;
 import com.innovify.skillswap.learningpathengine.domain.model.LearningPathError;
+import com.innovify.skillswap.learningpathengine.domain.model.aggregates.AdvancedPathUnlock;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.CompletePathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.DeclareGoalCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.EnforcePlanLimitsCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.LinkCertificateToNodeCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.GrantAdvancedPathUnlockCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.PauseLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RecognizeValidatedCertificateCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RefreshCertificateLinksCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.ResumeLearningPathCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.SyncAdvancedPathUnlocksCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.CareerGoal;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathStatus;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.SkillAffinity;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.SkillGap;
+import com.innovify.skillswap.learningpathengine.domain.repositories.AdvancedPathUnlockRepository;
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
 import com.innovify.skillswap.learningpathengine.domain.services.LearningPathBuilder;
 import com.innovify.skillswap.learningpathengine.domain.services.SkillGapAnalyzer;
+import com.innovify.skillswap.recognitionincentives.application.acl.RecognitionContextFacade;
 import com.innovify.skillswap.shared.application.Result;
 import com.innovify.skillswap.subscriptionbilling.application.acl.PlanLimitsView;
 import com.innovify.skillswap.subscriptionbilling.application.acl.SubscriptionContextFacade;
@@ -57,6 +62,11 @@ import org.springframework.transaction.support.TransactionOperations;
  * <p>Certificates are read from Credential Verification through its facade, and compared with the skills by the
  * {@link CertificateSkillAffinityScorer}. A certificate validated by a verifier that covers a skill makes it count
  * as demonstrated (its node is completed); any other certificate that can be evidence is only linked to the node.
+ *
+ * <p>An advanced path, started with an advanced path unlock the student redeemed with SkillCredits, skips the limits
+ * of the plan. The unlocks are granted by the event of the redemption and, as a safety net, synchronized with the
+ * redemptions read from Recognition &amp; Incentives; they are changed under the same lock, so one unlock never
+ * starts two paths.
  */
 @Service
 public class LearningPathCommandServiceImpl implements LearningPathCommandService {
@@ -70,6 +80,8 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
     private final LearningPathBuilder learningPathBuilder;
     private final CredentialContextFacade credentialContextFacade;
     private final SubscriptionContextFacade subscriptionContextFacade;
+    private final AdvancedPathUnlockRepository unlockRepository;
+    private final RecognitionContextFacade recognitionContextFacade;
     private final TransactionOperations transactions;
     private final LearningPathFailures failures;
 
@@ -80,6 +92,8 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
                                           LearningPathBuilder learningPathBuilder,
                                           CredentialContextFacade credentialContextFacade,
                                           SubscriptionContextFacade subscriptionContextFacade,
+                                          AdvancedPathUnlockRepository unlockRepository,
+                                          RecognitionContextFacade recognitionContextFacade,
                                           TransactionOperations transactions,
                                           MessageSource messageSource) {
         this.learningPathRepository = learningPathRepository;
@@ -89,6 +103,8 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
         this.learningPathBuilder = learningPathBuilder;
         this.credentialContextFacade = credentialContextFacade;
         this.subscriptionContextFacade = subscriptionContextFacade;
+        this.unlockRepository = unlockRepository;
+        this.recognitionContextFacade = recognitionContextFacade;
         this.transactions = transactions;
         this.failures = new LearningPathFailures(messageSource);
     }
@@ -101,10 +117,13 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
         }
 
         try {
-            // Checked first so the app can offer the paid plan right away; checked again under the lock below.
-            Optional<PlanLimitBreach> early = newPathBreach(command.studentId());
-            if (early.isPresent()) {
-                return failures.failure(LearningPathError.PLAN_LIMIT_REACHED, early.get().toDetails());
+            // Checked first so the app can offer the paid plan right away; checked again under the lock below. An
+            // advanced path does not count toward the plan: it needs an unlock instead, checked under the lock.
+            if (!command.advanced()) {
+                Optional<PlanLimitBreach> early = newPathBreach(command.studentId());
+                if (early.isPresent()) {
+                    return failures.failure(LearningPathError.PLAN_LIMIT_REACHED, early.get().toDetails());
+                }
             }
 
             List<String> skillTags = taxonomyMatcher.match(text);
@@ -140,12 +159,28 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
                         .toList(), nodeSkills);
             }
 
-            LearningPath path = new LearningPath(command.studentId(), goal, learningPathBuilder.buildPath(gap));
+            LearningPath path = new LearningPath(command.studentId(), goal, learningPathBuilder.buildPath(gap),
+                    command.advanced());
             certified.forEach((skillTag, certificateId) -> path.recognizeCertifiedSkill(skillTag, certificateId));
             linkEvidence(path, command.studentId());
+            List<Integer> redemptions = command.advanced()
+                    ? recognitionContextFacade.getAdvancedPathUnlockRedemptionIds(command.studentId())
+                    : List.of();
 
             return transactions.execute(status -> {
                 learningPathRepository.lockStudentPaths(command.studentId());
+                if (command.advanced()) {
+                    Optional<AdvancedPathUnlock> unlock = grantMissing(command.studentId(), redemptions).stream()
+                            .filter(AdvancedPathUnlock::isAvailable)
+                            .findFirst();
+                    if (unlock.isEmpty()) {
+                        return failures.<LearningPath>failure(LearningPathError.ADVANCED_PATH_UNLOCK_REQUIRED);
+                    }
+                    LearningPath saved = learningPathRepository.save(path);
+                    unlockRepository.save(unlock.get().useFor(saved.getId()));
+                    return Result.success(saved);
+                }
+
                 Optional<PlanLimitBreach> breach = newPathBreach(command.studentId());
                 if (breach.isPresent()) {
                     return failures.<LearningPath>failure(LearningPathError.PLAN_LIMIT_REACHED,
@@ -330,9 +365,10 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
                     return failures.<LearningPath>failure(LearningPathError.PATH_NOT_PAUSED);
                 }
 
+                // An advanced path is not counted, so it can always be resumed.
                 PlanLimitsView limits = subscriptionContextFacade.getPlanLimits(command.studentId());
                 int active = learningPathRepository.countActiveByStudentId(command.studentId());
-                if (active >= limits.maxActiveRoutes()) {
+                if (!path.isAdvanced() && active >= limits.maxActiveRoutes()) {
                     return failures.<LearningPath>failure(LearningPathError.PLAN_LIMIT_REACHED,
                             PlanLimitBreach.activeRoutes(limits, active).toDetails());
                 }
@@ -350,9 +386,10 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
                 learningPathRepository.lockStudentPaths(command.studentId());
                 PlanLimitsView limits = subscriptionContextFacade.getPlanLimits(command.studentId());
 
-                // The path the student advanced on most recently stays active; ties go to the newest path.
+                // The path the student advanced on most recently stays active; ties go to the newest path. The
+                // advanced paths do not count toward the plan, so they stay active.
                 List<LearningPath> active = learningPathRepository.findByStudentId(command.studentId()).stream()
-                        .filter(LearningPath::isActive)
+                        .filter(path -> path.isActive() && !path.isAdvanced())
                         .sorted(Comparator.comparing(LearningPath::getLastProgressAt)
                                 .thenComparing(LearningPath::getId).reversed())
                         .toList();
@@ -368,6 +405,52 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
             log.error("Could not apply the plan limits to the paths of student {}", command.studentId(), exception);
             return failures.failure(LearningPathFailures.toError(exception));
         }
+    }
+
+    @Override
+    public Result<AdvancedPathUnlock> handle(GrantAdvancedPathUnlockCommand command) {
+        try {
+            return transactions.execute(status -> {
+                learningPathRepository.lockStudentPaths(command.studentId());
+                List<AdvancedPathUnlock> unlocks = grantMissing(command.studentId(), List.of(command.redemptionId()));
+                return Result.success(unlocks.stream()
+                        .filter(unlock -> unlock.getRedemptionId() == command.redemptionId())
+                        .findFirst()
+                        .orElseThrow());
+            });
+        } catch (RuntimeException exception) {
+            log.error("Could not grant the advanced path {} to student {}", command.redemptionId(),
+                    command.studentId(), exception);
+            return failures.failure(LearningPathFailures.toError(exception));
+        }
+    }
+
+    @Override
+    public Result<List<AdvancedPathUnlock>> handle(SyncAdvancedPathUnlocksCommand command) {
+        try {
+            List<Integer> redemptions = recognitionContextFacade.getAdvancedPathUnlockRedemptionIds(
+                    command.studentId());
+            return transactions.execute(status -> {
+                learningPathRepository.lockStudentPaths(command.studentId());
+                return Result.success(grantMissing(command.studentId(), redemptions));
+            });
+        } catch (RuntimeException exception) {
+            log.error("Could not synchronize the advanced paths of student {}", command.studentId(), exception);
+            return failures.failure(LearningPathFailures.toError(exception));
+        }
+    }
+
+    /**
+     * Grants the redemptions that have no unlock yet and answers every unlock of the student, oldest first. It must
+     * run under the lock of the paths of the student.
+     */
+    private List<AdvancedPathUnlock> grantMissing(int studentId, List<Integer> redemptionIds) {
+        for (Integer redemptionId : redemptionIds) {
+            if (!unlockRepository.existsByRedemptionId(redemptionId)) {
+                unlockRepository.save(new AdvancedPathUnlock(studentId, redemptionId));
+            }
+        }
+        return unlockRepository.findByStudentId(studentId);
     }
 
     @Override

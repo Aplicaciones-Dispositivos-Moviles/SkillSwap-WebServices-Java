@@ -248,4 +248,15 @@ class ReputationCommandServiceImplTest {
         assertFailure(approveAutomatically(0), ReputationError.INTERNAL_SERVER_ERROR);
         assertThat(employabilities.items()).isEmpty();
     }
+
+    @org.junit.jupiter.api.Test
+    void missedDeadline_isCountedAndTheRatingFollows() {
+        var result = service.handle(new com.innovify.skillswap.reputation.domain.model.commands
+                .RecordMissedDeadlineCommand(4));
+
+        org.assertj.core.api.Assertions.assertThat(result.value().getMissedDeadlinesCount()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(result.value().getScore().value()).isEqualTo(95);
+        org.assertj.core.api.Assertions.assertThat(facade.updates()).containsExactly(
+                new com.innovify.skillswap.reputation.application.fakes.FakeVerifierProfileContextFacade.Update(4, 95));
+    }
 }

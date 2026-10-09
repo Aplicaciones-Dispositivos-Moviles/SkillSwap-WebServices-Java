@@ -14,4 +14,7 @@ public interface VerifierProfileRepository {
 
     /** The still-enabled (not revoked) profiles that can review the skill. */
     List<VerifierProfile> findEnabledBySkillTag(String skillTag);
+
+    /** Every still-enabled (not revoked) profile, whatever its skills. */
+    List<VerifierProfile> findEnabled();
 }

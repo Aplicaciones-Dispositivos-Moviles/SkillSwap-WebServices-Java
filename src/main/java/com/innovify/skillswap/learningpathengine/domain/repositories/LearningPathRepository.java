@@ -16,10 +16,13 @@ public interface LearningPathRepository {
     /** Every path of a student, whatever its status, newest first. */
     List<LearningPath> findByStudentId(int studentId);
 
-    /** How many paths the student has, whatever their status. */
+    /**
+     * How many paths of the student count toward the total the plan allows: all of them, whatever their status,
+     * except the advanced ones.
+     */
     int countByStudentId(int studentId);
 
-    /** How many active paths the student has. */
+    /** How many active paths of the student count toward the plan: the advanced ones are left out. */
     int countActiveByStudentId(int studentId);
 
     /**

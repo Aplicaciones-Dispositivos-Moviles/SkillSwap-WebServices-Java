@@ -49,4 +49,13 @@ class ReputationCalculatorsTest {
     void employability_withANegativeCount_throwsDomainException() {
         assertThatThrownBy(() -> employability.calculate(-1)).isInstanceOf(DomainException.class);
     }
+
+    @org.junit.jupiter.api.Test
+    void reliability_discountsFivePointsPerMissedDeadline() {
+        org.assertj.core.api.Assertions.assertThat(reliability.calculate(10, 0, 0, 1).value()).isEqualTo(95);
+        org.assertj.core.api.Assertions.assertThat(reliability.calculate(10, 1, 0, 2).value()).isEqualTo(75);
+        org.assertj.core.api.Assertions.assertThat(reliability.calculate(10, 0, 0, 30).value()).isZero();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> reliability.calculate(0, 0, 0, -1))
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+    }
 }

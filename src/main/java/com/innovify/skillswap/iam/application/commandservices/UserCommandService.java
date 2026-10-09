@@ -8,6 +8,7 @@ import com.innovify.skillswap.iam.domain.model.commands.SignInCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignUpCommand;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateInterestProfileCommand;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateUserBioCommand;
+import com.innovify.skillswap.iam.domain.model.commands.UpdateUserFullNameCommand;
 import com.innovify.skillswap.shared.application.Result;
 
 /** User command service interface. */
@@ -36,4 +37,10 @@ public interface UserCommandService {
 
     /** Handle remove device token command: no push notification is sent to the user any more. */
     Result<User> handle(RemoveDeviceTokenCommand command);
+
+    /**
+     * Handle update user full name command: the real name the holder of the certificates is compared with. A blank
+     * name clears it. @return the updated user
+     */
+    Result<User> handle(UpdateUserFullNameCommand command);
 }

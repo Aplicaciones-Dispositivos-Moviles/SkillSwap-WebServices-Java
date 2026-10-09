@@ -11,6 +11,7 @@ import com.innovify.skillswap.iam.domain.model.commands.SignInCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignUpCommand;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateInterestProfileCommand;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateUserBioCommand;
+import com.innovify.skillswap.iam.domain.model.commands.UpdateUserFullNameCommand;
 import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
 import com.innovify.skillswap.iam.domain.model.valueobjects.DeviceToken;
 import com.innovify.skillswap.iam.domain.model.valueobjects.Email;
@@ -90,6 +91,9 @@ public class UserCommandServiceImpl implements UserCommandService {
         if (!isAcceptablePassword(command.password())) {
             return failure(IamError.WEAK_PASSWORD);
         }
+        if (!User.isValidFullName(command.fullName())) {
+            return failure(IamError.INVALID_FULL_NAME);
+        }
 
         Username username = new Username(command.username());
         Email email = new Email(command.email());
@@ -101,7 +105,8 @@ public class UserCommandServiceImpl implements UserCommandService {
             return failure(IamError.EMAIL_ALREADY_TAKEN);
         }
 
-        User user = new User(username, email, passwordHasher.hashPassword(command.password()), command.role());
+        User user = new User(username, email, passwordHasher.hashPassword(command.password()), command.role())
+                .updateFullName(command.fullName());
         // The account starts unverified, with the token of the verification email saved along with it.
         EmailVerificationIssuer.IssuedToken verification = verificationIssuer.issue(user);
         Result<User> saved = save(user);
@@ -259,6 +264,25 @@ public class UserCommandServiceImpl implements UserCommandService {
         } catch (RuntimeException exception) {
             log.error("A new verification email for the user {} could not be issued", user.getId(), exception);
         }
+    }
+
+    @Override
+    public Result<User> handle(UpdateUserFullNameCommand command) {
+        Optional<User> found = userRepository.findById(command.userId());
+        if (found.isEmpty()) {
+            return failure(IamError.USER_NOT_FOUND);
+        }
+
+        User user = found.get();
+        if (!Objects.equals(user.getId(), command.actorUserId())) {
+            return failure(IamError.NOT_PROFILE_OWNER);
+        }
+        if (!User.isValidFullName(command.fullName())) {
+            return failure(IamError.INVALID_FULL_NAME);
+        }
+
+        user.updateFullName(command.fullName());
+        return save(user);
     }
 
     private Result<User> save(User user) {

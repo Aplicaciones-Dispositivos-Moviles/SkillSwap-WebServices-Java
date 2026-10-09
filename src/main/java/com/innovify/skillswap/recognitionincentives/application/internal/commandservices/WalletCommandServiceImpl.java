@@ -7,13 +7,16 @@ import com.innovify.skillswap.recognitionincentives.domain.model.commands.Create
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.RedeemCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
+import com.innovify.skillswap.recognitionincentives.domain.model.events.AdvancedPathUnlockRedeemed;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.CreditTransactionRepository;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.WalletRepository;
 import com.innovify.skillswap.recognitionincentives.domain.services.CreditRewards;
 import com.innovify.skillswap.recognitionincentives.domain.services.RedemptionPricing;
 import com.innovify.skillswap.shared.application.Result;
+import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +28,9 @@ import org.springframework.transaction.support.TransactionOperations;
  * given {@link TransactionOperations}, which must start a new transaction because the credit commands come from
  * event handlers that run after the commit of the transaction that raised the event. The wallet is read with a
  * lock inside that transaction, so two movements of the same wallet cannot read the same balance.
+ *
+ * <p>A redeemed advanced path unlock is announced with {@link AdvancedPathUnlockRedeemed} once committed, so
+ * Learning Path Engine delivers the benefit; it can also read the redemptions back through the facade of this context.
  */
 public class WalletCommandServiceImpl implements WalletCommandService {
 
@@ -37,15 +43,17 @@ public class WalletCommandServiceImpl implements WalletCommandService {
     private final CreditTransactionRepository transactions;
     private final RedemptionPricing pricing;
     private final TransactionOperations transactionOperations;
+    private final DomainEventPublisher eventPublisher;
     private final RecognitionIncentivesFailures failures;
 
     public WalletCommandServiceImpl(WalletRepository wallets, CreditTransactionRepository transactions,
                                     RedemptionPricing pricing, TransactionOperations transactionOperations,
-                                    MessageSource messageSource) {
+                                    DomainEventPublisher eventPublisher, MessageSource messageSource) {
         this.wallets = wallets;
         this.transactions = transactions;
         this.pricing = pricing;
         this.transactionOperations = transactionOperations;
+        this.eventPublisher = eventPublisher;
         this.failures = new RecognitionIncentivesFailures(messageSource);
     }
 
@@ -95,7 +103,7 @@ public class WalletCommandServiceImpl implements WalletCommandService {
         }
 
         try {
-            return transactionOperations.execute(status -> {
+            Result<CreditTransaction> result = transactionOperations.execute(status -> {
                 Optional<Wallet> existing = wallets.findByOwnerIdForUpdate(command.userId());
                 if (existing.isEmpty()) {
                     return failures.<CreditTransaction>failure(RecognitionIncentivesError.WALLET_NOT_FOUND);
@@ -110,9 +118,15 @@ public class WalletCommandServiceImpl implements WalletCommandService {
                 wallet.debit(cost);
                 wallets.save(wallet);
                 CreditTransaction movement = transactions.save(new CreditTransaction(wallet.getId(), cost,
-                        TransactionType.REDEEMED, REDEEMED_DESCRIPTION_PREFIX + command.item().description(), null));
+                        TransactionType.REDEEMED, REDEEMED_DESCRIPTION_PREFIX + command.item().description(), null,
+                        command.item()));
                 return Result.success(movement);
             });
+
+            if (result.isSuccess() && command.item() == RedemptionItem.ADVANCED_PATH_UNLOCK) {
+                eventPublisher.publish(new AdvancedPathUnlockRedeemed(command.userId(), result.value().getId()));
+            }
+            return result;
         } catch (RuntimeException exception) {
             log.error("Could not redeem a benefit for the user {}", command.userId(), exception);
             return failures.failure(RecognitionIncentivesFailures.toError(exception));

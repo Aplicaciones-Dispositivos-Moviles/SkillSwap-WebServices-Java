@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeAssessmentAttemptRepository;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeDomainEventPublisher;
+import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeReviewDeadlinePolicyRepository;
+import com.innovify.skillswap.assessmentpeerreview.application.internal.ReviewDeadlineResolver;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeLearningPathContextFacade;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeSubscriptionContextFacade;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeVerificationCaseRepository;
@@ -50,6 +52,7 @@ class AssessmentAttemptCommandServiceImplTest {
     private final FakeLearningPathContextFacade learningPath = new FakeLearningPathContextFacade();
     private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
     private final FakeSubscriptionContextFacade plans = new FakeSubscriptionContextFacade();
+    private final FakeReviewDeadlinePolicyRepository policies = new FakeReviewDeadlinePolicyRepository();
     private final AtomicInteger transactions = new AtomicInteger();
     private AssessmentAttemptCommandServiceImpl service;
 
@@ -66,8 +69,8 @@ class AssessmentAttemptCommandServiceImplTest {
         learningPath.addBlueprint();
         LocaleContextHolder.setLocale(Locale.US);
         service = new AssessmentAttemptCommandServiceImpl(attempts, cases, learningPath,
-                new CaseAssignmentServiceImpl(profiles, cases, new DefaultVerifierMatcher()), plans, events, counting,
-                TestMessages.source());
+                new CaseAssignmentServiceImpl(profiles, cases, new DefaultVerifierMatcher()), plans,
+                new ReviewDeadlineResolver(policies, plans), events, counting, TestMessages.source());
     }
 
     @AfterEach
@@ -356,5 +359,17 @@ class AssessmentAttemptCommandServiceImplTest {
         attempts.failOnSave(new IllegalStateException("boom"));
 
         assertFailure(submit(PASSING), AssessmentPeerReviewError.INTERNAL_SERVER_ERROR);
+    }
+
+    @Test
+    void submit_failing_opensTheCaseWithTheDeadlineASeniorDefinedForThePlan() {
+        policies.save(new com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.ReviewDeadlinePolicy(
+                "Free", com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline
+                .businessDays(2), 9));
+
+        var outcome = submit(FAILING);
+
+        assertThat(outcome.value().verificationCase().getReviewDeadline()).isEqualTo(
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline.businessDays(2));
     }
 }

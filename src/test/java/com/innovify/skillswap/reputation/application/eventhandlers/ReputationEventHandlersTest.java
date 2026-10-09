@@ -9,8 +9,10 @@ import com.innovify.skillswap.reputation.domain.model.aggregates.StudentEmployab
 import com.innovify.skillswap.reputation.domain.model.aggregates.VerifierReliability;
 import com.innovify.skillswap.reputation.domain.model.commands.RecordAutomaticApprovalCommand;
 import com.innovify.skillswap.reputation.domain.model.commands.RecordCaseResolutionCommand;
+import com.innovify.skillswap.reputation.domain.model.commands.RecordMissedDeadlineCommand;
 import com.innovify.skillswap.reputation.domain.model.commands.RecordOverturnCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.AssessmentAttemptPassed;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseDeadlineMissed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.shared.application.Result;
@@ -75,7 +77,27 @@ class ReputationEventHandlersTest {
         assertThat(service.approvals).hasSize(1);
     }
 
+    @Test
+    void deadlineMissed_isRecordedForTheVerifierWhoMissedIt() {
+        new RecordMissedDeadlineEventHandler(service).handle(
+                new VerificationCaseDeadlineMissed(10, 2, 1, java.time.Instant.now(), 3));
+
+        assertThat(service.missedDeadlines).containsExactly(new RecordMissedDeadlineCommand(2));
+    }
+
+    @Test
+    void deadlineMissed_whenTheServiceFails_doesNotThrow() {
+        service.fail = true;
+
+        new RecordMissedDeadlineEventHandler(service).handle(
+                new VerificationCaseDeadlineMissed(10, 2, 1, java.time.Instant.now(), null));
+
+        assertThat(service.missedDeadlines).hasSize(1);
+    }
+
     private static final class RecordingReputationCommandService implements ReputationCommandService {
+
+        final List<RecordMissedDeadlineCommand> missedDeadlines = new ArrayList<>();
 
         final List<RecordCaseResolutionCommand> resolutions = new ArrayList<>();
         final List<RecordOverturnCommand> overturns = new ArrayList<>();
@@ -92,6 +114,13 @@ class ReputationEventHandlersTest {
         @Override
         public Result<VerifierReliability> handle(RecordOverturnCommand command) {
             overturns.add(command);
+            return fail ? Result.failure(ReputationError.DATABASE_ERROR, "failure")
+                    : Result.success(new VerifierReliability(command.verifierUserId()));
+        }
+
+        @Override
+        public Result<VerifierReliability> handle(RecordMissedDeadlineCommand command) {
+            missedDeadlines.add(command);
             return fail ? Result.failure(ReputationError.DATABASE_ERROR, "failure")
                     : Result.success(new VerifierReliability(command.verifierUserId()));
         }

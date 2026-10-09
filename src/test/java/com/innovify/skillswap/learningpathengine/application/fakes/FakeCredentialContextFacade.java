@@ -78,4 +78,16 @@ public class FakeCredentialContextFacade implements CredentialContextFacade {
             throw exceptionToThrow;
         }
     }
+
+    @Override
+    public java.util.Optional<com.innovify.skillswap.credentialverification.application.acl.CertificateReviewView>
+            getCertificateForReview(int certificateId) {
+        return java.util.Optional.empty();
+    }
+
+    @Override
+    public com.innovify.skillswap.credentialverification.application.acl.CertificateReviewOutcome
+            resolveSuspiciousCertificate(int certificateId, boolean authentic, String reason) {
+        return com.innovify.skillswap.credentialverification.application.acl.CertificateReviewOutcome.NOT_FOUND;
+    }
 }

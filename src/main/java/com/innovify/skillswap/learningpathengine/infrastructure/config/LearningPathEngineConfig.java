@@ -5,6 +5,7 @@ import com.innovify.skillswap.learningpathengine.application.commandservices.Lea
 import com.innovify.skillswap.learningpathengine.application.eventhandlers.EnforcePlanLimitsEventHandler;
 import com.innovify.skillswap.learningpathengine.application.eventhandlers.RecognizeValidatedCertificateEventHandler;
 import com.innovify.skillswap.learningpathengine.application.internal.outboundservices.CertificateSkillAffinityScorer;
+import com.innovify.skillswap.learningpathengine.application.eventhandlers.GrantAdvancedPathUnlockEventHandler;
 import com.innovify.skillswap.learningpathengine.application.internal.outboundservices.SkillTaxonomyMatcher;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultLearningPathBuilder;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultSkillGapAnalyzer;
@@ -21,6 +22,7 @@ import com.innovify.skillswap.learningpathengine.infrastructure.taxonomy.JsonSki
 import com.innovify.skillswap.learningpathengine.infrastructure.taxonomy.KeywordCertificateSkillAffinityScorer;
 import com.innovify.skillswap.learningpathengine.infrastructure.taxonomy.KeywordSkillTaxonomyMatcher;
 import com.innovify.skillswap.learningpathengine.infrastructure.taxonomy.SkillCatalog;
+import com.innovify.skillswap.recognitionincentives.domain.model.events.AdvancedPathUnlockRedeemed;
 import com.innovify.skillswap.shared.domain.events.DomainEventHandler;
 import com.innovify.skillswap.subscriptionbilling.domain.model.events.SubscriptionExpired;
 import java.net.http.HttpClient;
@@ -119,5 +121,14 @@ public class LearningPathEngineConfig {
         TransactionTemplate newTransaction = new TransactionTemplate(transactionManager);
         newTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         return new RecognizeValidatedCertificateEventHandler(commandService, newTransaction);
+    }
+
+    /** The redemption is handled after its commit, so the unlock is granted in a new transaction. */
+    @Bean
+    public DomainEventHandler<AdvancedPathUnlockRedeemed> grantAdvancedPathUnlockEventHandler(
+            LearningPathCommandService commandService, PlatformTransactionManager transactionManager) {
+        TransactionTemplate newTransaction = new TransactionTemplate(transactionManager);
+        newTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return new GrantAdvancedPathUnlockEventHandler(commandService, newTransaction);
     }
 }

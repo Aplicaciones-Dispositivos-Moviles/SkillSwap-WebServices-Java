@@ -5,6 +5,7 @@ import com.innovify.skillswap.credentialverification.application.internal.outbou
 import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerificationResolved;
 import com.innovify.skillswap.credentialverification.domain.services.CertificateRiskScorer;
 import com.innovify.skillswap.credentialverification.domain.services.DefaultCertificateRiskScorer;
+import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
 import com.innovify.skillswap.credentialverification.infrastructure.filestorage.CloudinarySettings;
 import com.innovify.skillswap.credentialverification.infrastructure.filestorage.CloudinaryStorageService;
 import com.innovify.skillswap.iam.application.acl.UserNotificationsContextFacade;
@@ -25,6 +26,11 @@ public class CredentialVerificationConfig {
     @Bean
     public CertificateRiskScorer certificateRiskScorer() {
         return new DefaultCertificateRiskScorer();
+    }
+
+    @Bean
+    public HolderNameMatcher holderNameMatcher() {
+        return new HolderNameMatcher();
     }
 
     @Bean

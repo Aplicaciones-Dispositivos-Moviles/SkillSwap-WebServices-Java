@@ -20,7 +20,8 @@ class LearningPathErrorTest {
                 "PathNotFound", "PathNotActive", "PathNotPaused", "PathPaused", "NotPathOwner", "NodeNotFound",
                 "NodeLocked", "NodeAlreadyCompleted", "CertificateNotFound", "NotCertificateOwner",
                 "CertificateNotVerified", "CertificateSkillMismatch", "CertificateRequired",
-                "QuestionGenerationFailed", "OperationCancelled", "DatabaseError", "InternalServerError");
+                "QuestionGenerationFailed", "AdvancedPathUnlockRequired", "OperationCancelled", "DatabaseError",
+                "InternalServerError");
     }
 
     @Test

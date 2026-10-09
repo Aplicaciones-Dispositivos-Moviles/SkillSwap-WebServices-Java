@@ -272,4 +272,75 @@ class VerificationCaseTest {
         VerificationCase neverAppealed = assignedCase().resolve(ReviewDecision.APPROVED, "Good.");
         assertThat(neverAppealed.overturnedVerifierUserId()).isNull();
     }
+
+    // ---------- Missed deadline (US39) ----------
+
+    private static VerificationCase overdueCase(int studentId, int verifierId) {
+        VerificationCase verificationCase = new VerificationCase(1, studentId, 3, "http-basics",
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType.QUIZ,
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline.hours(48))
+                .assignVerifier(verifierId);
+        org.springframework.test.util.ReflectionTestUtils.setField(verificationCase, "reviewDueAt",
+                java.time.Instant.now().minusSeconds(60));
+        return verificationCase;
+    }
+
+    @org.junit.jupiter.api.Test
+    void constructor_storesTheDeadlineItWasOpenedWith() {
+        VerificationCase verificationCase = new VerificationCase(1, 2, 3, "http-basics",
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType.QUIZ,
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline.businessDays(3));
+
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getReviewDeadline()).isEqualTo(
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline.businessDays(3));
+        org.assertj.core.api.Assertions.assertThat(new VerificationCase(1, 2, 3, "http-basics",
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType.QUIZ)
+                .getReviewDeadline()).isNull();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.isOverdue(java.time.Instant.now())).isFalse();
+    }
+
+    @org.junit.jupiter.api.Test
+    void recordMissedDeadline_onlyOncePerAssignment() {
+        VerificationCase verificationCase = overdueCase(2, 5);
+        java.time.Instant now = java.time.Instant.now();
+
+        org.assertj.core.api.Assertions.assertThat(verificationCase.isOverdue(now)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.recordMissedDeadline(now)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.recordMissedDeadline(now)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getDeadlineMissedAt()).isEqualTo(now);
+
+        VerificationCase onTime = new VerificationCase(1, 2, 3, "http-basics",
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType.QUIZ,
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline.hours(48))
+                .assignVerifier(5);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> onTime.recordMissedDeadline(now))
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+    }
+
+    @org.junit.jupiter.api.Test
+    void reassignAfterMissedDeadline_givesTheSameDeadlineToAnotherVerifier() {
+        VerificationCase verificationCase = overdueCase(2, 5);
+        java.time.Instant now = java.time.Instant.now();
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> verificationCase.reassignAfterMissedDeadline(6, null, now))
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+        verificationCase.recordMissedDeadline(now);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> verificationCase.reassignAfterMissedDeadline(2, null, now))
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> verificationCase.reassignAfterMissedDeadline(5, null, now))
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+
+        verificationCase.reassignAfterMissedDeadline(6, null, now);
+
+        org.assertj.core.api.Assertions.assertThat(verificationCase.isAssignedTo(6)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getAssignedAt()).isEqualTo(now);
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getReviewDueAt())
+                .isEqualTo(now.plus(java.time.Duration.ofHours(48)));
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getDeadlineMissedAt()).isNull();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getReassignmentCount()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(verificationCase.isOverdue(now)).isFalse();
+    }
 }

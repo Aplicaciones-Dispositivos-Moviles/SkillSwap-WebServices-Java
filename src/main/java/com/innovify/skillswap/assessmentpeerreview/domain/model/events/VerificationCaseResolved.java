@@ -12,7 +12,10 @@ import com.innovify.skillswap.shared.domain.events.DomainEvent;
  * @param pathNodeId     the node of the case
  * @param skillTag       the skill of the case
  * @param decision       the decision
+ * @param overturnedVerifierUserId the verifier whose rejection this decision overturned after an appeal;
+ *                       null when nobody was overturned
  */
 public record VerificationCaseResolved(int caseId, int studentId, int verifierUserId, int pathNodeId,
-                                       String skillTag, ReviewDecision decision) implements DomainEvent {
+                                       String skillTag, ReviewDecision decision,
+                                       Integer overturnedVerifierUserId) implements DomainEvent {
 }

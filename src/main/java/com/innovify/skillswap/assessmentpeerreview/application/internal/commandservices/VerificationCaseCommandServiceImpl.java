@@ -137,7 +137,7 @@ public class VerificationCaseCommandServiceImpl implements VerificationCaseComma
 
             eventPublisher.publish(new VerificationCaseResolved(resolved.getId(), resolved.getStudentId(),
                     command.verifierUserId(), resolved.getPathNodeId(), resolved.getSkillTag(),
-                    command.decision()));
+                    command.decision(), resolved.overturnedVerifierUserId()));
 
             return Result.success(resolved);
         } catch (NodeCompletionFailedException exception) {

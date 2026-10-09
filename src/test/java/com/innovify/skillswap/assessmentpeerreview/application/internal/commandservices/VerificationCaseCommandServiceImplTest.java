@@ -165,6 +165,7 @@ class VerificationCaseCommandServiceImplTest {
         assertThat(published.pathNodeId()).isEqualTo(10);
         assertThat(published.skillTag()).isEqualTo("http-basics");
         assertThat(published.decision()).isEqualTo(ReviewDecision.APPROVED);
+        assertThat(published.overturnedVerifierUserId()).isNull();
     }
 
     @Test
@@ -415,5 +416,36 @@ class VerificationCaseCommandServiceImplTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.value().getDecision()).isEqualTo(ReviewDecision.APPROVED);
         assertThat(learningPath.completedNodes()).contains(10);
+    }
+
+    @Test
+    void resolve_anAppealedCaseAsApproved_publishesTheOverturnedVerifier() {
+        VerificationCase verificationCase = addRejectedCase();
+        addVerifier(VERIFIER_ID);
+        addVerifier(3);
+        appeal(verificationCase.getId(), STUDENT_ID);
+        events.published().clear();
+
+        Result<VerificationCase> result = resolve(verificationCase.getId(), 3, ReviewDecision.APPROVED, "Fine.");
+
+        assertThat(result.isSuccess()).isTrue();
+        var published = (VerificationCaseResolved) events.published().get(0);
+        assertThat(published.verifierUserId()).isEqualTo(3);
+        assertThat(published.overturnedVerifierUserId()).isEqualTo(VERIFIER_ID);
+    }
+
+    @Test
+    void resolve_anAppealedCaseAsRejected_confirmsTheFirstDecisionWithoutOverturning() {
+        VerificationCase verificationCase = addRejectedCase();
+        addVerifier(VERIFIER_ID);
+        addVerifier(3);
+        appeal(verificationCase.getId(), STUDENT_ID);
+        events.published().clear();
+
+        resolve(verificationCase.getId(), 3, ReviewDecision.REJECTED, "Still not enough.");
+
+        var published = (VerificationCaseResolved) events.published().get(0);
+        assertThat(published.decision()).isEqualTo(ReviewDecision.REJECTED);
+        assertThat(published.overturnedVerifierUserId()).isNull();
     }
 }

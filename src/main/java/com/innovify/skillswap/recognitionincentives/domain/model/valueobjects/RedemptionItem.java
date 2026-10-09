@@ -4,7 +4,10 @@ import java.util.Optional;
 
 /** The benefits that can be redeemed with SkillCredits. */
 public enum RedemptionItem {
-    /** Unlocks an advanced node of the learning path. */
+    /**
+     * Unlocks an advanced learning path for the student: it is completed like any other path, but it does not count
+     * toward the limits of the plan (delivered by Learning Path Engine).
+     */
     ADVANCED_PATH_UNLOCK("AdvancedPathUnlock", "advanced path unlock"),
     /** An exportable certificate of the contribution as a verifier. */
     CONTRIBUTION_CERTIFICATE("ContributionCertificate", "contribution certificate");
@@ -25,6 +28,11 @@ public enum RedemptionItem {
     /** What the benefit is, for the description of the movement. */
     public String description() {
         return description;
+    }
+
+    /** Case-insensitive lookup by {@link #value()}. */
+    public static RedemptionItem fromValue(String value) {
+        return tryParse(value).orElseThrow(() -> new IllegalArgumentException("Unknown RedemptionItem: " + value));
     }
 
     /** Case-insensitive lookup that answers empty for anything that is not a benefit. */

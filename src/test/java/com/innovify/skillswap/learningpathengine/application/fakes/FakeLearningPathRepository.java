@@ -74,13 +74,13 @@ public class FakeLearningPathRepository implements LearningPathRepository {
 
     @Override
     public int countByStudentId(int studentId) {
-        return (int) paths.stream().filter(p -> p.getStudentId() == studentId).count();
+        return (int) paths.stream().filter(p -> p.getStudentId() == studentId && !p.isAdvanced()).count();
     }
 
     @Override
     public int countActiveByStudentId(int studentId) {
         return (int) paths.stream()
-                .filter(p -> p.getStudentId() == studentId && p.getStatus() == PathStatus.ACTIVE)
+                .filter(p -> p.getStudentId() == studentId && p.getStatus() == PathStatus.ACTIVE && !p.isAdvanced())
                 .count();
     }
 

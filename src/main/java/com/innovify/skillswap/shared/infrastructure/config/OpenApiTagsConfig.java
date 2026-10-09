@@ -28,6 +28,9 @@ public class OpenApiTagsConfig {
                 "Identity & Access. The authenticated user and the profile bio.");
         group("learning-paths-controller", "Learning Paths",
                 "Learning Path Engine. Declare a goal and get the certification path with its nodes.");
+        group("advanced-path-unlocks-controller", "Advanced Path Unlocks",
+                "Learning Path Engine. Advanced paths redeemed with SkillCredits, which do not count toward the "
+                        + "limits of the plan.");
         group("assessment-blueprints-controller", "Assessment Blueprints",
                 "Learning Path Engine. Generate the AI questions that assess a path node.");
         group("certificates-controller", "Certificates",

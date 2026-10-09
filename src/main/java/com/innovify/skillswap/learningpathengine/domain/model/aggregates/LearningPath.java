@@ -34,6 +34,9 @@ import java.util.Set;
  * paths are active at once, so a path can be {@link PathStatus#PAUSED}: it keeps its progress and still receives
  * the result of a review already in progress, but no new assessment can be started on it until it is resumed.
  *
+ * <p>An advanced path, started with an advanced path unlock redeemed with SkillCredits, is not counted in those
+ * limits and is never paused by them.
+ *
  * <p>The goal and the status are mapped to their columns by the auto-applied attribute converters of the
  * infrastructure layer.
  */
@@ -66,6 +69,13 @@ public class LearningPath {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * Whether the path was started with an advanced path unlock redeemed with SkillCredits: it is completed like any
+     * other, but it never counts toward the limits of the plan.
+     */
+    @Column(name = "is_advanced", nullable = false)
+    private boolean advanced;
+
     /** When the student last advanced: created, generated an assessment or completed a node. */
     @Column(name = "last_progress_at", nullable = false)
     private Instant lastProgressAt;
@@ -81,6 +91,16 @@ public class LearningPath {
      *                         prerequisite is outside the path, or a node is already completed
      */
     public LearningPath(int studentId, CareerGoal careerGoal, Collection<PathNode> nodes) {
+        this(studentId, careerGoal, nodes, false);
+    }
+
+    /**
+     * Creates an active path; an advanced one is started with an advanced path unlock.
+     *
+     * @throws DomainException when the student is not valid, there are no nodes, orders or skills repeat, a
+     *                         prerequisite is outside the path, or a node is already completed
+     */
+    public LearningPath(int studentId, CareerGoal careerGoal, Collection<PathNode> nodes, boolean advanced) {
         if (studentId <= 0) {
             throw new DomainException("The path must belong to a valid student.");
         }
@@ -111,6 +131,7 @@ public class LearningPath {
         this.careerGoal = careerGoal;
         this.nodes.addAll(list);
         this.status = PathStatus.ACTIVE;
+        this.advanced = advanced;
         this.createdAt = Instant.now();
         this.updatedAt = createdAt;
         this.lastProgressAt = createdAt;
@@ -148,6 +169,11 @@ public class LearningPath {
     /** When the student last advanced on the path; used to choose which path stays active after a downgrade. */
     public Instant getLastProgressAt() {
         return lastProgressAt;
+    }
+
+    /** Whether it was started with an advanced path unlock, so it does not count toward the limits of the plan. */
+    public boolean isAdvanced() {
+        return advanced;
     }
 
     public boolean isActive() {

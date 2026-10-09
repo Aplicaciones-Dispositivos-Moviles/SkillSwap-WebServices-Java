@@ -61,9 +61,10 @@ public class LearningPathsController {
      * Declares a career goal in free text. The goal is interpreted against the skill taxonomy, the skills the
      * student already demonstrated are discounted, and the path is built in prerequisite order. The student is
      * the authenticated user, and the plan must allow another active path and another path in total (free: 1
-     * active and 3 in total; monthly: 3 active and no total cap). 201 with the path; 400 (empty or longer than 500
-     * characters), 409 (PlanLimitReached, or every skill was already demonstrated) or 422 (the goal matches no
-     * skill).
+     * active and 3 in total; monthly: 3 active and no total cap). With {@code advanced: true} the path is the
+     * advanced path redeemed with SkillCredits: it skips those limits and spends an available advanced path unlock.
+     * 201 with the path; 400 (empty or longer than 500 characters), 409 (PlanLimitReached,
+     * AdvancedPathUnlockRequired, or every skill was already demonstrated) or 422 (the goal matches no skill).
      */
     @PostMapping
     @PreAuthorize("hasRole('STUDENT')")

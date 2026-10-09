@@ -1,6 +1,7 @@
 package com.innovify.skillswap.recognitionincentives.infrastructure.persistence.jpa.repositories;
 
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.CreditTransactionRepository;
 import java.util.List;
@@ -29,5 +30,10 @@ public class CreditTransactionRepositoryAdapter implements CreditTransactionRepo
     @Override
     public boolean existsEarnedForCase(int walletId, int caseId) {
         return jpaRepository.existsByWalletIdAndTypeAndRelatedCaseId(walletId, TransactionType.EARNED, caseId);
+    }
+
+    @Override
+    public List<Integer> findRedemptionIds(int walletId, RedemptionItem item) {
+        return jpaRepository.findIdsByWalletIdAndRedemptionItem(walletId, item);
     }
 }

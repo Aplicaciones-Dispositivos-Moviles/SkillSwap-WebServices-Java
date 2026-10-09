@@ -39,12 +39,12 @@ public class LearningPathRepositoryAdapter implements LearningPathRepository {
 
     @Override
     public int countByStudentId(int studentId) {
-        return Math.toIntExact(jpaRepository.countByStudentId(studentId));
+        return Math.toIntExact(jpaRepository.countByStudentIdAndAdvancedFalse(studentId));
     }
 
     @Override
     public int countActiveByStudentId(int studentId) {
-        return Math.toIntExact(jpaRepository.countByStudentIdAndStatus(studentId, PathStatus.ACTIVE));
+        return Math.toIntExact(jpaRepository.countByStudentIdAndStatusAndAdvancedFalse(studentId, PathStatus.ACTIVE));
     }
 
     @Override

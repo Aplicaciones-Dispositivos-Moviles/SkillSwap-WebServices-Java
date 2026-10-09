@@ -1,6 +1,7 @@
 package com.innovify.skillswap.recognitionincentives.domain.model.entities;
 
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import jakarta.persistence.Column;
@@ -45,6 +46,10 @@ public class CreditTransaction {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** The benefit a redeemed transaction bought; null for the earned ones. */
+    @Column(name = "redemption_item", length = 30)
+    private RedemptionItem redemptionItem;
+
     /** Required by JPA. */
     protected CreditTransaction() {
     }
@@ -55,6 +60,16 @@ public class CreditTransaction {
      */
     public CreditTransaction(int walletId, Credits amount, TransactionType type, String description,
                              Integer relatedCaseId) {
+        this(walletId, amount, type, description, relatedCaseId, null);
+    }
+
+    /**
+     * @param relatedCaseId  the case that paid an earned movement, or null
+     * @param redemptionItem the benefit a redeemed movement bought, or null
+     * @throws DomainException when the wallet, amount, type, description, case or benefit are not valid
+     */
+    public CreditTransaction(int walletId, Credits amount, TransactionType type, String description,
+                             Integer relatedCaseId, RedemptionItem redemptionItem) {
         if (walletId <= 0) {
             throw new DomainException("The transaction must belong to a valid wallet.");
         }
@@ -83,11 +98,16 @@ public class CreditTransaction {
             }
         }
 
+        if (redemptionItem != null && type != TransactionType.REDEEMED) {
+            throw new DomainException("Only a redeemed transaction can buy a benefit.");
+        }
+
         this.walletId = walletId;
         this.amount = amount;
         this.type = type;
         this.description = text;
         this.relatedCaseId = relatedCaseId;
+        this.redemptionItem = redemptionItem;
         this.createdAt = Instant.now();
     }
 
@@ -118,5 +138,10 @@ public class CreditTransaction {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    /** The benefit a redeemed transaction bought; null for the earned ones. */
+    public RedemptionItem getRedemptionItem() {
+        return redemptionItem;
     }
 }

@@ -34,6 +34,7 @@ public final class LearningPathResourceFromEntityAssembler {
                 nodes,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                entity.getLastProgressAt());
+                entity.getLastProgressAt(),
+                entity.isAdvanced());
     }
 }

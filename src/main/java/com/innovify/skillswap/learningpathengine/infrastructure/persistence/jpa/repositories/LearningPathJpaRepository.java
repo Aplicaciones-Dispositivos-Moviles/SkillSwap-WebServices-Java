@@ -16,9 +16,9 @@ public interface LearningPathJpaRepository extends JpaRepository<LearningPath, I
 
     List<LearningPath> findByStudentIdOrderByIdDesc(int studentId);
 
-    long countByStudentId(int studentId);
+    long countByStudentIdAndAdvancedFalse(int studentId);
 
-    long countByStudentIdAndStatus(int studentId, PathStatus status);
+    long countByStudentIdAndStatusAndAdvancedFalse(int studentId, PathStatus status);
 
     /**
      * Transaction-level advisory lock of PostgreSQL on (namespace, student): released at the commit or rollback.

@@ -19,7 +19,7 @@ class LearningPathErrorTest {
                 "None", "InvalidGoal", "GoalNotInterpretable", "GoalAlreadyAchieved", "PlanLimitReached",
                 "PathNotFound", "PathNotActive", "PathNotPaused", "PathPaused", "NotPathOwner", "NodeNotFound",
                 "NodeLocked", "NodeAlreadyCompleted",
-                "QuestionGenerationFailed", "OperationCancelled", "DatabaseError", "InternalServerError");
+                "QuestionGenerationFailed", "AdvancedPathUnlockRequired", "OperationCancelled", "DatabaseError", "InternalServerError");
     }
 
     @Test

@@ -181,6 +181,15 @@ public class VerificationCase {
         return status == CaseStatus.RESOLVED && decision == ReviewDecision.REJECTED && hasAppealsLeft();
     }
 
+    /**
+     * The verifier whose rejection the current decision overturned: the one who rejected the case before the
+     * appeal, when the new decision is an approval. Null for a case never appealed, a rejection that was
+     * confirmed, or a case that is not resolved.
+     */
+    public Integer overturnedVerifierUserId() {
+        return status == CaseStatus.RESOLVED && decision == ReviewDecision.APPROVED ? previousVerifierUserId : null;
+    }
+
     public boolean hasAppealsLeft() {
         return appealCount < MAX_APPEALS;
     }

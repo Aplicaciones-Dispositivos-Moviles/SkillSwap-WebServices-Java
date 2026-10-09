@@ -242,4 +242,20 @@ class VerificationCaseTest {
                 .isInstanceOf(DomainException.class);
         assertThat(verificationCase.assignVerifier(3).getVerifierUserId()).isEqualTo(3);
     }
+
+    @Test
+    void overturnedVerifierUserId_isTheFirstVerifierOnlyWhenTheAppealEndsInAnApproval() {
+        assertThat(rejectedCase().overturnedVerifierUserId()).isNull();
+
+        VerificationCase approved = rejectedCase().appeal().assignVerifier(3)
+                .resolve(ReviewDecision.APPROVED, "Meets the rubric.");
+        assertThat(approved.overturnedVerifierUserId()).isEqualTo(VERIFIER_ID);
+
+        VerificationCase confirmed = rejectedCase().appeal().assignVerifier(3)
+                .resolve(ReviewDecision.REJECTED, "Still not enough.");
+        assertThat(confirmed.overturnedVerifierUserId()).isNull();
+
+        VerificationCase neverAppealed = assignedCase().resolve(ReviewDecision.APPROVED, "Good.");
+        assertThat(neverAppealed.overturnedVerifierUserId()).isNull();
+    }
 }

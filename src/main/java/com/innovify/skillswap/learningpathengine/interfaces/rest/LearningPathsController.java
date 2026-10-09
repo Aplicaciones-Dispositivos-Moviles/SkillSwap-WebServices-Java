@@ -1,13 +1,10 @@
 package com.innovify.skillswap.learningpathengine.interfaces.rest;
 
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
-import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
 import com.innovify.skillswap.learningpathengine.application.commandservices.LearningPathCommandService;
-import com.innovify.skillswap.learningpathengine.application.queryservices.LearningPathQueryService;
 import com.innovify.skillswap.learningpathengine.domain.model.LearningPathError;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RefreshCertificateLinksCommand;
-import com.innovify.skillswap.learningpathengine.domain.model.queries.GetLearningPathByStudentIdQuery;
 import com.innovify.skillswap.learningpathengine.domain.services.SkillTaxonomy;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.DeclareGoalResource;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.LearningPathResource;
@@ -34,14 +31,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class LearningPathsController {
 
     private final LearningPathCommandService commandService;
-    private final LearningPathQueryService queryService;
     private final SkillTaxonomy skillTaxonomy;
     private final MessageSource messageSource;
 
-    public LearningPathsController(LearningPathCommandService commandService, LearningPathQueryService queryService,
-                                   SkillTaxonomy skillTaxonomy, MessageSource messageSource) {
+    public LearningPathsController(LearningPathCommandService commandService, SkillTaxonomy skillTaxonomy,
+                                   MessageSource messageSource) {
         this.commandService = commandService;
-        this.queryService = queryService;
         this.skillTaxonomy = skillTaxonomy;
         this.messageSource = messageSource;
     }
@@ -64,25 +59,18 @@ public class LearningPathsController {
     }
 
     /**
-     * The latest path of a student with the state of each node. Only the student or a Coordinator can read it.
-     * When the student reads their own path, the certificates uploaded since it was created are linked to the
-     * matching nodes first (as supporting evidence only); a Coordinator's read never writes.
+     * The latest path of a student with the state of each node. Only the student can read it. The certificates
+     * uploaded since the path was created are linked to the matching nodes first (as supporting evidence only).
      */
     @GetMapping("/{studentId:\\d+}")
     public ResponseEntity<?> getLearningPathByStudentId(@PathVariable int studentId,
                                                         @AuthenticationPrincipal User actor) {
-        if (actor.getId() != studentId && actor.getRole() != UserRole.COORDINATOR) {
+        if (actor.getId() != studentId) {
             return error(LearningPathError.NOT_PATH_OWNER);
         }
 
-        if (actor.getId() == studentId) {
-            var refreshed = commandService.handle(new RefreshCertificateLinksCommand(studentId));
-            return LearningPathActionResultAssembler.toResponse(refreshed, path -> ResponseEntity.ok(toResource(path)));
-        }
-
-        return queryService.handle(new GetLearningPathByStudentIdQuery(studentId))
-                .<ResponseEntity<?>>map(path -> ResponseEntity.ok(toResource(path)))
-                .orElseGet(() -> error(LearningPathError.PATH_NOT_FOUND));
+        var refreshed = commandService.handle(new RefreshCertificateLinksCommand(studentId));
+        return LearningPathActionResultAssembler.toResponse(refreshed, path -> ResponseEntity.ok(toResource(path)));
     }
 
     private LearningPathResource toResource(LearningPath path) {

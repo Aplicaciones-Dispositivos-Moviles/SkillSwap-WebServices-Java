@@ -8,6 +8,9 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -16,15 +19,10 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Optional;
-
 /**
  * Resolves the Bearer JWT of each request. When the token is valid and its user still exists, the
- * {@link User} becomes the principal of the request, with the authority {@code ROLE_STUDENT} or
- * {@code ROLE_COORDINATOR}. Otherwise the request goes on unauthenticated and the security rules decide
- * (401 on protected endpoints).
+ * {@link User} becomes the principal of the request, with the authority {@code ROLE_STUDENT}. Otherwise the
+ * request goes on unauthenticated and the security rules decide (401 on protected endpoints).
  *
  * <p>It is created by {@link SecurityConfig} and is not a bean, so Spring Boot does not also register it as a
  * servlet filter.

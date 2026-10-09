@@ -1,15 +1,22 @@
 package com.innovify.skillswap.iam.domain.model.aggregates;
 
-import com.innovify.skillswap.iam.domain.model.valueobjects.*;
+import com.innovify.skillswap.iam.domain.model.valueobjects.DeviceToken;
+import com.innovify.skillswap.iam.domain.model.valueobjects.Email;
+import com.innovify.skillswap.iam.domain.model.valueobjects.PasswordHash;
+import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
+import com.innovify.skillswap.iam.domain.model.valueobjects.Username;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
-import jakarta.persistence.*;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.util.Objects;
 
 /**
- * User aggregate root. Centralizes the account information of a registered SkillSwap user. Student accounts
- * can also become Verifiers (see the Assessment &amp; Peer Review bounded context); Coordinator is a
- * separate role.
+ * User aggregate root. Centralizes the account information of a registered SkillSwap user. Every account is a
+ * Student; a Student can also become a Verifier (see the Assessment &amp; Peer Review bounded context).
  *
  * <p>Value objects are mapped to their column by the auto-applied attribute converters of the
  * infrastructure layer.

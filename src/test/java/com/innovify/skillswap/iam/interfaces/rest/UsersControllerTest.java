@@ -18,13 +18,11 @@ class UsersControllerTest extends IamRestTest {
 
     private User ana;
     private User bob;
-    private User coordinator;
 
     @BeforeEach
     void saveUsers() {
         ana = saveUser("ana", "ana@upc.edu.pe", UserRole.STUDENT);
         bob = saveUser("bob", "bob@upc.edu.pe", UserRole.STUDENT);
-        coordinator = saveUser("root", "root@upc.edu.pe", UserRole.COORDINATOR);
     }
 
     private ResultActions updateBio(int id, String body) throws Exception {
@@ -69,15 +67,6 @@ class UsersControllerTest extends IamRestTest {
                 .andExpect(jsonPath("$.role").value("Student"))
                 .andExpect(jsonPath("$.isVerified").value(false))
                 .andExpect(jsonPath("$.email").doesNotExist());
-    }
-
-    @Test
-    void getUserById_asCoordinator_includesTheEmailOfAnyUser() throws Exception {
-        authenticateAs(coordinator);
-
-        mockMvc.perform(get("/api/v1/users/" + bob.getId()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("bob@upc.edu.pe"));
     }
 
     @Test

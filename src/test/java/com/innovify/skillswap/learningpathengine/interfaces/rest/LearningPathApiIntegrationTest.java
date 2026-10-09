@@ -64,10 +64,8 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
     private FakeQuestionGenerationService generator;
     private User ana;
     private User bob;
-    private User coordinator;
     private String anaToken;
     private String bobToken;
-    private String coordinatorToken;
 
     @BeforeEach
     void setUpMockMvc() {
@@ -80,10 +78,8 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
 
         ana = userRepository.save(TestData.newUser("ana", "ana@upc.edu.pe", UserRole.STUDENT));
         bob = userRepository.save(TestData.newUser("bob", "bob@upc.edu.pe", UserRole.STUDENT));
-        coordinator = userRepository.save(TestData.newUser("coord", "coord@upc.edu.pe", UserRole.COORDINATOR));
         anaToken = tokenGenerator.generateToken(ana);
         bobToken = tokenGenerator.generateToken(bob);
-        coordinatorToken = tokenGenerator.generateToken(coordinator);
     }
 
     // ---------- Helpers ----------
@@ -263,11 +259,6 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void declare_asCoordinator_returns403() throws Exception {
-        assertThat(status(declare(coordinatorToken, REST_AND_JWT))).isEqualTo(403);
-    }
-
-    @Test
     void declare_errorMessagesFollowTheAcceptLanguageHeader() throws Exception {
         MvcResult result = mockMvc.perform(post(PATHS)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -323,21 +314,6 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void get_asCoordinator_returns200() throws Exception {
-        declareOk(anaToken, REST_AND_JWT);
-
-        assertThat(status(getPath(coordinatorToken, ana.getId()))).isEqualTo(200);
-    }
-
-    @Test
-    void get_asCoordinatorForAStudentWithoutPath_returns404() throws Exception {
-        MvcResult result = getPath(coordinatorToken, ana.getId());
-
-        assertThat(status(result)).isEqualTo(404);
-        assertThat(title(result)).isEqualTo("PathNotFound");
-    }
-
-    @Test
     void get_withoutToken_returns401() throws Exception {
         assertThat(status(getPath(null, 1))).isEqualTo(401);
     }
@@ -345,20 +321,21 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
     // ---------- Certificates ----------
 
     @Test
-    void get_asTheOwner_linksCertificatesUploadedAfterTheGoal_andACoordinatorReadNeverWrites() throws Exception {
+    void get_asTheOwner_linksCertificatesUploadedAfterTheGoal_andAnotherStudentsReadNeverWrites() throws Exception {
         declareOk(anaToken, REST_AND_JWT);
         int certificateId = uploadCertificate(anaToken, "REST API fundamentals");
 
-        MvcResult byCoordinator = getPath(coordinatorToken, ana.getId());
-        assertThat(linkedNodes(byCoordinator)).isEmpty();
+        assertThat(status(getPath(bobToken, ana.getId()))).isEqualTo(403);
+        assertThat(queryString("SELECT count(*) FROM path_nodes WHERE linked_certificate_id IS NOT NULL"))
+                .isEqualTo("0");
 
         MvcResult byOwner = getPath(anaToken, ana.getId());
         assertThat(linkedNodes(byOwner)).hasSize(1);
         assertThat(node(byOwner, "rest-api-design")).containsEntry("linkedCertificateId", certificateId);
         assertThat(node(byOwner, "rest-api-design")).containsEntry("status", "Locked");
 
-        // The link was saved: a later read by the coordinator sees it too.
-        MvcResult again = getPath(coordinatorToken, ana.getId());
+        // The link was saved: a later read sees it too.
+        MvcResult again = getPath(anaToken, ana.getId());
         assertThat(node(again, "rest-api-design")).containsEntry("linkedCertificateId", certificateId);
     }
 
@@ -459,11 +436,6 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
     @Test
     void generate_withoutToken_returns401() throws Exception {
         assertThat(status(requestBlueprint(null, 1))).isEqualTo(401);
-    }
-
-    @Test
-    void generate_asCoordinator_returns403() throws Exception {
-        assertThat(status(requestBlueprint(coordinatorToken, 1))).isEqualTo(403);
     }
 
     @Test

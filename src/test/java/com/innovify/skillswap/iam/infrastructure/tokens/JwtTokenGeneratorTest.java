@@ -77,13 +77,13 @@ class JwtTokenGeneratorTest {
 
     @Test
     void generateToken_carriesTheUsernameAndTheRoleClaims() {
-        User coordinator = TestData.newUser("root", "root@upc.edu.pe", UserRole.COORDINATOR);
-        ReflectionTestUtils.setField(coordinator, "id", 3);
+        User student = TestData.newUser("root", "root@upc.edu.pe", UserRole.STUDENT);
+        ReflectionTestUtils.setField(student, "id", 3);
 
-        String token = generator(SECRET).generateToken(coordinator);
+        String token = generator(SECRET).generateToken(student);
 
         String payload = new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]), StandardCharsets.UTF_8);
-        assertThat(payload).contains("\"sub\":\"3\"", "\"username\":\"root\"", "\"role\":\"Coordinator\"");
+        assertThat(payload).contains("\"sub\":\"3\"", "\"username\":\"root\"", "\"role\":\"Student\"");
     }
 
     @ParameterizedTest

@@ -55,7 +55,7 @@ class AuthenticationControllerTest extends IamRestTest {
     void signUp_ignoresTheRoleSentByTheClient() throws Exception {
         mockMvc.perform(post(SIGN_UP_URL).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"mallory\",\"email\":\"mallory@upc.edu.pe\","
-                                + "\"password\":\"password123\",\"role\":\"Coordinator\"}"))
+                                + "\"password\":\"password123\",\"role\":\"Admin\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.role").value("Student"));
 

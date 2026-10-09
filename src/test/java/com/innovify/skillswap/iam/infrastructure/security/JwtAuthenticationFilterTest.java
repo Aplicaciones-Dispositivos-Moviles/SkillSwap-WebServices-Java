@@ -62,16 +62,6 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    void coordinatorToken_getsTheCoordinatorAuthority() throws Exception {
-        User coordinator = savedUser(UserRole.COORDINATOR);
-
-        Authentication authentication = run("Bearer " + tokens.generateToken(coordinator));
-
-        assertThat(authentication.getAuthorities()).extracting(Object::toString)
-                .containsExactly("ROLE_COORDINATOR");
-    }
-
-    @Test
     void bareTokenWithoutTheBearerPrefix_alsoWorks() throws Exception {
         User user = savedUser(UserRole.STUDENT);
 

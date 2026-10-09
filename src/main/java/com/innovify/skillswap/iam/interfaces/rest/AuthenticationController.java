@@ -35,7 +35,7 @@ public class AuthenticationController {
     @PostMapping("/sign-up")
     public ResponseEntity<?> signUp(@Valid @RequestBody SignUpResource resource) {
         // Self-registration can only create Student accounts: the role is never taken from the request, so a
-        // client cannot elevate its own role. Coordinator accounts are created by the seeder.
+        // client cannot elevate its own role. Every account is a Student.
         var command = SignUpCommandFromResourceAssembler.toCommandFromResource(resource, UserRole.STUDENT);
         var result = userCommandService.handle(command);
 

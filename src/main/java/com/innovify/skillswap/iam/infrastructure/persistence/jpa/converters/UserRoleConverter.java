@@ -4,7 +4,7 @@ import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
-/** Stores the role as the text the C# API wrote ("Student", "Coordinator"). */
+/** Stores the role as the text the C# API wrote ("Student"). */
 @Converter(autoApply = true)
 public class UserRoleConverter implements AttributeConverter<UserRole, String> {
 

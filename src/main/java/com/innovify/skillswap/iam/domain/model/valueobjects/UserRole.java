@@ -1,17 +1,15 @@
 package com.innovify.skillswap.iam.domain.model.valueobjects;
 
 /**
- * The role assigned to an account.
+ * The role assigned to an account. Every account is a Student.
  *
- * <p>The Verifier profile is not a role: it is an additional profile (VerifierProfile) that a Student can
- * acquire, managed in the Assessment &amp; Peer Review bounded context.
+ * <p>The Verifier is not a role: it is an additional profile (VerifierProfile) that a Student can acquire,
+ * managed in the Assessment &amp; Peer Review bounded context.
  *
- * <p>{@link #value()} is the representation stored in the database and exposed by the API
- * ("Student", "Coordinator").
+ * <p>{@link #value()} is the representation stored in the database and exposed by the API ("Student").
  */
 public enum UserRole {
-    STUDENT("Student"),
-    COORDINATOR("Coordinator");
+    STUDENT("Student");
 
     private final String value;
 

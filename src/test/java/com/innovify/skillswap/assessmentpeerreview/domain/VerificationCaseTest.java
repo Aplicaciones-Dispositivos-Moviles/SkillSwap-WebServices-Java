@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import java.time.Instant;
@@ -20,7 +21,7 @@ class VerificationCaseTest {
     private static final int VERIFIER_ID = 2;
 
     private static VerificationCase newCase() {
-        return new VerificationCase(10, STUDENT_ID, 5, " http-basics ");
+        return new VerificationCase(10, STUDENT_ID, 5, " http-basics ", CaseType.QUIZ);
     }
 
     private static VerificationCase assignedCase() {
@@ -40,6 +41,7 @@ class VerificationCaseTest {
         assertThat(verificationCase.getStudentId()).isEqualTo(STUDENT_ID);
         assertThat(verificationCase.getPathNodeId()).isEqualTo(5);
         assertThat(verificationCase.getSkillTag()).isEqualTo("http-basics");
+        assertThat(verificationCase.getCaseType()).isEqualTo(CaseType.QUIZ);
         assertThat(verificationCase.getVerifierUserId()).isNull();
         assertThat(verificationCase.getDecision()).isNull();
         assertThat(verificationCase.isOpen()).isTrue();
@@ -50,7 +52,19 @@ class VerificationCaseTest {
     @CsvSource({"0,1,1,skill", "1,0,1,skill", "1,1,0,skill", "1,1,1,' '"})
     void constructor_withInvalidData_throwsDomainException(int attemptId, int studentId, int pathNodeId,
                                                            String skillTag) {
-        assertThatThrownBy(() -> new VerificationCase(attemptId, studentId, pathNodeId, skillTag))
+        assertThatThrownBy(() -> new VerificationCase(attemptId, studentId, pathNodeId, skillTag, CaseType.QUIZ))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(CaseType.class)
+    void constructor_keepsTheTypeOfTheCase(CaseType caseType) {
+        assertThat(new VerificationCase(10, STUDENT_ID, 5, "http-basics", caseType).getCaseType()).isEqualTo(caseType);
+    }
+
+    @Test
+    void constructor_withoutType_throwsDomainException() {
+        assertThatThrownBy(() -> new VerificationCase(10, STUDENT_ID, 5, "http-basics", null))
                 .isInstanceOf(DomainException.class);
     }
 

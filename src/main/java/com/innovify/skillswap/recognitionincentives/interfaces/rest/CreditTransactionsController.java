@@ -32,7 +32,7 @@ public class CreditTransactionsController {
     }
 
     /**
-     * Redeems a benefit: AdvancedPathUnlock costs 50 and ContributionCertificate costs 30. The cost is taken from
+     * Redeems a benefit: AdvancedPathUnlock costs 200 and ContributionCertificate costs 120. The cost is taken from
      * the wallet of the caller and the movement is recorded. The mobile app asks the user to confirm with the
      * biometrics of the device before calling this endpoint; the server does not check it, and delivering the
      * benefit itself is not part of this version. 201 with the movement; 400 (unknown benefit), 404 (no wallet) or

@@ -3,6 +3,7 @@ package com.innovify.skillswap.recognitionincentives.application.eventhandlers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
 import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
@@ -13,11 +14,13 @@ import com.innovify.skillswap.recognitionincentives.domain.model.commands.Create
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.RedeemCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.ResolvedCaseType;
 import com.innovify.skillswap.shared.application.Result;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 class RecognitionIncentivesEventHandlersTest {
@@ -45,10 +48,19 @@ class RecognitionIncentivesEventHandlersTest {
     @EnumSource(ReviewDecision.class)
     void caseResolved_creditsTheVerifierWhateverTheDecision(ReviewDecision decision) {
         new CreditVerifierEventHandler(service).handle(
-                new VerificationCaseResolved(10, 1, 2, 5, "http-basics", decision, null));
+                new VerificationCaseResolved(10, 1, 2, 5, "http-basics", CaseType.QUIZ, decision, null));
 
-        assertThat(service.credits).containsExactly(new CreditVerifierCommand(2, 10));
+        assertThat(service.credits).containsExactly(new CreditVerifierCommand(2, 10, ResolvedCaseType.QUIZ));
         assertThat(service.creations).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"QUIZ,QUIZ", "MINI_PROJECT,MINI_PROJECT"})
+    void caseResolved_translatesTheTypeOfTheCase(CaseType caseType, ResolvedCaseType expected) {
+        new CreditVerifierEventHandler(service).handle(
+                new VerificationCaseResolved(10, 1, 2, 5, "http-basics", caseType, ReviewDecision.APPROVED, null));
+
+        assertThat(service.credits).containsExactly(new CreditVerifierCommand(2, 10, expected));
     }
 
     @Test
@@ -56,7 +68,7 @@ class RecognitionIncentivesEventHandlersTest {
         service.fail = true;
 
         new CreditVerifierEventHandler(service).handle(
-                new VerificationCaseResolved(10, 1, 2, 5, "http-basics", ReviewDecision.APPROVED, null));
+                new VerificationCaseResolved(10, 1, 2, 5, "http-basics", CaseType.QUIZ, ReviewDecision.APPROVED, null));
 
         assertThat(service.credits).hasSize(1);
     }

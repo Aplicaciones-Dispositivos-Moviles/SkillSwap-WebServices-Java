@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.AssessmentAttemptPassed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerifierProfileRepository;
 import com.innovify.skillswap.reputation.domain.repositories.StudentEmployabilityScoreRepository;
@@ -43,7 +44,8 @@ class ReputationEventWiringTest extends PostgresIntegrationTest {
     void approvedCase_certifiesTheStudentAndCountsForTheVerifier() {
         profiles.save(new VerifierProfile(7, "http-basics"));
 
-        publisher.publish(new VerificationCaseResolved(1, 3, 7, 10, "http-basics", ReviewDecision.APPROVED, null));
+        publisher.publish(new VerificationCaseResolved(1, 3, 7, 10, "http-basics",
+                CaseType.QUIZ, ReviewDecision.APPROVED, null));
 
         assertThat(employabilities.findByStudentId(3).orElseThrow().getScore().value()).isEqualTo(10);
         var reliability = reliabilities.findByVerifierUserId(7).orElseThrow();
@@ -54,7 +56,8 @@ class ReputationEventWiringTest extends PostgresIntegrationTest {
 
     @Test
     void rejectedCase_countsForTheVerifierButDoesNotCertify() {
-        publisher.publish(new VerificationCaseResolved(1, 3, 7, 10, "http-basics", ReviewDecision.REJECTED, null));
+        publisher.publish(new VerificationCaseResolved(1, 3, 7, 10, "http-basics",
+                CaseType.QUIZ, ReviewDecision.REJECTED, null));
 
         assertThat(employabilities.findByStudentId(3)).isEmpty();
         assertThat(reliabilities.findByVerifierUserId(7).orElseThrow().getResolvedCasesCount()).isEqualTo(1);
@@ -63,9 +66,11 @@ class ReputationEventWiringTest extends PostgresIntegrationTest {
     @Test
     void overturnedRejection_discountsThePreviousVerifier() {
         profiles.save(new VerifierProfile(5, "http-basics"));
-        publisher.publish(new VerificationCaseResolved(1, 3, 5, 10, "http-basics", ReviewDecision.REJECTED, null));
+        publisher.publish(new VerificationCaseResolved(1, 3, 5, 10, "http-basics",
+                CaseType.QUIZ, ReviewDecision.REJECTED, null));
 
-        publisher.publish(new VerificationCaseResolved(1, 3, 7, 10, "http-basics", ReviewDecision.APPROVED, 5));
+        publisher.publish(new VerificationCaseResolved(1, 3, 7, 10, "http-basics",
+                CaseType.QUIZ, ReviewDecision.APPROVED, 5));
 
         var previous = reliabilities.findByVerifierUserId(5).orElseThrow();
         assertThat(previous.getOverturnedDecisionsCount()).isEqualTo(1);

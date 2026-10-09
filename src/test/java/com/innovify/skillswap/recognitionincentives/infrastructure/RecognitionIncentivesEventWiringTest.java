@@ -3,6 +3,7 @@ package com.innovify.skillswap.recognitionincentives.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
 import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
@@ -43,7 +44,12 @@ class RecognitionIncentivesEventWiringTest extends PostgresIntegrationTest {
     private WalletCommandService commandService;
 
     private static VerificationCaseResolved resolved(int caseId, int verifierUserId, ReviewDecision decision) {
-        return new VerificationCaseResolved(caseId, 1, verifierUserId, 5, "http-basics", decision, null);
+        return resolved(caseId, verifierUserId, CaseType.QUIZ, decision);
+    }
+
+    private static VerificationCaseResolved resolved(int caseId, int verifierUserId, CaseType caseType,
+                                                     ReviewDecision decision) {
+        return new VerificationCaseResolved(caseId, 1, verifierUserId, 5, "http-basics", caseType, decision, null);
     }
 
     @Test
@@ -63,10 +69,10 @@ class RecognitionIncentivesEventWiringTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void approvedCase_creditsTheVerifierTenCredits() {
+    void approvedQuizCase_creditsTheVerifierTwentyFiveCredits() {
         publisher.publish(resolved(10, 2, ReviewDecision.APPROVED));
 
-        assertThat(wallets.findByOwnerId(2).orElseThrow().getBalance()).isEqualTo(10);
+        assertThat(wallets.findByOwnerId(2).orElseThrow().getBalance()).isEqualTo(25);
         assertThat(wallets.findByOwnerId(1)).isEmpty();
     }
 
@@ -74,7 +80,17 @@ class RecognitionIncentivesEventWiringTest extends PostgresIntegrationTest {
     void rejectedCase_alsoCreditsTheVerifier() {
         publisher.publish(resolved(10, 2, ReviewDecision.REJECTED));
 
-        assertThat(wallets.findByOwnerId(2).orElseThrow().getBalance()).isEqualTo(10);
+        assertThat(wallets.findByOwnerId(2).orElseThrow().getBalance()).isEqualTo(25);
+    }
+
+    @Test
+    void resolvedMiniProjectCase_creditsTheVerifierFortyCredits() {
+        publisher.publish(resolved(10, 2, CaseType.MINI_PROJECT, ReviewDecision.REJECTED));
+
+        Wallet wallet = wallets.findByOwnerId(2).orElseThrow();
+        assertThat(wallet.getBalance()).isEqualTo(40);
+        assertThat(transactions.findByWalletId(wallet.getId())).extracting(movement -> movement.getAmount().value())
+                .containsExactly(40);
     }
 
     @Test
@@ -83,7 +99,7 @@ class RecognitionIncentivesEventWiringTest extends PostgresIntegrationTest {
         publisher.publish(resolved(10, 2, ReviewDecision.APPROVED));
 
         Wallet wallet = wallets.findByOwnerId(2).orElseThrow();
-        assertThat(wallet.getBalance()).isEqualTo(10);
+        assertThat(wallet.getBalance()).isEqualTo(25);
         assertThat(transactions.findByWalletId(wallet.getId())).hasSize(1);
     }
 
@@ -91,16 +107,16 @@ class RecognitionIncentivesEventWiringTest extends PostgresIntegrationTest {
     void creditsOfSeveralCases_addUpOnTheExistingWallet() {
         publisher.publish(new UserRegistered(2, UserRole.STUDENT));
         publisher.publish(resolved(10, 2, ReviewDecision.APPROVED));
-        publisher.publish(resolved(11, 2, ReviewDecision.REJECTED));
+        publisher.publish(resolved(11, 2, CaseType.MINI_PROJECT, ReviewDecision.REJECTED));
 
         Wallet wallet = wallets.findByOwnerId(2).orElseThrow();
-        assertThat(wallet.getBalance()).isEqualTo(20);
+        assertThat(wallet.getBalance()).isEqualTo(65);
         assertThat(transactions.findByWalletId(wallet.getId())).hasSize(2);
     }
 
     @Test
     void twoRedemptionsAtTheSameTime_spendTheCreditsOnlyOnce() throws Exception {
-        Wallet wallet = wallets.save(new Wallet(2).credit(new Credits(30)));
+        Wallet wallet = wallets.save(new Wallet(2).credit(new Credits(120)));
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);
         List<Future<Result<CreditTransaction>>> futures = new ArrayList<>();

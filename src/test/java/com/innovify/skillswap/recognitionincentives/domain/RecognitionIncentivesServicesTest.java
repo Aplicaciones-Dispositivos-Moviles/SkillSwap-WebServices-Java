@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.ResolvedCaseType;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
 import com.innovify.skillswap.recognitionincentives.domain.services.CreditRewards;
 import com.innovify.skillswap.recognitionincentives.domain.services.DefaultRedemptionPricing;
@@ -18,13 +19,13 @@ class RecognitionIncentivesServicesTest {
     private final DefaultRedemptionPricing pricing = new DefaultRedemptionPricing();
 
     @Test
-    void pricing_advancedPathUnlockCostsFifty() {
-        assertThat(pricing.calculateCost(RedemptionItem.ADVANCED_PATH_UNLOCK).value()).isEqualTo(50);
+    void pricing_advancedPathUnlockCostsTwoHundred() {
+        assertThat(pricing.calculateCost(RedemptionItem.ADVANCED_PATH_UNLOCK).value()).isEqualTo(200);
     }
 
     @Test
-    void pricing_contributionCertificateCostsThirty() {
-        assertThat(pricing.calculateCost(RedemptionItem.CONTRIBUTION_CERTIFICATE).value()).isEqualTo(30);
+    void pricing_contributionCertificateCostsOneHundredTwenty() {
+        assertThat(pricing.calculateCost(RedemptionItem.CONTRIBUTION_CERTIFICATE).value()).isEqualTo(120);
     }
 
     @Test
@@ -33,8 +34,18 @@ class RecognitionIncentivesServicesTest {
     }
 
     @Test
-    void rewards_everyResolvedCaseIsWorthTen() {
-        assertThat(CreditRewards.forResolvedCase().value()).isEqualTo(10);
+    void rewards_aResolvedMiniProjectIsWorthForty() {
+        assertThat(CreditRewards.forResolvedCase(ResolvedCaseType.MINI_PROJECT).value()).isEqualTo(40);
+    }
+
+    @Test
+    void rewards_aResolvedQuizIsWorthTwentyFive() {
+        assertThat(CreditRewards.forResolvedCase(ResolvedCaseType.QUIZ).value()).isEqualTo(25);
+    }
+
+    @Test
+    void rewards_withoutCaseType_throwsDomainException() {
+        assertThatThrownBy(() -> CreditRewards.forResolvedCase(null)).isInstanceOf(DomainException.class);
     }
 
     @ParameterizedTest

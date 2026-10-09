@@ -66,6 +66,7 @@ public class WalletCommandServiceImpl implements WalletCommandService {
     @Override
     public Result<Wallet> handle(CreditVerifierCommand command) {
         try {
+            Credits amount = CreditRewards.forResolvedCase(command.caseType());
             Wallet credited = transactionOperations.execute(status -> {
                 Optional<Wallet> existing = wallets.findByOwnerIdForUpdate(command.verifierUserId());
                 if (existing.isPresent() && transactions.existsEarnedForCase(existing.get().getId(), command.caseId())) {
@@ -74,7 +75,6 @@ public class WalletCommandServiceImpl implements WalletCommandService {
 
                 // The movement needs the id of the wallet, so a new wallet is saved first.
                 Wallet wallet = existing.orElseGet(() -> wallets.save(new Wallet(command.verifierUserId())));
-                Credits amount = CreditRewards.forResolvedCase();
                 wallet.credit(amount);
                 Wallet saved = wallets.save(wallet);
                 transactions.save(new CreditTransaction(saved.getId(), amount, TransactionType.EARNED,

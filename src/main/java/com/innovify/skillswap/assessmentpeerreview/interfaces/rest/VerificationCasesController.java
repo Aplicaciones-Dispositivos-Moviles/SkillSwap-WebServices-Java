@@ -13,9 +13,15 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.AttachCaseEvidenceResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.ResolveVerificationCaseResource;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseDetailResource;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.transform.AssessmentPeerReviewActionResultAssembler;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.transform.AssessmentPeerReviewResourceAssemblers;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,7 +37,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Verification cases. There is no global listing: the student reads and changes their own case, and the
- * verifier works on the cases assigned to them. Every endpoint needs a valid token.
+ * verifier works on the cases assigned to them. Every endpoint needs a valid token. The endpoints answer
+ * {@code ResponseEntity<?>} (the resource or a problem), so the success body is declared for the documentation.
  */
 @RestController
 @RequestMapping("/api/v1/verification-cases")
@@ -57,6 +64,8 @@ public class VerificationCasesController {
      */
     @GetMapping
     @PreAuthorize("hasRole('STUDENT')")
+    @ApiResponse(responseCode = "200",
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = VerificationCaseResource.class))))
     public ResponseEntity<?> getAssignedCases(@AuthenticationPrincipal User actor) {
         var profile = profileQueryService.handle(new GetVerifierProfileByUserIdQuery(actor.getId()));
         if (profile.isEmpty() || !profile.get().isVerified()) {
@@ -75,6 +84,8 @@ public class VerificationCasesController {
      */
     @GetMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('STUDENT')")
+    @ApiResponse(responseCode = "200",
+            content = @Content(schema = @Schema(implementation = VerificationCaseDetailResource.class)))
     public ResponseEntity<?> getById(@PathVariable int id, @AuthenticationPrincipal User actor) {
         var detail = queryService.handle(new GetVerificationCaseDetailQuery(id));
         if (detail.isEmpty()) {
@@ -95,6 +106,8 @@ public class VerificationCasesController {
      */
     @PutMapping("/{id:\\d+}/evidence")
     @PreAuthorize("hasRole('STUDENT')")
+    @ApiResponse(responseCode = "200",
+            content = @Content(schema = @Schema(implementation = VerificationCaseResource.class)))
     public ResponseEntity<?> attachEvidence(@PathVariable int id, @RequestBody AttachCaseEvidenceResource resource,
                                             @AuthenticationPrincipal User actor) {
         String url = resource == null || resource.evidenceUrl() == null ? "" : resource.evidenceUrl();
@@ -110,6 +123,8 @@ public class VerificationCasesController {
      */
     @PatchMapping("/{id:\\d+}/decision")
     @PreAuthorize("hasRole('STUDENT')")
+    @ApiResponse(responseCode = "200",
+            content = @Content(schema = @Schema(implementation = VerificationCaseResource.class)))
     public ResponseEntity<?> resolve(@PathVariable int id, @RequestBody ResolveVerificationCaseResource resource,
                                      @AuthenticationPrincipal User actor) {
         ReviewDecision decision = resource == null ? null : ReviewDecision.tryParse(resource.decision()).orElse(null);
@@ -127,6 +142,8 @@ public class VerificationCasesController {
      */
     @PostMapping("/{id:\\d+}/appeal")
     @PreAuthorize("hasRole('STUDENT')")
+    @ApiResponse(responseCode = "200",
+            content = @Content(schema = @Schema(implementation = VerificationCaseResource.class)))
     public ResponseEntity<?> appeal(@PathVariable int id, @AuthenticationPrincipal User actor) {
         var result = commandService.handle(new AppealVerificationCaseCommand(id, actor.getId()));
         return AssessmentPeerReviewActionResultAssembler.toResponse(result,

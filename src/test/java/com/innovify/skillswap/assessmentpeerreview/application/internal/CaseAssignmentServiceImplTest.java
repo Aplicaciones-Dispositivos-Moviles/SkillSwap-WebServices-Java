@@ -7,6 +7,7 @@ import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeVerifie
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import java.util.List;
@@ -30,7 +31,7 @@ class CaseAssignmentServiceImplTest {
     }
 
     private VerificationCase addCase(int studentId, String skill) {
-        return cases.save(new VerificationCase(1, studentId, 10, skill));
+        return cases.save(new VerificationCase(1, studentId, 10, skill, CaseType.QUIZ));
     }
 
     @Test

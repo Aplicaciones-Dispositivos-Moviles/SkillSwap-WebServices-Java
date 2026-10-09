@@ -16,6 +16,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Verif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.SubmitAssessmentAttemptCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.AssessmentAttemptPassed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionOutcome;
@@ -127,6 +128,7 @@ class AssessmentAttemptCommandServiceImplTest {
         assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.ASSIGNED);
         assertThat(verificationCase.getVerifierUserId()).isEqualTo(2);
         assertThat(verificationCase.getPathNodeId()).isEqualTo(10);
+        assertThat(verificationCase.getCaseType()).isEqualTo(CaseType.QUIZ);
         assertThat(learningPath.completedNodes()).isEmpty();
         assertThat(events.published()).isEmpty();
     }
@@ -187,7 +189,7 @@ class AssessmentAttemptCommandServiceImplTest {
 
     @Test
     void submit_whenThereIsAnOpenCaseForTheNode_failsWithOpenCaseAlreadyExists() {
-        cases.save(new VerificationCase(5, 1, 10, "http-basics"));
+        cases.save(new VerificationCase(5, 1, 10, "http-basics", CaseType.QUIZ));
 
         assertFailure(submit(PASSING), AssessmentPeerReviewError.OPEN_CASE_ALREADY_EXISTS);
         assertThat(attempts.attempts()).isEmpty();
@@ -195,7 +197,7 @@ class AssessmentAttemptCommandServiceImplTest {
 
     @Test
     void submit_whenTheCaseOfTheNodeWasResolved_isAllowed() {
-        cases.save(new VerificationCase(5, 1, 10, "http-basics").assignVerifier(2)
+        cases.save(new VerificationCase(5, 1, 10, "http-basics", CaseType.QUIZ).assignVerifier(2)
                 .resolve(ReviewDecision.REJECTED, "Needs work."));
 
         assertThat(submit(PASSING).isSuccess()).isTrue();

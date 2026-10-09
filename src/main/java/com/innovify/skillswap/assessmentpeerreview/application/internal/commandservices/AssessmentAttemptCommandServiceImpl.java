@@ -8,6 +8,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Asses
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.SubmitAssessmentAttemptCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.AssessmentAttemptPassed;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
 import com.innovify.skillswap.learningpathengine.application.acl.BlueprintQuestionView;
@@ -107,8 +108,9 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
                     return new SubmitAssessmentAttemptOutcome(attempt, null);
                 }
 
+                // The attempts are the answers of the quiz of the node: the only work that opens a case today.
                 VerificationCase opened = new VerificationCase(attempt.getId(), command.studentId(),
-                        blueprint.pathNodeId(), blueprint.skillTag());
+                        blueprint.pathNodeId(), blueprint.skillTag(), CaseType.QUIZ);
                 caseAssignmentService.tryAssign(opened);
                 return new SubmitAssessmentAttemptOutcome(attempt, caseRepository.save(opened));
             });

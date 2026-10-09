@@ -226,6 +226,16 @@ class AssessmentPeerReviewApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void submit_failingAnswers_opensACaseOfTypeQuiz() throws Exception {
+        enroll(bob, bobToken);
+
+        int caseId = failAssessment(ana, anaToken);
+
+        assertThat((String) read(getCase(anaToken, caseId), "$.verificationCase.caseType")).isEqualTo("Quiz");
+        assertThat(queryString("SELECT case_type FROM verification_cases WHERE id = " + caseId)).isEqualTo("Quiz");
+    }
+
+    @Test
     void submit_withTheWrongNumberOfAnswers_returns400() throws Exception {
         BlueprintView blueprint = newBlueprint(ana, anaToken);
 

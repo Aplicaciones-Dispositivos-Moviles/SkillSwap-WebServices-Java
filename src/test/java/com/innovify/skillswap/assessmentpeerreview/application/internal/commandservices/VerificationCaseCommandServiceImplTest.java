@@ -16,6 +16,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.AttachC
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.ResolveVerificationCaseCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionOutcome;
@@ -56,7 +57,8 @@ class VerificationCaseCommandServiceImplTest {
     }
 
     private VerificationCase addAssignedCase() {
-        return cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics").assignVerifier(VERIFIER_ID));
+        return cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics", CaseType.QUIZ)
+                .assignVerifier(VERIFIER_ID));
     }
 
     private VerifierProfile addVerifier(int userId) {
@@ -99,7 +101,7 @@ class VerificationCaseCommandServiceImplTest {
 
     @Test
     void attach_toAPendingCase_isAllowed() {
-        VerificationCase pending = cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics"));
+        VerificationCase pending = cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics", CaseType.QUIZ));
 
         assertThat(attach(pending.getId()).isSuccess()).isTrue();
     }
@@ -164,6 +166,7 @@ class VerificationCaseCommandServiceImplTest {
         assertThat(published.verifierUserId()).isEqualTo(VERIFIER_ID);
         assertThat(published.pathNodeId()).isEqualTo(10);
         assertThat(published.skillTag()).isEqualTo("http-basics");
+        assertThat(published.caseType()).isEqualTo(CaseType.QUIZ);
         assertThat(published.decision()).isEqualTo(ReviewDecision.APPROVED);
         assertThat(published.overturnedVerifierUserId()).isNull();
     }
@@ -212,7 +215,7 @@ class VerificationCaseCommandServiceImplTest {
 
     @Test
     void resolve_aPendingCase_failsWithNotAssignedVerifier() {
-        VerificationCase pending = cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics"));
+        VerificationCase pending = cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics", CaseType.QUIZ));
         addVerifier(VERIFIER_ID);
 
         assertFailure(resolve(pending.getId()), AssessmentPeerReviewError.NOT_ASSIGNED_VERIFIER);
@@ -314,7 +317,8 @@ class VerificationCaseCommandServiceImplTest {
     // ---------- Appeal ----------
 
     private VerificationCase addRejectedCase() {
-        return cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics").assignVerifier(VERIFIER_ID)
+        return cases.save(new VerificationCase(1, STUDENT_ID, 10, "http-basics", CaseType.QUIZ)
+                .assignVerifier(VERIFIER_ID)
                 .resolve(ReviewDecision.REJECTED, "Needs more work."));
     }
 
@@ -390,7 +394,7 @@ class VerificationCaseCommandServiceImplTest {
     @Test
     void appeal_whenTheStudentHasAnotherOpenCaseForTheNode_failsWithOpenCaseAlreadyExists() {
         VerificationCase rejected = addRejectedCase();
-        cases.save(new VerificationCase(2, STUDENT_ID, 10, "http-basics"));
+        cases.save(new VerificationCase(2, STUDENT_ID, 10, "http-basics", CaseType.QUIZ));
 
         assertFailure(appeal(rejected.getId(), STUDENT_ID), AssessmentPeerReviewError.OPEN_CASE_ALREADY_EXISTS);
         assertThat(rejected.getStatus()).isEqualTo(CaseStatus.RESOLVED);

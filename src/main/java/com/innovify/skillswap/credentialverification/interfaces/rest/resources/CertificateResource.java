@@ -21,7 +21,7 @@ import java.time.LocalDate;
  * @param verificationMethod OcrOnly or Manual in the implemented scope
  * @param riskLevel         LowRisk, Review or HighRisk
  * @param createdAt         when the certificate was registered (UTC)
- * @param verifiedAt        when a Coordinator resolved it (UTC), if ever
+ * @param verifiedAt        when a verifier resolved it (UTC), if ever
  * @param fileUrl           temporary signed URL to view the file (expires in 15 minutes)
  */
 public record CertificateResource(

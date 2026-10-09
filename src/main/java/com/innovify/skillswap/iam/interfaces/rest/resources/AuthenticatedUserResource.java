@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param id         the unique identifier of the user
  * @param username   the username
  * @param email      the institutional email
- * @param role       the account role: Student or Coordinator
+ * @param role       the account role: Student
  * @param isVerified whether the institutional validation has been completed
  * @param token      the JWT to send as a Bearer token
  */

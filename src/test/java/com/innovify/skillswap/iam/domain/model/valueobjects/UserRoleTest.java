@@ -10,17 +10,22 @@ class UserRoleTest {
     @Test
     void value_isTheRepresentationStoredInTheDatabase() {
         assertThat(UserRole.STUDENT.value()).isEqualTo("Student");
-        assertThat(UserRole.COORDINATOR.value()).isEqualTo("Coordinator");
     }
 
     @Test
     void fromValue_isCaseInsensitive() {
         assertThat(UserRole.fromValue("Student")).isEqualTo(UserRole.STUDENT);
-        assertThat(UserRole.fromValue("coordinator")).isEqualTo(UserRole.COORDINATOR);
+        assertThat(UserRole.fromValue("student")).isEqualTo(UserRole.STUDENT);
     }
 
     @Test
     void fromValue_withAnUnknownRole_throwsIllegalArgumentException() {
         assertThatThrownBy(() -> UserRole.fromValue("Verifier")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> UserRole.fromValue("Coordinator")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void student_isTheOnlyRole() {
+        assertThat(UserRole.values()).containsExactly(UserRole.STUDENT);
     }
 }

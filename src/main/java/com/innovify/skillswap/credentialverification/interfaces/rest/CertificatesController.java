@@ -12,7 +12,6 @@ import com.innovify.skillswap.credentialverification.interfaces.rest.transform.C
 import com.innovify.skillswap.credentialverification.interfaces.rest.transform.CredentialVerificationActionResultAssembler;
 import com.innovify.skillswap.credentialverification.interfaces.rest.transform.UploadCertificateCommandFromResourceAssembler;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
-import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
 import com.innovify.skillswap.shared.domain.errors.ErrorCodes;
 import java.net.URI;
 import org.springframework.context.MessageSource;
@@ -65,7 +64,7 @@ public class CertificatesController {
                         .body(toResource(certificate)));
     }
 
-    /** The detail of a certificate. Only its owner or a Coordinator can see it. */
+    /** The detail of a certificate. Only its owner can see it. */
     @GetMapping("/{id:\\d+}")
     public ResponseEntity<?> getCertificateById(@PathVariable int id, @AuthenticationPrincipal User actor) {
         var certificate = queryService.handle(new GetCertificateByIdQuery(id));
@@ -79,8 +78,8 @@ public class CertificatesController {
     }
 
     /**
-     * The certificates of a student, newest first. Without {@code ownerId} it lists the authenticated student's
-     * own. Listing another student's certificates requires the Coordinator role.
+     * The certificates of the authenticated student, newest first. {@code ownerId} is optional and must be the
+     * student's own id: a certificate belongs to its owner and nobody else lists it.
      */
     @GetMapping
     public ResponseEntity<?> getCertificatesByOwner(@RequestParam(required = false) Integer ownerId,
@@ -95,9 +94,9 @@ public class CertificatesController {
         return ResponseEntity.ok(resources);
     }
 
-    /** A certificate can be read by its owner or by a Coordinator. */
+    /** A certificate can only be read by its owner. */
     private static boolean canAccess(User actor, int ownerId) {
-        return actor.getId() == ownerId || actor.getRole() == UserRole.COORDINATOR;
+        return actor.getId() == ownerId;
     }
 
     private CertificateResource toResource(Certificate certificate) {

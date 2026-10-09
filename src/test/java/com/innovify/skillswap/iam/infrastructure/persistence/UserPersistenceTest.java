@@ -1,5 +1,8 @@
 package com.innovify.skillswap.iam.infrastructure.persistence;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.innovify.skillswap.iam.TestData;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
 import com.innovify.skillswap.iam.domain.model.valueobjects.DeviceToken;
@@ -11,9 +14,6 @@ import com.innovify.skillswap.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class UserPersistenceTest extends PostgresIntegrationTest {
 
@@ -74,23 +74,21 @@ class UserPersistenceTest extends PostgresIntegrationTest {
 
     @Test
     void role_isStoredAsTheTextTheCSharpApiWrote() throws Exception {
-        repository.save(TestData.newUser("coord", "coord@upc.edu.pe", UserRole.COORDINATOR));
         repository.save(TestData.newUser("ana", "ana@upc.edu.pe", UserRole.STUDENT));
 
-        assertThat(queryString("SELECT role FROM users WHERE username = 'coord'")).isEqualTo("Coordinator");
         assertThat(queryString("SELECT role FROM users WHERE username = 'ana'")).isEqualTo("Student");
-        assertThat(repository.findByUsername(new Username("coord")).orElseThrow().getRole())
-                .isEqualTo(UserRole.COORDINATOR);
+        assertThat(repository.findByUsername(new Username("ana")).orElseThrow().getRole())
+                .isEqualTo(UserRole.STUDENT);
     }
 
     @Test
     void readsARowInsertedByTheCSharpApi() throws Exception {
         execute("INSERT INTO users (username, email, password_hash, role, is_verified, bio) "
-                + "VALUES ('legacy', 'legacy@upc.edu.pe', '$2a$11$hash', 'Coordinator', true, 'hi')");
+                + "VALUES ('legacy', 'legacy@upc.edu.pe', '$2a$11$hash', 'Student', true, 'hi')");
 
         User user = repository.findByUsername(new Username("legacy")).orElseThrow();
 
-        assertThat(user.getRole()).isEqualTo(UserRole.COORDINATOR);
+        assertThat(user.getRole()).isEqualTo(UserRole.STUDENT);
         assertThat(user.isVerified()).isTrue();
         assertThat(user.getBio()).isEqualTo("hi");
         assertThat(user.getDeviceToken()).isNull();

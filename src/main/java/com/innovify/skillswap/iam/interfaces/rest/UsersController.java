@@ -9,7 +9,6 @@ import com.innovify.skillswap.iam.application.queryservices.UserQueryService;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateUserBioCommand;
 import com.innovify.skillswap.iam.domain.model.queries.GetUserByIdQuery;
-import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
 import jakarta.validation.Valid;
 import java.util.Objects;
 import org.springframework.context.MessageSource;
@@ -46,8 +45,8 @@ public class UsersController {
     }
 
     /**
-     * A user by id. The account owner and Coordinators receive the full profile (UserResource); any other
-     * authenticated user receives the public profile (PublicUserResource), which excludes the email.
+     * A user by id. The account owner receives the full profile (UserResource); any other authenticated user
+     * receives the public profile (PublicUserResource), which excludes the email.
      */
     @GetMapping("/{id:\\d+}")
     public ResponseEntity<?> getUserById(@PathVariable int id, @AuthenticationPrincipal User actor) {
@@ -58,8 +57,7 @@ public class UsersController {
             return IamActionResultAssembler.toUserNotFound(message);
         }
 
-        boolean canSeePrivateData = Objects.equals(user.get().getId(), actor.getId())
-                || actor.getRole() == UserRole.COORDINATOR;
+        boolean canSeePrivateData = Objects.equals(user.get().getId(), actor.getId());
 
         return ResponseEntity.ok(canSeePrivateData
                 ? UserResourceFromEntityAssembler.toResourceFromEntity(user.get())

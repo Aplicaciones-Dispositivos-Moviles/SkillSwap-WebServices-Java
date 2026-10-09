@@ -126,15 +126,6 @@ class CertificatesApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void upload_asCoordinator_returns403() throws Exception {
-        User coordinator = userRepository.save(TestData.newUser("coord", "coord@upc.edu.pe", UserRole.COORDINATOR));
-
-        MvcResult result = upload(tokenGenerator.generateToken(coordinator), jpeg("x"), "image/jpeg", Map.of());
-
-        assertThat(result.getResponse().getStatus()).isEqualTo(403);
-    }
-
-    @Test
     void getById_withoutToken_returns401() throws Exception {
         mockMvc.perform(get(URL + "/1")).andExpect(status().isUnauthorized());
     }
@@ -142,26 +133,6 @@ class CertificatesApiIntegrationTest extends PostgresIntegrationTest {
     @Test
     void list_withoutToken_returns401() throws Exception {
         mockMvc.perform(get(URL)).andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void getById_asCoordinator_returns200() throws Exception {
-        int id = uploadOk(anaToken, "file-a", null, null);
-        User coordinator = userRepository.save(TestData.newUser("coord", "coord@upc.edu.pe", UserRole.COORDINATOR));
-
-        mockMvc.perform(get(URL + "/" + id).header("Authorization", "Bearer " + tokenGenerator.generateToken(coordinator)))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void list_asCoordinator_returnsTheRequestedStudentsCertificates() throws Exception {
-        uploadOk(anaToken, "file-1", null, null);
-        User coordinator = userRepository.save(TestData.newUser("coord", "coord@upc.edu.pe", UserRole.COORDINATOR));
-
-        mockMvc.perform(get(URL).param("ownerId", String.valueOf(ana.getId()))
-                        .header("Authorization", "Bearer " + tokenGenerator.generateToken(coordinator)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)));
     }
 
     @Test

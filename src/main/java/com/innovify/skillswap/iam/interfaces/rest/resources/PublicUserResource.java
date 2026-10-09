@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *
  * @param id         the unique identifier of the user
  * @param username   the username
- * @param role       the account role: Student or Coordinator
+ * @param role       the account role: Student
  * @param isVerified whether the institutional validation has been completed
  * @param bio        the profile description
  */

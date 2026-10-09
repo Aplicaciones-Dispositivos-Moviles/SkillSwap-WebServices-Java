@@ -2,6 +2,7 @@ package com.innovify.skillswap.iam.infrastructure.security;
 
 import com.innovify.skillswap.iam.application.internal.outboundservices.TokenGenerator;
 import com.innovify.skillswap.iam.application.queryservices.UserQueryService;
+import java.nio.charset.StandardCharsets;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -15,8 +16,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
-
-import java.nio.charset.StandardCharsets;
 
 /**
  * Stateless JWT security. Anonymous: health check, sign-up / sign-in and the API docs. Everything else needs
@@ -50,7 +49,7 @@ public class SecurityConfig {
                             response.getWriter().write(FORBIDDEN_BODY);
                         }))
                 .authorizeHttpRequests(requests -> requests
-                        .requestMatchers("/health", "/api/v1/authentication/**",
+                        .requestMatchers("/", "/swagger", "/health", "/api/v1/authentication/**",
                                 "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenGenerator, userQueryService),

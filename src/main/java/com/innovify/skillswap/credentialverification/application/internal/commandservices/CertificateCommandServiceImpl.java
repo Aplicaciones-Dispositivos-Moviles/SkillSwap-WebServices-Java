@@ -6,11 +6,13 @@ import com.innovify.skillswap.credentialverification.domain.model.CredentialVeri
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.model.commands.ResolveCertificateDisputeCommand;
 import com.innovify.skillswap.credentialverification.domain.model.commands.UploadCertificateCommand;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerificationResolved;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
 import com.innovify.skillswap.credentialverification.domain.repositories.CertificateRepository;
 import com.innovify.skillswap.credentialverification.domain.services.CertificateRiskScorer;
 import com.innovify.skillswap.shared.application.Result;
 import com.innovify.skillswap.shared.domain.errors.ErrorCodes;
+import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
@@ -49,15 +51,18 @@ public class CertificateCommandServiceImpl implements CertificateCommandService 
     private final CertificateRepository certificateRepository;
     private final CertificateRiskScorer riskScorer;
     private final FileStorageService fileStorageService;
+    private final DomainEventPublisher eventPublisher;
     private final MessageSource messageSource;
 
     public CertificateCommandServiceImpl(CertificateRepository certificateRepository,
                                          CertificateRiskScorer riskScorer,
                                          FileStorageService fileStorageService,
+                                         DomainEventPublisher eventPublisher,
                                          MessageSource messageSource) {
         this.certificateRepository = certificateRepository;
         this.riskScorer = riskScorer;
         this.fileStorageService = fileStorageService;
+        this.eventPublisher = eventPublisher;
         this.messageSource = messageSource;
     }
 
@@ -131,13 +136,27 @@ public class CertificateCommandServiceImpl implements CertificateCommandService 
             return failure(CredentialVerificationError.INVALID_STATUS_TRANSITION);
         }
 
+        String reason = command.isAuthentic() || command.rejectionReason() == null
+                || command.rejectionReason().isBlank()
+                ? null
+                : command.rejectionReason().strip();
+        if (reason != null && reason.length() > ResolveCertificateDisputeCommand.MAX_REASON_LENGTH) {
+            return failure(CredentialVerificationError.FIELD_TOO_LONG);
+        }
+
+        Certificate resolved;
         try {
             certificate.resolveDispute(command.isAuthentic());
-            return Result.success(certificateRepository.save(certificate));
+            resolved = certificateRepository.save(certificate);
         } catch (RuntimeException exception) {
             log.error("Could not resolve the certificate {}", command.certificateId(), exception);
             return failure(toError(exception));
         }
+
+        // The student is notified on their device (US16) once the final status is saved.
+        eventPublisher.publish(new CertificateVerificationResolved(resolved.getId(), resolved.getOwnerId(),
+                resolved.getStatus(), resolved.getCourseName(), reason));
+        return Result.success(resolved);
     }
 
     /**

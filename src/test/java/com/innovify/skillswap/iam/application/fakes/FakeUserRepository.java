@@ -1,6 +1,7 @@
 package com.innovify.skillswap.iam.application.fakes;
 
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
+import com.innovify.skillswap.iam.domain.model.valueobjects.DeviceToken;
 import com.innovify.skillswap.iam.domain.model.valueobjects.Email;
 import com.innovify.skillswap.iam.domain.model.valueobjects.Username;
 import com.innovify.skillswap.iam.domain.repositories.UserRepository;
@@ -58,6 +59,16 @@ public class FakeUserRepository implements UserRepository {
     @Override
     public Optional<User> findByEmail(Email email) {
         return users.stream().filter(user -> user.getEmail().equals(email)).findFirst();
+    }
+
+    @Override
+    public Optional<User> findByVerificationTokenHash(String tokenHash) {
+        return users.stream().filter(user -> Objects.equals(user.getVerificationTokenHash(), tokenHash)).findFirst();
+    }
+
+    @Override
+    public List<User> findByDeviceToken(DeviceToken deviceToken) {
+        return users.stream().filter(user -> Objects.equals(user.getDeviceToken(), deviceToken)).toList();
     }
 
     @Override

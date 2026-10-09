@@ -16,10 +16,12 @@ public final class IamActionResultAssembler {
     static HttpStatus toStatusFromIamError(IamError error) {
         return switch (error) {
             case INVALID_CREDENTIALS -> HttpStatus.UNAUTHORIZED;
-            case USER_BANNED, NOT_PROFILE_OWNER -> HttpStatus.FORBIDDEN;
+            case USER_BANNED, NOT_PROFILE_OWNER, EMAIL_NOT_VERIFIED -> HttpStatus.FORBIDDEN;
             case USERNAME_ALREADY_TAKEN, EMAIL_ALREADY_TAKEN, OPERATION_CANCELLED -> HttpStatus.CONFLICT;
-            case INVALID_INSTITUTIONAL_EMAIL, INVALID_USERNAME, WEAK_PASSWORD, BIO_TOO_LONG, NONE ->
-                    HttpStatus.BAD_REQUEST;
+            case INVALID_INSTITUTIONAL_EMAIL, INVALID_USERNAME, WEAK_PASSWORD, BIO_TOO_LONG,
+                 INVALID_VERIFICATION_TOKEN, INVALID_DEVICE_TOKEN, INTEREST_TOPICS_REQUIRED, TOO_MANY_INTEREST_TOPICS,
+                 INVALID_INTEREST_TOPIC, NONE -> HttpStatus.BAD_REQUEST;
+            case VERIFICATION_TOKEN_EXPIRED -> HttpStatus.GONE;
             case USER_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case DATABASE_ERROR, INTERNAL_SERVER_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
         };

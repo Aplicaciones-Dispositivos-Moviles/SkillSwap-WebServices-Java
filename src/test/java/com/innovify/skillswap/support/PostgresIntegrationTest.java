@@ -15,8 +15,9 @@ import org.springframework.context.annotation.Import;
  * Base class of the tests that run the whole application against a real PostgreSQL, started by Testcontainers
  * through its JDBC URL (jdbc:tc:...). The schema is created by the same Flyway migrations as production
  * (db/migration), and Hibernate only validates it, so a mapping that drifts from the migrations fails the tests.
- * The file storage, the question generator, the payment gateway and the email sender are in-memory fakes. All the subclasses share
- * one Spring context and one container. They are skipped when Docker is not available.
+ * The file storage, the question generator, the payment gateway, the email sender and the push sender are
+ * in-memory fakes. All the subclasses share one Spring context and one container. They are skipped when Docker is
+ * not available.
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///skillswap?stringtype=unspecified",
@@ -31,7 +32,7 @@ import org.springframework.context.annotation.Import;
         "billing.expiration-check-enabled=false"
 })
 @Import({FileStorageTestConfig.class, QuestionGenerationTestConfig.class, PaymentGatewayTestConfig.class,
-        EmailSenderTestConfig.class})
+        EmailSenderTestConfig.class, PushNotificationTestConfig.class})
 @ExtendWith(DockerAvailableCondition.class)
 public abstract class PostgresIntegrationTest {
 

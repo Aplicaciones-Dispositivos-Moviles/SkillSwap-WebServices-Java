@@ -81,6 +81,35 @@ class UserTest {
         assertThatThrownBy(() -> user.registerDeviceToken("  ")).isInstanceOf(DomainException.class);
     }
 
+    @Test
+    void registerDeviceToken_withWhitespaceInsideOrTooLong_throwsDomainException() {
+        User user = TestData.newUser();
+
+        assertThatThrownBy(() -> user.registerDeviceToken("abc def")).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> user.registerDeviceToken("x".repeat(DeviceToken.MAX_LENGTH + 1)))
+                .isInstanceOf(DomainException.class);
+        user.registerDeviceToken("x".repeat(DeviceToken.MAX_LENGTH));
+        assertThat(user.hasDeviceToken()).isTrue();
+    }
+
+    @Test
+    void removeDeviceToken_forgetsIt() {
+        User user = TestData.newUser().registerDeviceToken("device-123");
+
+        user.removeDeviceToken();
+
+        assertThat(user.getDeviceToken()).isNull();
+        assertThat(user.hasDeviceToken()).isFalse();
+    }
+
+    @Test
+    void deviceToken_neverPrintsTheWholeToken() {
+        DeviceToken token = new DeviceToken("fcm-registration-token-123456");
+
+        assertThat(token.toString()).isEqualTo("DeviceToken[fcm-regi...]");
+        assertThat(new DeviceToken("short").abbreviated()).isEqualTo("***");
+    }
+
     // ---------- Email verification ----------
 
     private static final String HASH = "a".repeat(64);

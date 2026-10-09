@@ -4,11 +4,15 @@ import com.innovify.skillswap.iam.application.eventhandlers.SendVerificationEmai
 import com.innovify.skillswap.iam.application.internal.commandservices.EmailVerificationIssuer;
 import com.innovify.skillswap.iam.application.internal.emails.VerificationEmailComposer;
 import com.innovify.skillswap.iam.application.internal.outboundservices.EmailSender;
+import com.innovify.skillswap.iam.application.internal.outboundservices.PushNotificationSender;
 import com.innovify.skillswap.iam.domain.model.events.EmailVerificationRequested;
 import com.innovify.skillswap.iam.domain.repositories.UserRepository;
 import com.innovify.skillswap.iam.infrastructure.email.EmailSettings;
 import com.innovify.skillswap.iam.infrastructure.email.brevo.BrevoEmailSenderAdapter;
 import com.innovify.skillswap.iam.infrastructure.email.logging.LoggingEmailSenderAdapter;
+import com.innovify.skillswap.iam.infrastructure.push.FirebaseSettings;
+import com.innovify.skillswap.iam.infrastructure.push.firebase.FirebasePushNotificationAdapter;
+import com.innovify.skillswap.iam.infrastructure.push.logging.LoggingPushNotificationAdapter;
 import com.innovify.skillswap.iam.infrastructure.tokens.jwt.TokenSettings;
 import com.innovify.skillswap.iam.infrastructure.verification.EmailVerificationSettings;
 import com.innovify.skillswap.iam.domain.services.DefaultEmailDomainValidator;
@@ -28,7 +32,8 @@ import org.springframework.web.client.RestClient;
 
 /** Wiring of the IAM beans that are not annotated themselves. */
 @Configuration
-@EnableConfigurationProperties({TokenSettings.class, EmailSettings.class, EmailVerificationSettings.class})
+@EnableConfigurationProperties({TokenSettings.class, EmailSettings.class, EmailVerificationSettings.class,
+        FirebaseSettings.class})
 public class IamConfig {
 
     private static final Logger log = LoggerFactory.getLogger(IamConfig.class);
@@ -78,5 +83,29 @@ public class IamConfig {
     public DomainEventHandler<EmailVerificationRequested> sendVerificationEmailEventHandler(
             EmailSender emailSender, EmailVerificationSettings settings) {
         return new SendVerificationEmailEventHandler(emailSender, new VerificationEmailComposer(settings.baseUrl()));
+    }
+
+    /**
+     * Firebase Cloud Messaging when the service account is configured; otherwise the push notifications are only
+     * logged, so the application works without a Firebase project. Invalid credentials do not stop the application
+     * either: they are reported in the log and the notifications are logged.
+     */
+    @Bean
+    public PushNotificationSender pushNotificationSender(FirebaseSettings settings) {
+        if (!settings.hasCredentials()) {
+            log.warn("FIREBASE_CREDENTIALS_BASE64 is not set: push notifications are NOT sent, they are written to "
+                    + "the log.");
+            return new LoggingPushNotificationAdapter();
+        }
+        try {
+            FirebasePushNotificationAdapter adapter = FirebasePushNotificationAdapter.fromCredentials(
+                    settings.credentialsBase64());
+            log.info("Push notifications are sent through Firebase Cloud Messaging.");
+            return adapter;
+        } catch (RuntimeException exception) {
+            log.error("Firebase could not be initialized ({}): push notifications are NOT sent, they are written to "
+                    + "the log.", exception.getMessage());
+            return new LoggingPushNotificationAdapter();
+        }
     }
 }

@@ -161,6 +161,20 @@ public class User {
         return this;
     }
 
+    /**
+     * Forget the device token: the student denied (or revoked) the notification permission, signed out, or the
+     * push provider reported the token as no longer valid. No push notification is sent until a new one is
+     * registered.
+     */
+    public User removeDeviceToken() {
+        this.deviceToken = null;
+        return this;
+    }
+
+    public boolean hasDeviceToken() {
+        return deviceToken != null;
+    }
+
     /** Null until the account is persisted. */
     public Integer getId() {
         return id;

@@ -1,7 +1,9 @@
 package com.innovify.skillswap.iam.interfaces.rest;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -133,5 +135,42 @@ class UsersControllerTest extends IamRestTest {
         updateBio(999, json("bio", "hi"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.title").value("UserNotFound"));
+    }
+
+    // ---------- Device token ----------
+
+    @Test
+    void registerDeviceToken_returns204AndStoresTheToken() throws Exception {
+        authenticateAs(ana);
+
+        mockMvc.perform(put("/api/v1/users/me/device-token").contentType(MediaType.APPLICATION_JSON)
+                        .content(json("token", "fcm-token-of-ana")))
+                .andExpect(status().isNoContent());
+
+        assertThat(ana.getDeviceToken().value()).isEqualTo("fcm-token-of-ana");
+    }
+
+    @Test
+    void registerDeviceToken_withAnInvalidToken_returns400() throws Exception {
+        authenticateAs(ana);
+
+        mockMvc.perform(put("/api/v1/users/me/device-token").contentType(MediaType.APPLICATION_JSON)
+                        .content(json("token", "  ")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("InvalidDeviceToken"));
+        mockMvc.perform(put("/api/v1/users/me/device-token").contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void removeDeviceToken_returns204AndForgetsTheToken() throws Exception {
+        ana.registerDeviceToken("fcm-token-of-ana");
+        authenticateAs(ana);
+
+        mockMvc.perform(delete("/api/v1/users/me/device-token")).andExpect(status().isNoContent());
+        mockMvc.perform(delete("/api/v1/users/me/device-token")).andExpect(status().isNoContent());
+
+        assertThat(ana.getDeviceToken()).isNull();
     }
 }

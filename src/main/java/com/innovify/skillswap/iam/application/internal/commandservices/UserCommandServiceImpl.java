@@ -5,10 +5,13 @@ import com.innovify.skillswap.iam.application.internal.outboundservices.Authenti
 import com.innovify.skillswap.iam.application.internal.outboundservices.TokenGenerator;
 import com.innovify.skillswap.iam.domain.model.IamError;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
+import com.innovify.skillswap.iam.domain.model.commands.RegisterDeviceTokenCommand;
+import com.innovify.skillswap.iam.domain.model.commands.RemoveDeviceTokenCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignInCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignUpCommand;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateUserBioCommand;
 import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
+import com.innovify.skillswap.iam.domain.model.valueobjects.DeviceToken;
 import com.innovify.skillswap.iam.domain.model.valueobjects.Email;
 import com.innovify.skillswap.iam.domain.model.valueobjects.Username;
 import com.innovify.skillswap.iam.domain.repositories.UserRepository;
@@ -145,6 +148,44 @@ public class UserCommandServiceImpl implements UserCommandService {
 
         user.updateBio(bio);
         return save(user);
+    }
+
+    @Override
+    public Result<User> handle(RegisterDeviceTokenCommand command) {
+        if (!DeviceToken.isValid(command.token())) {
+            return failure(IamError.INVALID_DEVICE_TOKEN);
+        }
+        Optional<User> found = userRepository.findById(command.userId());
+        if (found.isEmpty()) {
+            return failure(IamError.USER_NOT_FOUND);
+        }
+
+        DeviceToken token = new DeviceToken(command.token());
+        // One device, one account: whoever signed in before on this device stops receiving its notifications.
+        try {
+            for (User previousOwner : userRepository.findByDeviceToken(token)) {
+                if (!Objects.equals(previousOwner.getId(), command.userId())) {
+                    userRepository.save(previousOwner.removeDeviceToken());
+                }
+            }
+        } catch (RuntimeException exception) {
+            log.error("The device token could not be removed from its previous account", exception);
+            return failure(exception instanceof DataAccessException
+                    ? IamError.DATABASE_ERROR
+                    : IamError.INTERNAL_SERVER_ERROR);
+        }
+
+        return save(found.get().registerDeviceToken(token.value()));
+    }
+
+    @Override
+    public Result<User> handle(RemoveDeviceTokenCommand command) {
+        Optional<User> found = userRepository.findById(command.userId());
+        if (found.isEmpty()) {
+            return failure(IamError.USER_NOT_FOUND);
+        }
+        User user = found.get();
+        return user.hasDeviceToken() ? save(user.removeDeviceToken()) : Result.success(user);
     }
 
     /** A failure to send it again must not hide the reason of the rejected sign-in, so it is only logged. */

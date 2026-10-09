@@ -16,6 +16,7 @@
     <properties>
         <java.version>21</java.version>
         <jjwt.version>0.13.0</jjwt.version>
+        <firebase-admin.version>9.10.0</firebase-admin.version>
     </properties>
     <dependencies>
         <dependency>
@@ -89,6 +90,29 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
+        </dependency>
+        <!-- Push notifications (Firebase Cloud Messaging). Only messaging is used, so Firestore and Cloud Storage,
+             and the gRPC stack they bring, are left out to keep the image small. -->
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>${firebase-admin.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.google.cloud</groupId>
+                    <artifactId>google-cloud-firestore</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.cloud</groupId>
+                    <artifactId>google-cloud-storage</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- FirebaseOptions needs the Jackson JSON factory, which came only through the excluded modules. -->
+        <dependency>
+            <groupId>com.google.http-client</groupId>
+            <artifactId>google-http-client-jackson2</artifactId>
+            <version>2.1.0</version>
         </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>

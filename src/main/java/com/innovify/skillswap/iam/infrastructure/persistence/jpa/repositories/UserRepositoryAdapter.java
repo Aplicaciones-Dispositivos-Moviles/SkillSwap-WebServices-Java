@@ -1,11 +1,13 @@
 package com.innovify.skillswap.iam.infrastructure.persistence.jpa.repositories;
 
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
+import com.innovify.skillswap.iam.domain.model.valueobjects.DeviceToken;
 import com.innovify.skillswap.iam.domain.model.valueobjects.Email;
 import com.innovify.skillswap.iam.domain.model.valueobjects.Username;
 import com.innovify.skillswap.iam.domain.repositories.UserRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /** Implements the domain {@link UserRepository} port on top of Spring Data JPA. */
@@ -41,6 +43,11 @@ public class UserRepositoryAdapter implements UserRepository {
     @Override
     public Optional<User> findByVerificationTokenHash(String tokenHash) {
         return jpaRepository.findByVerificationTokenHash(tokenHash);
+    }
+
+    @Override
+    public List<User> findByDeviceToken(DeviceToken deviceToken) {
+        return jpaRepository.findByDeviceToken(deviceToken);
     }
 
     @Override

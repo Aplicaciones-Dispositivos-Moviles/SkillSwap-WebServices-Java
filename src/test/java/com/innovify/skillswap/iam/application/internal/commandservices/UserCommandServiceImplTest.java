@@ -8,6 +8,8 @@ import com.innovify.skillswap.iam.application.fakes.MutableClock;
 import com.innovify.skillswap.iam.application.internal.outboundservices.AuthenticatedUser;
 import com.innovify.skillswap.iam.domain.model.IamError;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
+import com.innovify.skillswap.iam.domain.model.commands.RegisterDeviceTokenCommand;
+import com.innovify.skillswap.iam.domain.model.commands.RemoveDeviceTokenCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignInCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignUpCommand;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateUserBioCommand;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
@@ -354,6 +357,87 @@ class UserCommandServiceImplTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.value().getBio()).isEmpty();
+    }
+
+    // ---------- Device token ----------
+
+    @Test
+    void registerDeviceToken_storesTheTokenOfTheUser() {
+        int userId = service.handle(signUp()).value().getId();
+
+        Result<User> result = service.handle(new RegisterDeviceTokenCommand(userId, " fcm-token-1 "));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getDeviceToken().value()).isEqualTo("fcm-token-1");
+    }
+
+    @Test
+    void registerDeviceToken_replacesThePreviousTokenOfTheUser() {
+        int userId = service.handle(signUp()).value().getId();
+        service.handle(new RegisterDeviceTokenCommand(userId, "old-token"));
+
+        service.handle(new RegisterDeviceTokenCommand(userId, "new-token"));
+
+        assertThat(repository.users().get(0).getDeviceToken().value()).isEqualTo("new-token");
+    }
+
+    @Test
+    void registerDeviceToken_removesTheSameTokenFromAnotherAccount() {
+        int anaId = service.handle(signUp("ana", "ana@upc.edu.pe", "password123")).value().getId();
+        int bobId = service.handle(signUp("bob", "bob@upc.edu.pe", "password123")).value().getId();
+        service.handle(new RegisterDeviceTokenCommand(anaId, "shared-device"));
+
+        service.handle(new RegisterDeviceTokenCommand(bobId, "shared-device"));
+
+        assertThat(repository.findById(anaId).orElseThrow().getDeviceToken()).isNull();
+        assertThat(repository.findById(bobId).orElseThrow().getDeviceToken().value()).isEqualTo("shared-device");
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "with space"})
+    void registerDeviceToken_withAnInvalidToken_returnsInvalidDeviceToken(String token) {
+        int userId = service.handle(signUp()).value().getId();
+
+        assertFailure(service.handle(new RegisterDeviceTokenCommand(userId, token)), IamError.INVALID_DEVICE_TOKEN);
+    }
+
+    @Test
+    void registerDeviceToken_tooLong_returnsInvalidDeviceToken() {
+        int userId = service.handle(signUp()).value().getId();
+
+        assertFailure(service.handle(new RegisterDeviceTokenCommand(userId, "x".repeat(513))),
+                IamError.INVALID_DEVICE_TOKEN);
+    }
+
+    @Test
+    void registerDeviceToken_forAnUnknownUser_returnsUserNotFound() {
+        assertFailure(service.handle(new RegisterDeviceTokenCommand(99, "token")), IamError.USER_NOT_FOUND);
+    }
+
+    @Test
+    void removeDeviceToken_forgetsTheToken() {
+        int userId = service.handle(signUp()).value().getId();
+        service.handle(new RegisterDeviceTokenCommand(userId, "token"));
+
+        Result<User> result = service.handle(new RemoveDeviceTokenCommand(userId));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getDeviceToken()).isNull();
+    }
+
+    @Test
+    void removeDeviceToken_withoutAToken_succeedsWithoutSaving() {
+        int userId = service.handle(signUp()).value().getId();
+        int savesBefore = repository.saveCalls();
+
+        assertThat(service.handle(new RemoveDeviceTokenCommand(userId)).isSuccess()).isTrue();
+        assertThat(repository.saveCalls()).isEqualTo(savesBefore);
+    }
+
+    @Test
+    void removeDeviceToken_forAnUnknownUser_returnsUserNotFound() {
+        assertFailure(service.handle(new RemoveDeviceTokenCommand(99)), IamError.USER_NOT_FOUND);
     }
 
     // ---------- Localized messages ----------

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The codes are part of the API contract (title of the error responses): they must match the C# names, plus the
- * ones of the email verification added by the Java API.
+ * ones added by the Java API (email verification, device token).
  */
 class IamErrorTest {
 
@@ -18,6 +18,6 @@ class IamErrorTest {
                 "None", "InvalidCredentials", "UserBanned", "UsernameAlreadyTaken", "EmailAlreadyTaken",
                 "InvalidInstitutionalEmail", "InvalidUsername", "WeakPassword", "UserNotFound",
                 "NotProfileOwner", "BioTooLong", "EmailNotVerified", "InvalidVerificationToken",
-                "VerificationTokenExpired", "OperationCancelled", "DatabaseError", "InternalServerError");
+                "VerificationTokenExpired", "InvalidDeviceToken", "OperationCancelled", "DatabaseError", "InternalServerError");
     }
 }

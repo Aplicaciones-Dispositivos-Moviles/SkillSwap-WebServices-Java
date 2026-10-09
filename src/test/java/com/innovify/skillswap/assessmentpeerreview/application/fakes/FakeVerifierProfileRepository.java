@@ -52,4 +52,9 @@ public class FakeVerifierProfileRepository implements VerifierProfileRepository 
     public List<VerifierProfile> findEnabledBySkillTag(String skillTag) {
         return profiles.stream().filter(p -> p.canReview(skillTag)).toList();
     }
+
+    @Override
+    public List<VerifierProfile> findEnabled() {
+        return profiles.stream().filter(VerifierProfile::isVerified).toList();
+    }
 }

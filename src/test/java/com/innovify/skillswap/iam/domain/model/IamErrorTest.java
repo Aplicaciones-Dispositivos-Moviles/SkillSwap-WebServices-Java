@@ -14,6 +14,6 @@ class IamErrorTest {
         assertThat(Arrays.stream(IamError.values()).map(ErrorCodes::of)).containsExactly(
                 "None", "InvalidCredentials", "UserBanned", "UsernameAlreadyTaken", "EmailAlreadyTaken",
                 "InvalidInstitutionalEmail", "InvalidUsername", "WeakPassword", "UserNotFound",
-                "NotProfileOwner", "BioTooLong", "OperationCancelled", "DatabaseError", "InternalServerError");
+                "NotProfileOwner", "BioTooLong", "InvalidFullName", "OperationCancelled", "DatabaseError", "InternalServerError");
     }
 }

@@ -3,6 +3,7 @@ package com.innovify.skillswap.credentialverification.infrastructure.config;
 import com.innovify.skillswap.credentialverification.application.internal.outboundservices.FileStorageService;
 import com.innovify.skillswap.credentialverification.domain.services.CertificateRiskScorer;
 import com.innovify.skillswap.credentialverification.domain.services.DefaultCertificateRiskScorer;
+import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
 import com.innovify.skillswap.credentialverification.infrastructure.filestorage.CloudinarySettings;
 import com.innovify.skillswap.credentialverification.infrastructure.filestorage.CloudinaryStorageService;
 import java.net.http.HttpClient;
@@ -20,6 +21,11 @@ public class CredentialVerificationConfig {
     @Bean
     public CertificateRiskScorer certificateRiskScorer() {
         return new DefaultCertificateRiskScorer();
+    }
+
+    @Bean
+    public HolderNameMatcher holderNameMatcher() {
+        return new HolderNameMatcher();
     }
 
     @Bean

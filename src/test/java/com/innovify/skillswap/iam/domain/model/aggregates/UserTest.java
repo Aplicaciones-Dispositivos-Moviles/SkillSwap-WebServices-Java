@@ -77,4 +77,14 @@ class UserTest {
 
         assertThatThrownBy(() -> user.registerDeviceToken("  ")).isInstanceOf(DomainException.class);
     }
+
+    @Test
+    void updateFullName_normalizesTheSpacesAndRejectsInvalidNames() {
+        var user = TestData.newUser();
+
+        assertThat(user.updateFullName("  Ana \t María  ").getFullName()).isEqualTo("Ana María");
+        assertThat(user.updateFullName(null).getFullName()).isNull();
+        assertThatThrownBy(() -> user.updateFullName("x".repeat(151))).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> user.updateFullName("Ana\u0007")).isInstanceOf(DomainException.class);
+    }
 }

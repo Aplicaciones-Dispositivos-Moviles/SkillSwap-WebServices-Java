@@ -66,6 +66,48 @@ class UserCommandServiceImplTest {
     // ---------- Sign up ----------
 
     @Test
+    void signUp_withAFullName_storesItNormalized() {
+        Result<User> result = service.handle(new SignUpCommand("ana", "ana@upc.edu.pe", "password123",
+                UserRole.STUDENT, "  Ana   María Pérez "));
+
+        assertThat(result.value().getFullName()).isEqualTo("Ana María Pérez");
+    }
+
+    @Test
+    void signUp_withAFullNameTooLong_isRejected() {
+        Result<User> result = service.handle(new SignUpCommand("ana", "ana@upc.edu.pe", "password123",
+                UserRole.STUDENT, "a".repeat(151)));
+
+        assertFailure(result, IamError.INVALID_FULL_NAME);
+        assertThat(repository.users()).isEmpty();
+    }
+
+    @Test
+    void updateFullName_ofTheOwnProfile_storesItAndBlankClearsIt() {
+        User user = service.handle(signUp()).value();
+
+        Result<User> updated = service.handle(new com.innovify.skillswap.iam.domain.model.commands
+                .UpdateUserFullNameCommand(user.getId(), "Ana Pérez", user.getId()));
+        assertThat(updated.value().getFullName()).isEqualTo("Ana Pérez");
+
+        Result<User> cleared = service.handle(new com.innovify.skillswap.iam.domain.model.commands
+                .UpdateUserFullNameCommand(user.getId(), "  ", user.getId()));
+        assertThat(cleared.value().getFullName()).isNull();
+    }
+
+    @Test
+    void updateFullName_rejectsAnotherProfileAnUnknownUserAndAnInvalidName() {
+        User user = service.handle(signUp()).value();
+
+        assertFailure(service.handle(new com.innovify.skillswap.iam.domain.model.commands
+                .UpdateUserFullNameCommand(user.getId(), "Ana", user.getId() + 1)), IamError.NOT_PROFILE_OWNER);
+        assertFailure(service.handle(new com.innovify.skillswap.iam.domain.model.commands
+                .UpdateUserFullNameCommand(99, "Ana", 99)), IamError.USER_NOT_FOUND);
+        assertFailure(service.handle(new com.innovify.skillswap.iam.domain.model.commands
+                .UpdateUserFullNameCommand(user.getId(), "Ana\u0000", user.getId())), IamError.INVALID_FULL_NAME);
+    }
+
+    @Test
     void signUp_withValidData_createsUserWithHashedPasswordAndNormalizedValues() {
         Result<User> result = service.handle(signUp("Ana", "Ana@UPC.edu.pe", "password123"));
 

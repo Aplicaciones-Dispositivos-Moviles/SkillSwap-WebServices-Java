@@ -1,6 +1,8 @@
 package com.innovify.skillswap.reputation.domain.model.aggregates;
 
 import com.innovify.skillswap.reputation.domain.model.valueobjects.ReliabilityScore;
+import com.innovify.skillswap.reputation.domain.model.valueobjects.VerifierRank;
+import com.innovify.skillswap.reputation.domain.services.SeniorVerifierPolicy;
 import com.innovify.skillswap.reputation.domain.services.VerifierReliabilityCalculator;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import jakarta.persistence.Column;
@@ -84,6 +86,16 @@ public class VerifierReliability {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    /** The rank reached with the resolved cases: Bronze, Silver or Gold. */
+    public VerifierRank getRank() {
+        return VerifierRank.fromResolvedCases(resolvedCasesCount);
+    }
+
+    /** Whether the verifier is a Verificador senior right now: Gold rank and a reliability of 90 or more. */
+    public boolean isSeniorVerifier() {
+        return SeniorVerifierPolicy.isSenior(resolvedCasesCount, score);
     }
 
     /** The verifier resolved a case, approving or rejecting it. */

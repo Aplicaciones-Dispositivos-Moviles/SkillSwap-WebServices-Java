@@ -10,6 +10,6 @@ public final class UserResourceFromEntityAssembler {
 
     public static UserResource toResourceFromEntity(User entity) {
         return new UserResource(entity.getId(), entity.getUsername().value(), entity.getEmail().value(),
-                entity.getRole().value(), entity.isVerified(), entity.getBio());
+                entity.getRole().value(), entity.isVerified(), entity.getBio(), entity.getFullName());
     }
 }

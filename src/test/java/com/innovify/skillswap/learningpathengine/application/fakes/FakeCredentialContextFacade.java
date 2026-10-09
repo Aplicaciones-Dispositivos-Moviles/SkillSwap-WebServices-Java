@@ -27,4 +27,16 @@ public class FakeCredentialContextFacade implements CredentialContextFacade {
         }
         return certificates.stream().sorted(Comparator.comparing(CertificateSummary::id)).toList();
     }
+
+    @Override
+    public java.util.Optional<com.innovify.skillswap.credentialverification.application.acl.CertificateReviewView>
+            getCertificateForReview(int certificateId) {
+        return java.util.Optional.empty();
+    }
+
+    @Override
+    public com.innovify.skillswap.credentialverification.application.acl.CertificateReviewOutcome
+            resolveSuspiciousCertificate(int certificateId, boolean authentic) {
+        return com.innovify.skillswap.credentialverification.application.acl.CertificateReviewOutcome.NOT_FOUND;
+    }
 }

@@ -1,6 +1,7 @@
 package com.innovify.skillswap.credentialverification.application.acl;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Anti-corruption facade through which other bounded contexts read Credential Verification data, without
@@ -13,4 +14,13 @@ public interface CredentialContextFacade {
      * nor rejected. Ordered by id, so the oldest certificate comes first.
      */
     List<CertificateSummary> getEvidenceCertificates(int ownerId);
+
+    /** The data a verifier reviews to decide on a certificate; empty when it does not exist. */
+    Optional<CertificateReviewView> getCertificateForReview(int certificateId);
+
+    /**
+     * Applies the decision of the verifier on a suspicious certificate: authentic moves it to Verified, otherwise
+     * to Rejected. It joins the transaction of the caller, if any, and never throws: a failure is reported.
+     */
+    CertificateReviewOutcome resolveSuspiciousCertificate(int certificateId, boolean authentic);
 }

@@ -3,6 +3,8 @@ package com.innovify.skillswap.reputation.infrastructure.config;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.AssessmentAttemptPassed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.application.acl.VerifierProfileContextFacade;
+import com.innovify.skillswap.reputation.application.acl.ReputationContextFacade;
+import com.innovify.skillswap.reputation.application.acl.ReputationContextFacadeImpl;
 import com.innovify.skillswap.reputation.application.commandservices.ReputationCommandService;
 import com.innovify.skillswap.reputation.application.eventhandlers.RecordAutomaticApprovalEventHandler;
 import com.innovify.skillswap.reputation.application.eventhandlers.RecordCaseResolutionEventHandler;
@@ -69,6 +71,11 @@ public class ReputationConfig {
     public VerifierReliabilityQueryService verifierReliabilityQueryService(
             VerifierReliabilityRepository repository) {
         return new VerifierReliabilityQueryServiceImpl(repository);
+    }
+
+    @Bean
+    public ReputationContextFacade reputationContextFacade(VerifierReliabilityRepository repository) {
+        return new ReputationContextFacadeImpl(repository);
     }
 
     @Bean

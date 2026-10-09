@@ -2,6 +2,8 @@ package com.innovify.skillswap.reputation.infrastructure.persistence.jpa.reposit
 
 import com.innovify.skillswap.reputation.domain.model.aggregates.VerifierReliability;
 import com.innovify.skillswap.reputation.domain.repositories.VerifierReliabilityRepository;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -23,5 +25,13 @@ public class VerifierReliabilityRepositoryAdapter implements VerifierReliability
     @Override
     public Optional<VerifierReliability> findByVerifierUserId(int verifierUserId) {
         return jpaRepository.findByVerifierUserId(verifierUserId);
+    }
+
+    @Override
+    public List<VerifierReliability> findByVerifierUserIds(Collection<Integer> verifierUserIds) {
+        if (verifierUserIds.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findByVerifierUserIdIn(verifierUserIds);
     }
 }

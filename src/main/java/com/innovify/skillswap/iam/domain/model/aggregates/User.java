@@ -26,6 +26,7 @@ import java.util.Objects;
 public class User {
 
     public static final int MAX_BIO_LENGTH = 1000;
+    public static final int MAX_FULL_NAME_LENGTH = 150;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -52,6 +53,10 @@ public class User {
 
     @Column(name = "device_token", length = 512)
     private DeviceToken deviceToken;
+
+    /** The real name of the student, compared with the holder of their certificates; null when not given. */
+    @Column(name = "full_name", length = MAX_FULL_NAME_LENGTH)
+    private String fullName;
 
     /** Required by JPA. */
     protected User() {
@@ -87,6 +92,37 @@ public class User {
         return this;
     }
 
+    /**
+     * Sets the real name of the student, the one their certificates must be issued to. A blank name clears it.
+     *
+     * @throws DomainException when the name exceeds {@link #MAX_FULL_NAME_LENGTH} characters or contains control
+     *                         characters
+     */
+    public User updateFullName(String fullName) {
+        if (fullName == null || fullName.isBlank()) {
+            this.fullName = null;
+            return this;
+        }
+        String normalized = fullName.strip().replaceAll("\\s+", " ");
+        if (!isValidFullName(normalized)) {
+            throw new DomainException("The full name must have up to %d characters and no control characters."
+                    .formatted(MAX_FULL_NAME_LENGTH));
+        }
+        this.fullName = normalized;
+        return this;
+    }
+
+    /** Whether the name (already stripped) can be stored: a blank name is valid, it means none. */
+    public static boolean isValidFullName(String fullName) {
+        if (fullName == null || fullName.isBlank()) {
+            return true;
+        }
+        // Runs of whitespace (tabs and line breaks included) become one space, as they are stored.
+        String normalized = fullName.strip().replaceAll("\\s+", " ");
+        return normalized.length() <= MAX_FULL_NAME_LENGTH
+                && normalized.codePoints().noneMatch(Character::isISOControl);
+    }
+
     /** Associate or update the device token of the mobile device the user signed in from. */
     public User registerDeviceToken(String token) {
         this.deviceToken = new DeviceToken(token);
@@ -120,6 +156,11 @@ public class User {
 
     public String getBio() {
         return bio;
+    }
+
+    /** The registered real name; null when the student did not give one. */
+    public String getFullName() {
+        return fullName;
     }
 
     /** Null until the mobile client registers one. */

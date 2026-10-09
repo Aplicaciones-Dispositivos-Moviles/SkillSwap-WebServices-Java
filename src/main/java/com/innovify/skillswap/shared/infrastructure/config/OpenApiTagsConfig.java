@@ -38,6 +38,9 @@ public class OpenApiTagsConfig {
                 "Assessment & Peer Review. Attach evidence, resolve a case as verifier and appeal a rejection.");
         group("verifier-profiles-controller", "Verifier Profiles",
                 "Assessment & Peer Review. Become a verifier for a skill and set the availability.");
+        group("disputes-controller", "Disputes",
+                "Moderation & Disputes. Suspicious certificates escalated to a Verificador senior: list the ones "
+                        + "assigned to you, read their evidence and resolve them.");
         group("verifier-reliabilities-controller", "Verifier Reliabilities",
                 "Reputation. Reliability score of a verifier (owner only).");
         group("student-employability-scores-controller", "Student Employability Scores",

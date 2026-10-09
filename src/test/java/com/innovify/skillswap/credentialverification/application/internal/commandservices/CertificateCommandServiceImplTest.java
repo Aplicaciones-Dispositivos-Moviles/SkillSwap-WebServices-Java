@@ -1,6 +1,10 @@
 package com.innovify.skillswap.credentialverification.application.internal.commandservices;
 
 import com.innovify.skillswap.credentialverification.application.fakes.FakeCertificateRepository;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeDomainEventPublisher;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeIamContextFacade;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateFlaggedSuspicious;
+import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
 import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
 import com.innovify.skillswap.credentialverification.domain.model.CredentialVerificationError;
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
@@ -38,6 +42,8 @@ class CertificateCommandServiceImplTest {
 
     private final FakeCertificateRepository repository = new FakeCertificateRepository();
     private final FakeFileStorageService storage = new FakeFileStorageService();
+    private final FakeIamContextFacade iam = new FakeIamContextFacade();
+    private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
     private CertificateCommandServiceImpl service;
 
     @BeforeEach
@@ -48,8 +54,8 @@ class CertificateCommandServiceImplTest {
         messages.setFallbackToSystemLocale(false);
 
         LocaleContextHolder.setLocale(Locale.US);
-        service = new CertificateCommandServiceImpl(repository, new DefaultCertificateRiskScorer(), storage,
-                messages);
+        service = new CertificateCommandServiceImpl(repository, new DefaultCertificateRiskScorer(),
+                new HolderNameMatcher(), storage, iam, events, messages);
     }
 
     @AfterEach
@@ -101,6 +107,50 @@ class CertificateCommandServiceImplTest {
     }
 
     // ---------- Upload ----------
+
+    @Test
+    void upload_withAHolderWhoIsNotTheRegisteredStudent_isSuspiciousAndAnnounced() {
+        iam.withFullName(7, "Ana María Pérez García");
+
+        Result<Certificate> result = service.handle(upload(7, JPEG, "image/jpeg", "Luis Gómez", "n-1", "c-1"));
+
+        Certificate certificate = result.value();
+        assertThat(certificate.getStatus()).isEqualTo(VerificationStatus.SUSPICIOUS);
+        assertThat(certificate.hasHolderNameMismatch()).isTrue();
+        assertThat(certificate.getRiskAssessment().level()).isEqualTo(RiskLevel.HIGH_RISK);
+        assertThat(events.published()).containsExactly(
+                new CertificateFlaggedSuspicious(certificate.getId(), 7, java.util.List.of("HolderNameMismatch")));
+    }
+
+    @Test
+    void upload_withTheHolderWrittenDifferently_matchesTheRegisteredStudent() {
+        iam.withFullName(7, "Ana María Pérez García");
+
+        Result<Certificate> result = service.handle(upload(7, JPEG, "image/jpeg", "PÉREZ GARCÍA, ANA", "n-1", "c-1"));
+
+        assertThat(result.value().getStatus()).isEqualTo(VerificationStatus.UNVERIFIED);
+        assertThat(result.value().hasHolderNameMismatch()).isFalse();
+        assertThat(events.published()).isEmpty();
+    }
+
+    @Test
+    void upload_byAStudentWithoutARegisteredName_doesNotCompareTheHolder() {
+        Result<Certificate> result = service.handle(upload(7, JPEG, "image/jpeg", "Luis Gómez", "n-1", "c-1"));
+
+        assertThat(result.value().getStatus()).isEqualTo(VerificationStatus.UNVERIFIED);
+        assertThat(result.value().hasHolderNameMismatch()).isFalse();
+    }
+
+    @Test
+    void upload_ofAFileAnotherStudentRegistered_isSuspiciousAndAnnouncedWithItsReasons() {
+        seedOtherUser(8, JPEG, "OTHER", "OTHER");
+
+        Result<Certificate> result = service.handle(upload(7, JPEG));
+
+        assertThat(result.value().getStatus()).isEqualTo(VerificationStatus.SUSPICIOUS);
+        assertThat(events.published()).containsExactly(
+                new CertificateFlaggedSuspicious(result.value().getId(), 7, java.util.List.of("DuplicateFile")));
+    }
 
     @Test
     void upload_withValidData_createsUnverifiedCertificateWithNoRisk() {

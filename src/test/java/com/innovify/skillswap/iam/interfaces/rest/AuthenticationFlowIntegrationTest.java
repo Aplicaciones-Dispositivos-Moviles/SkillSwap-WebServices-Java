@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -103,5 +104,32 @@ class AuthenticationFlowIntegrationTest extends PostgresIntegrationTest {
         mockMvc.perform(patch("/api/v1/users/1/bio").header("Authorization", "Bearer " + bobToken)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"bio\":\"hacked\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    /** US04 with the real skill catalog: the topics and the description become the skill vector, then replaced. */
+    @Test
+    void interestProfile_isSavedWithItsSkillVectorAndReplacedOnUpdate() throws Exception {
+        signUp("ana", "ana@upc.edu.pe");
+        String token = signInAndGetToken("ana");
+
+        mockMvc.perform(put("/api/v1/users/1/interests").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"topics\":[\"Programación en Java\",\"Ajedrez\"],"
+                                + "\"description\":\"Quiero aprender React\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interests.length()").value(2))
+                .andExpect(jsonPath("$.skillVector[0]").value("java-language"))
+                .andExpect(jsonPath("$.skillVector[1]").value("react"));
+        assertThat(queryString("SELECT interest_topics ->> 0 FROM users WHERE username = 'ana'"))
+                .isEqualTo("Programación en Java");
+        assertThat(queryString("SELECT bio FROM users WHERE username = 'ana'")).isEqualTo("Quiero aprender React");
+
+        mockMvc.perform(put("/api/v1/users/1/interests").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"topics\":[\"Python\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interests.length()").value(1));
+
+        assertThat(queryString("SELECT skill_vector::text FROM users WHERE username = 'ana'"))
+                .contains("python-language").contains("react").doesNotContain("java-language");
     }
 }

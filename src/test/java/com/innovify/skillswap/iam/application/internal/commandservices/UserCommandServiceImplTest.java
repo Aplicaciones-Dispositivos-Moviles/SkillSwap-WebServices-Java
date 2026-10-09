@@ -3,6 +3,7 @@ package com.innovify.skillswap.iam.application.internal.commandservices;
 import com.innovify.skillswap.iam.application.fakes.FakeDomainEventPublisher;
 import com.innovify.skillswap.iam.application.fakes.FakePasswordHasher;
 import com.innovify.skillswap.iam.application.fakes.FakeTokenGenerator;
+import com.innovify.skillswap.iam.application.fakes.FakeSkillCatalog;
 import com.innovify.skillswap.iam.application.fakes.FakeUserRepository;
 import com.innovify.skillswap.iam.application.fakes.MutableClock;
 import com.innovify.skillswap.iam.application.internal.outboundservices.AuthenticatedUser;
@@ -12,6 +13,7 @@ import com.innovify.skillswap.iam.domain.model.commands.RegisterDeviceTokenComma
 import com.innovify.skillswap.iam.domain.model.commands.RemoveDeviceTokenCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignInCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignUpCommand;
+import com.innovify.skillswap.iam.domain.model.commands.UpdateInterestProfileCommand;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateUserBioCommand;
 import com.innovify.skillswap.iam.domain.model.events.EmailVerificationRequested;
 import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
@@ -29,6 +31,8 @@ import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,7 +55,8 @@ class UserCommandServiceImplTest {
         var issuer = new EmailVerificationIssuer(repository, events, Duration.ofHours(24), Duration.ofMinutes(2),
                 clock);
         service = new UserCommandServiceImpl(repository, new FakePasswordHasher(),
-                new DefaultEmailDomainValidator(), new FakeTokenGenerator(), events, issuer, messages);
+                new DefaultEmailDomainValidator(), new FakeTokenGenerator(), events, issuer, new FakeSkillCatalog(),
+                messages);
     }
 
     @AfterEach
@@ -357,6 +362,131 @@ class UserCommandServiceImplTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.value().getBio()).isEmpty();
+    }
+
+    // ---------- Interest profile (US04) ----------
+
+    @Test
+    void updateInterestProfile_storesTopicsAndDescriptionAndCalculatesTheSkillVector() {
+        int userId = service.handle(signUp()).value().getId();
+
+        Result<User> result = service.handle(new UpdateInterestProfileCommand(userId,
+                List.of("Backend con Java", "  Bases   de datos SQL "), "Me gusta el testing", userId));
+
+        assertThat(result.isSuccess()).isTrue();
+        User user = result.value();
+        assertThat(user.getInterestTopics()).containsExactly("Backend con Java", "Bases de datos SQL");
+        assertThat(user.getBio()).isEqualTo("Me gusta el testing");
+        assertThat(user.getSkillVector()).containsExactly("java-language", "sql-databases", "software-testing");
+    }
+
+    @Test
+    void updateInterestProfile_replacesThePreviousTopicsAndRecalculatesTheVector() {
+        int userId = service.handle(signUp()).value().getId();
+        service.handle(new UpdateInterestProfileCommand(userId, List.of("Java", "SQL"), null, userId));
+
+        Result<User> result = service.handle(new UpdateInterestProfileCommand(userId, List.of("React"), null,
+                userId));
+
+        assertThat(result.value().getInterestTopics()).containsExactly("React");
+        assertThat(result.value().getSkillVector()).containsExactly("react");
+    }
+
+    @Test
+    void updateInterestProfile_withoutDescription_keepsTheBioAndCountsItInTheVector() {
+        int userId = service.handle(signUp()).value().getId();
+        service.handle(new UpdateUserBioCommand(userId, "Estudio Java", userId));
+
+        Result<User> result = service.handle(new UpdateInterestProfileCommand(userId, List.of("React"), null,
+                userId));
+
+        assertThat(result.value().getBio()).isEqualTo("Estudio Java");
+        assertThat(result.value().getSkillVector()).containsExactly("react", "java-language");
+    }
+
+    @Test
+    void updateInterestProfile_keepsTopicsThatMatchNoSkill() {
+        int userId = service.handle(signUp()).value().getId();
+
+        Result<User> result = service.handle(new UpdateInterestProfileCommand(userId, List.of("Ajedrez"), "",
+                userId));
+
+        assertThat(result.value().getInterestTopics()).containsExactly("Ajedrez");
+        assertThat(result.value().getSkillVector()).isEmpty();
+    }
+
+    @Test
+    void updateInterestProfile_ignoresRepeatedTopics() {
+        int userId = service.handle(signUp()).value().getId();
+
+        Result<User> result = service.handle(new UpdateInterestProfileCommand(userId,
+                List.of("Java", "JAVA", " java "), null, userId));
+
+        assertThat(result.value().getInterestTopics()).containsExactly("Java");
+    }
+
+    @Test
+    void updateUserBio_recalculatesTheSkillVector() {
+        int userId = service.handle(signUp()).value().getId();
+        service.handle(new UpdateInterestProfileCommand(userId, List.of("React"), null, userId));
+
+        Result<User> result = service.handle(new UpdateUserBioCommand(userId, "Ahora aprendo SQL", userId));
+
+        assertThat(result.value().getSkillVector()).containsExactly("react", "sql-databases");
+    }
+
+    @Test
+    void updateInterestProfile_withoutTopics_returnsInterestTopicsRequired() {
+        int userId = service.handle(signUp()).value().getId();
+
+        assertFailure(service.handle(new UpdateInterestProfileCommand(userId, List.of(), "x", userId)),
+                IamError.INTEREST_TOPICS_REQUIRED);
+        assertFailure(service.handle(new UpdateInterestProfileCommand(userId, null, "x", userId)),
+                IamError.INTEREST_TOPICS_REQUIRED);
+    }
+
+    @Test
+    void updateInterestProfile_withMoreThanTenDistinctTopics_returnsTooManyInterestTopics() {
+        int userId = service.handle(signUp()).value().getId();
+        List<String> topics = java.util.stream.IntStream.rangeClosed(1, 11).mapToObj(i -> "Tema " + i).toList();
+
+        assertFailure(service.handle(new UpdateInterestProfileCommand(userId, topics, null, userId)),
+                IamError.TOO_MANY_INTEREST_TOPICS);
+    }
+
+    @Test
+    void updateInterestProfile_withABlankOrTooLongTopic_returnsInvalidInterestTopic() {
+        int userId = service.handle(signUp()).value().getId();
+
+        assertFailure(service.handle(new UpdateInterestProfileCommand(userId, List.of("Java", " "), null, userId)),
+                IamError.INVALID_INTEREST_TOPIC);
+        assertFailure(service.handle(new UpdateInterestProfileCommand(userId, Arrays.asList("Java", null), null,
+                userId)), IamError.INVALID_INTEREST_TOPIC);
+        assertFailure(service.handle(new UpdateInterestProfileCommand(userId, List.of("x".repeat(61)), null,
+                userId)), IamError.INVALID_INTEREST_TOPIC);
+    }
+
+    @Test
+    void updateInterestProfile_withATooLongDescription_returnsBioTooLongAndChangesNothing() {
+        int userId = service.handle(signUp()).value().getId();
+
+        assertFailure(service.handle(new UpdateInterestProfileCommand(userId, List.of("Java"), "a".repeat(1001),
+                userId)), IamError.BIO_TOO_LONG);
+        assertThat(repository.users().get(0).getInterestTopics()).isEmpty();
+    }
+
+    @Test
+    void updateInterestProfile_ofAnotherUser_returnsNotProfileOwner() {
+        int userId = service.handle(signUp()).value().getId();
+
+        assertFailure(service.handle(new UpdateInterestProfileCommand(userId, List.of("Java"), null, userId + 1)),
+                IamError.NOT_PROFILE_OWNER);
+    }
+
+    @Test
+    void updateInterestProfile_ofAnUnknownUser_returnsUserNotFound() {
+        assertFailure(service.handle(new UpdateInterestProfileCommand(99, List.of("Java"), null, 99)),
+                IamError.USER_NOT_FOUND);
     }
 
     // ---------- Device token ----------

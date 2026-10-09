@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 class UserTest {
 
@@ -108,6 +109,47 @@ class UserTest {
 
         assertThat(token.toString()).isEqualTo("DeviceToken[fcm-regi...]");
         assertThat(new DeviceToken("short").abbreviated()).isEqualTo("***");
+    }
+
+    // ---------- Interest profile ----------
+
+    @Test
+    void newUser_hasNoInterestsAndAnEmptySkillVector() {
+        User user = TestData.newUser();
+
+        assertThat(user.getInterestTopics()).isEmpty();
+        assertThat(user.getSkillVector()).isEmpty();
+    }
+
+    @Test
+    void replaceInterestTopics_normalizesSpacesAndRemovesRepeatedTopics() {
+        User user = TestData.newUser();
+
+        user.replaceInterestTopics(List.of("  Desarrollo   web ", "desarrollo web", "Java"));
+
+        assertThat(user.getInterestTopics()).containsExactly("Desarrollo web", "Java");
+    }
+
+    @Test
+    void replaceInterestTopics_withInvalidTopics_throwsDomainException() {
+        User user = TestData.newUser();
+
+        assertThatThrownBy(() -> user.replaceInterestTopics(List.of())).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> user.replaceInterestTopics(List.of(" "))).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> user.replaceInterestTopics(List.of("x".repeat(User.MAX_INTEREST_TOPIC_LENGTH + 1))))
+                .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> user.replaceInterestTopics(
+                java.util.stream.IntStream.rangeClosed(1, User.MAX_INTEREST_TOPICS + 1).mapToObj(i -> "t" + i)
+                        .toList())).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void updateSkillVector_keepsEachTagOnceAndDropsBlanks() {
+        User user = TestData.newUser();
+
+        user.updateSkillVector(java.util.Arrays.asList("java-language", " ", null, "java-language", "react"));
+
+        assertThat(user.getSkillVector()).containsExactly("java-language", "react");
     }
 
     // ---------- Email verification ----------

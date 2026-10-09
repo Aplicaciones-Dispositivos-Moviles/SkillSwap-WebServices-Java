@@ -3,6 +3,7 @@ package com.innovify.skillswap.iam.interfaces.rest;
 import com.innovify.skillswap.iam.application.fakes.FakeDomainEventPublisher;
 import com.innovify.skillswap.iam.application.fakes.FakePasswordHasher;
 import com.innovify.skillswap.iam.application.fakes.FakeTokenGenerator;
+import com.innovify.skillswap.iam.application.fakes.FakeSkillCatalog;
 import com.innovify.skillswap.iam.application.fakes.FakeUserRepository;
 import com.innovify.skillswap.iam.application.fakes.MutableClock;
 import com.innovify.skillswap.iam.application.internal.commandservices.EmailVerificationCommandServiceImpl;
@@ -57,7 +58,8 @@ abstract class IamRestTest {
 
         var issuer = new EmailVerificationIssuer(repository, events, TOKEN_TTL, RESEND_COOLDOWN, clock);
         var commands = new UserCommandServiceImpl(repository, new FakePasswordHasher(),
-                new DefaultEmailDomainValidator(), new FakeTokenGenerator(), events, issuer, messages);
+                new DefaultEmailDomainValidator(), new FakeTokenGenerator(), events, issuer, new FakeSkillCatalog(),
+                messages);
         var verification = new EmailVerificationCommandServiceImpl(repository, issuer, messages);
         var queries = new UserQueryServiceImpl(repository);
 

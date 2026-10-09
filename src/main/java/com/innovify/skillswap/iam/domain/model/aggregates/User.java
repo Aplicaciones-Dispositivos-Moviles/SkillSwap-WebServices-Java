@@ -5,8 +5,10 @@ import com.innovify.skillswap.iam.domain.model.valueobjects.Email;
 import com.innovify.skillswap.iam.domain.model.valueobjects.PasswordHash;
 import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
 import com.innovify.skillswap.iam.domain.model.valueobjects.Username;
+import com.innovify.skillswap.iam.infrastructure.persistence.jpa.converters.StringListJsonConverter;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -14,7 +16,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -29,6 +36,8 @@ import java.util.Objects;
 public class User {
 
     public static final int MAX_BIO_LENGTH = 1000;
+    public static final int MAX_INTEREST_TOPICS = 10;
+    public static final int MAX_INTEREST_TOPIC_LENGTH = 60;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -55,6 +64,20 @@ public class User {
 
     @Column(name = "device_token", length = 512)
     private DeviceToken deviceToken;
+
+    /** The topics the student is interested in, as they wrote them (US04). */
+    @Convert(converter = StringListJsonConverter.class)
+    @Column(name = "interest_topics", nullable = false, columnDefinition = "jsonb")
+    private List<String> interestTopics = List.of();
+
+    /**
+     * The skill vector of the student: the skills of the internal catalog their interest topics and description
+     * refer to, used to personalize the paths and the matching with verifiers. It is recalculated whenever the
+     * topics or the description change.
+     */
+    @Convert(converter = StringListJsonConverter.class)
+    @Column(name = "skill_vector", nullable = false, columnDefinition = "jsonb")
+    private List<String> skillVector = List.of();
 
     // Email verification: only the SHA-256 of the token sent by email is stored, never the token itself.
     @Column(name = "verification_token_hash", length = 64)
@@ -155,6 +178,61 @@ public class User {
         return this;
     }
 
+    /**
+     * Replace the interest topics of the profile. Blank spaces are collapsed and repeated topics (ignoring case) are
+     * kept once, in the order given.
+     *
+     * @throws DomainException when there is no topic, more than {@link #MAX_INTEREST_TOPICS}, or a topic is blank
+     *                         or longer than {@link #MAX_INTEREST_TOPIC_LENGTH} characters
+     */
+    public User replaceInterestTopics(List<String> topics) {
+        this.interestTopics = normalizeInterestTopics(topics);
+        return this;
+    }
+
+    /**
+     * The normalized topics, or the reason they are not valid.
+     *
+     * @throws DomainException when they are not valid
+     */
+    public static List<String> normalizeInterestTopics(List<String> topics) {
+        if (topics == null || topics.isEmpty()) {
+            throw new DomainException("At least one interest topic is required.");
+        }
+        Map<String, String> unique = new LinkedHashMap<>();
+        for (String topic : topics) {
+            if (topic == null || topic.isBlank()) {
+                throw new DomainException("An interest topic cannot be empty.");
+            }
+            String normalized = topic.strip().replaceAll("\\s+", " ");
+            if (normalized.length() > MAX_INTEREST_TOPIC_LENGTH) {
+                throw new DomainException("An interest topic cannot exceed %d characters."
+                        .formatted(MAX_INTEREST_TOPIC_LENGTH));
+            }
+            unique.putIfAbsent(normalized.toLowerCase(Locale.ROOT), normalized);
+        }
+        if (unique.size() > MAX_INTEREST_TOPICS) {
+            throw new DomainException("A profile cannot have more than %d interest topics."
+                    .formatted(MAX_INTEREST_TOPICS));
+        }
+        return List.copyOf(unique.values());
+    }
+
+    /**
+     * Store the skill vector recalculated from the interest topics and the description: catalog skill tags,
+     * without blanks or duplicates.
+     */
+    public User updateSkillVector(List<String> skillTags) {
+        List<String> tags = new ArrayList<>();
+        for (String tag : skillTags == null ? List.<String>of() : skillTags) {
+            if (tag != null && !tag.isBlank() && !tags.contains(tag.strip())) {
+                tags.add(tag.strip());
+            }
+        }
+        this.skillVector = List.copyOf(tags);
+        return this;
+    }
+
     /** Associate or update the device token of the mobile device the user signed in from. */
     public User registerDeviceToken(String token) {
         this.deviceToken = new DeviceToken(token);
@@ -202,6 +280,16 @@ public class User {
 
     public String getBio() {
         return bio;
+    }
+
+    /** The interest topics, empty until the student registers them. */
+    public List<String> getInterestTopics() {
+        return interestTopics == null ? List.of() : List.copyOf(interestTopics);
+    }
+
+    /** The skill tags of the catalog the profile refers to; empty when nothing matched. */
+    public List<String> getSkillVector() {
+        return skillVector == null ? List.of() : List.copyOf(skillVector);
     }
 
     /** Null when there is no pending verification token. */

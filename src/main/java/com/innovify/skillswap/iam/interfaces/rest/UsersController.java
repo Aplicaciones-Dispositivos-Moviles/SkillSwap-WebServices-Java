@@ -2,7 +2,9 @@ package com.innovify.skillswap.iam.interfaces.rest;
 
 import com.innovify.skillswap.iam.domain.model.commands.RegisterDeviceTokenCommand;
 import com.innovify.skillswap.iam.domain.model.commands.RemoveDeviceTokenCommand;
+import com.innovify.skillswap.iam.domain.model.commands.UpdateInterestProfileCommand;
 import com.innovify.skillswap.iam.interfaces.rest.resources.RegisterDeviceTokenResource;
+import com.innovify.skillswap.iam.interfaces.rest.resources.UpdateInterestProfileResource;
 import com.innovify.skillswap.iam.interfaces.rest.resources.UpdateUserBioResource;
 import com.innovify.skillswap.iam.interfaces.rest.transform.IamActionResultAssembler;
 import com.innovify.skillswap.iam.interfaces.rest.transform.PublicUserResourceFromEntityAssembler;
@@ -74,6 +76,22 @@ public class UsersController {
     public ResponseEntity<?> updateUserBio(@PathVariable int id, @Valid @RequestBody UpdateUserBioResource resource,
                                            @AuthenticationPrincipal User actor) {
         var command = new UpdateUserBioCommand(id, resource.bio(), actor.getId());
+        var result = userCommandService.handle(command);
+
+        return IamActionResultAssembler.toResponse(result,
+                user -> ResponseEntity.ok(UserResourceFromEntityAssembler.toResourceFromEntity(user)));
+    }
+
+    /**
+     * Registers or replaces the interest topics of the authenticated user's profile, and optionally its
+     * description; the skill vector is recalculated from both (US04). 200 with the profile, 400 for invalid
+     * topics or a too long description, 403 when the profile is someone else's.
+     */
+    @PutMapping("/{id:\\d+}/interests")
+    public ResponseEntity<?> updateInterestProfile(@PathVariable int id,
+                                                   @Valid @RequestBody UpdateInterestProfileResource resource,
+                                                   @AuthenticationPrincipal User actor) {
+        var command = new UpdateInterestProfileCommand(id, resource.topics(), resource.description(), actor.getId());
         var result = userCommandService.handle(command);
 
         return IamActionResultAssembler.toResponse(result,

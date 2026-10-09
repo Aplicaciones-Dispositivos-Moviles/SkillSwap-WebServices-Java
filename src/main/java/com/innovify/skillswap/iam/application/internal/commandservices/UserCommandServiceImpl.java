@@ -9,6 +9,7 @@ import com.innovify.skillswap.iam.domain.model.commands.RegisterDeviceTokenComma
 import com.innovify.skillswap.iam.domain.model.commands.RemoveDeviceTokenCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignInCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignUpCommand;
+import com.innovify.skillswap.iam.domain.model.commands.UpdateInterestProfileCommand;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateUserBioCommand;
 import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
 import com.innovify.skillswap.iam.domain.model.valueobjects.DeviceToken;
@@ -17,6 +18,7 @@ import com.innovify.skillswap.iam.domain.model.valueobjects.Username;
 import com.innovify.skillswap.iam.domain.repositories.UserRepository;
 import com.innovify.skillswap.iam.domain.services.EmailDomainValidator;
 import com.innovify.skillswap.iam.domain.services.PasswordHasher;
+import com.innovify.skillswap.learningpathengine.application.acl.SkillCatalogContextFacade;
 import com.innovify.skillswap.shared.application.Result;
 import com.innovify.skillswap.shared.domain.errors.ErrorCodes;
 import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
@@ -28,7 +30,11 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.Optional;
 
 /**
@@ -52,6 +58,7 @@ public class UserCommandServiceImpl implements UserCommandService {
     private final TokenGenerator tokenGenerator;
     private final DomainEventPublisher eventPublisher;
     private final EmailVerificationIssuer verificationIssuer;
+    private final SkillCatalogContextFacade skillCatalog;
     private final MessageSource messageSource;
 
     public UserCommandServiceImpl(UserRepository userRepository,
@@ -60,6 +67,7 @@ public class UserCommandServiceImpl implements UserCommandService {
                                   TokenGenerator tokenGenerator,
                                   DomainEventPublisher eventPublisher,
                                   EmailVerificationIssuer verificationIssuer,
+                                  SkillCatalogContextFacade skillCatalog,
                                   MessageSource messageSource) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
@@ -67,6 +75,7 @@ public class UserCommandServiceImpl implements UserCommandService {
         this.tokenGenerator = tokenGenerator;
         this.eventPublisher = eventPublisher;
         this.verificationIssuer = verificationIssuer;
+        this.skillCatalog = skillCatalog;
         this.messageSource = messageSource;
     }
 
@@ -147,7 +156,62 @@ public class UserCommandServiceImpl implements UserCommandService {
         }
 
         user.updateBio(bio);
+        // The description is part of the skill vector.
+        user.updateSkillVector(skillVectorOf(user.getInterestTopics(), user.getBio()));
         return save(user);
+    }
+
+    @Override
+    public Result<User> handle(UpdateInterestProfileCommand command) {
+        Optional<User> found = userRepository.findById(command.userId());
+        if (found.isEmpty()) {
+            return failure(IamError.USER_NOT_FOUND);
+        }
+
+        User user = found.get();
+        if (!Objects.equals(user.getId(), command.actorUserId())) {
+            return failure(IamError.NOT_PROFILE_OWNER);
+        }
+
+        IamError topicsError = validateInterestTopics(command.topics());
+        if (topicsError != null) {
+            return failure(topicsError);
+        }
+        if (command.description() != null && command.description().strip().length() > User.MAX_BIO_LENGTH) {
+            return failure(IamError.BIO_TOO_LONG);
+        }
+
+        user.replaceInterestTopics(command.topics());
+        if (command.description() != null) {
+            user.updateBio(command.description());
+        }
+        user.updateSkillVector(skillVectorOf(user.getInterestTopics(), user.getBio()));
+        return save(user);
+    }
+
+    private static IamError validateInterestTopics(List<String> topics) {
+        if (topics == null || topics.isEmpty()) {
+            return IamError.INTEREST_TOPICS_REQUIRED;
+        }
+        Set<String> unique = new LinkedHashSet<>();
+        for (String topic : topics) {
+            if (topic == null || topic.isBlank()
+                    || topic.strip().replaceAll("\\s+", " ").length() > User.MAX_INTEREST_TOPIC_LENGTH) {
+                return IamError.INVALID_INTEREST_TOPIC;
+            }
+            unique.add(topic.strip().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT));
+        }
+        return unique.size() > User.MAX_INTEREST_TOPICS ? IamError.TOO_MANY_INTEREST_TOPICS : null;
+    }
+
+    /** The catalog skills each topic and the description refer to, in that order and without duplicates. */
+    private List<String> skillVectorOf(List<String> topics, String description) {
+        Set<String> tags = new LinkedHashSet<>();
+        for (String topic : topics) {
+            tags.addAll(skillCatalog.matchSkillTags(topic));
+        }
+        tags.addAll(skillCatalog.matchSkillTags(description));
+        return List.copyOf(tags);
     }
 
     @Override

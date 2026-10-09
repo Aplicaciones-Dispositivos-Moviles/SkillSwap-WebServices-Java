@@ -4,12 +4,14 @@ import com.innovify.skillswap.iam.application.fakes.FakeDomainEventPublisher;
 import com.innovify.skillswap.iam.application.fakes.FakePasswordHasher;
 import com.innovify.skillswap.iam.application.fakes.FakeTokenGenerator;
 import com.innovify.skillswap.iam.application.fakes.FakeUserRepository;
+import com.innovify.skillswap.iam.application.fakes.MutableClock;
 import com.innovify.skillswap.iam.application.internal.outboundservices.AuthenticatedUser;
 import com.innovify.skillswap.iam.domain.model.IamError;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
 import com.innovify.skillswap.iam.domain.model.commands.SignInCommand;
 import com.innovify.skillswap.iam.domain.model.commands.SignUpCommand;
 import com.innovify.skillswap.iam.domain.model.commands.UpdateUserBioCommand;
+import com.innovify.skillswap.iam.domain.model.events.EmailVerificationRequested;
 import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
 import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
 import com.innovify.skillswap.iam.domain.services.DefaultEmailDomainValidator;
@@ -23,6 +25,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.Duration;
 import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +34,7 @@ class UserCommandServiceImplTest {
 
     private final FakeUserRepository repository = new FakeUserRepository();
     private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
+    private final MutableClock clock = new MutableClock();
     private UserCommandServiceImpl service;
 
     @BeforeEach
@@ -41,8 +45,10 @@ class UserCommandServiceImplTest {
         messages.setFallbackToSystemLocale(false);
 
         LocaleContextHolder.setLocale(Locale.US);
+        var issuer = new EmailVerificationIssuer(repository, events, Duration.ofHours(24), Duration.ofMinutes(2),
+                clock);
         service = new UserCommandServiceImpl(repository, new FakePasswordHasher(),
-                new DefaultEmailDomainValidator(), new FakeTokenGenerator(), events, messages);
+                new DefaultEmailDomainValidator(), new FakeTokenGenerator(), events, issuer, messages);
     }
 
     @AfterEach
@@ -84,11 +90,29 @@ class UserCommandServiceImplTest {
     void signUp_withValidData_publishesTheUserRegisteredEvent() {
         Result<User> result = service.handle(signUp());
 
-        assertThat(events.published()).hasSize(1);
+        assertThat(events.published()).hasSize(2);
         UserRegistered published = (UserRegistered) events.published().get(0);
         assertThat(published.userId()).isEqualTo(result.value().getId());
         assertThat(published.userId()).isPositive();
         assertThat(published.role()).isEqualTo(UserRole.STUDENT);
+    }
+
+    @Test
+    void signUp_withValidData_storesAVerificationTokenHashAndRequestsTheEmail() {
+        Result<User> result = service.handle(signUp("Ana", "Ana@UPC.edu.pe", "password123"));
+
+        User user = result.value();
+        EmailVerificationRequested requested = (EmailVerificationRequested) events.published().get(1);
+        assertThat(requested.userId()).isEqualTo(user.getId());
+        assertThat(requested.username()).isEqualTo("ana");
+        assertThat(requested.email()).isEqualTo("ana@upc.edu.pe");
+        assertThat(requested.issuedAt()).isEqualTo(clock.instant());
+        assertThat(requested.expiresAt()).isEqualTo(clock.instant().plus(Duration.ofHours(24)));
+        // Only the hash is stored, never the token of the email.
+        assertThat(user.getVerificationTokenHash()).isEqualTo(EmailVerificationIssuer.hash(requested.token()));
+        assertThat(user.getVerificationTokenHash()).isNotEqualTo(requested.token());
+        assertThat(requested.toString()).doesNotContain(requested.token());
+        assertThat(user.isVerified()).isFalse();
     }
 
     @Test
@@ -207,13 +231,57 @@ class UserCommandServiceImplTest {
 
     @Test
     void signIn_withCorrectCredentials_returnsUserAndToken() {
-        service.handle(signUp("Ana", "ana@upc.edu.pe", "password123"));
+        service.handle(signUp("Ana", "ana@upc.edu.pe", "password123")).value().verify();
 
         Result<AuthenticatedUser> result = service.handle(new SignInCommand("ANA", "password123"));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.value().user().getUsername().value()).isEqualTo("ana");
         assertThat(result.value().token()).isEqualTo("token-for-1");
+    }
+
+    @Test
+    void signIn_ofAnUnverifiedAccount_returnsEmailNotVerified() {
+        service.handle(signUp("ana", "ana@upc.edu.pe", "password123"));
+
+        assertFailure(service.handle(new SignInCommand("ana", "password123")), IamError.EMAIL_NOT_VERIFIED);
+    }
+
+    @Test
+    void signIn_ofAnUnverifiedAccount_requestsANewEmailOnlyAfterTheCooldown() {
+        service.handle(signUp("ana", "ana@upc.edu.pe", "password123"));
+        String firstHash = repository.users().get(0).getVerificationTokenHash();
+        events.published().clear();
+
+        service.handle(new SignInCommand("ana", "password123"));
+        assertThat(events.published()).isEmpty();
+
+        clock.advance(Duration.ofMinutes(2));
+        service.handle(new SignInCommand("ana", "password123"));
+
+        assertThat(events.published()).singleElement().isInstanceOf(EmailVerificationRequested.class);
+        assertThat(repository.users().get(0).getVerificationTokenHash()).isNotEqualTo(firstHash);
+    }
+
+    @Test
+    void signIn_ofAnUnverifiedAccount_stillAnswersEmailNotVerifiedWhenTheNewTokenCannotBeSaved() {
+        service.handle(signUp("ana", "ana@upc.edu.pe", "password123"));
+        events.published().clear();
+        clock.advance(Duration.ofMinutes(5));
+        repository.failOnSave(new DataIntegrityViolationException("boom"));
+
+        assertFailure(service.handle(new SignInCommand("ana", "password123")), IamError.EMAIL_NOT_VERIFIED);
+        assertThat(events.published()).isEmpty();
+    }
+
+    @Test
+    void signIn_ofAnUnverifiedAccountWithAWrongPassword_returnsInvalidCredentialsAndSendsNothing() {
+        service.handle(signUp("ana", "ana@upc.edu.pe", "password123"));
+        events.published().clear();
+        clock.advance(Duration.ofMinutes(5));
+
+        assertFailure(service.handle(new SignInCommand("ana", "wrong")), IamError.INVALID_CREDENTIALS);
+        assertThat(events.published()).isEmpty();
     }
 
     @Test

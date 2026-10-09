@@ -48,6 +48,7 @@ public class UserCommandServiceImpl implements UserCommandService {
     private final EmailDomainValidator emailDomainValidator;
     private final TokenGenerator tokenGenerator;
     private final DomainEventPublisher eventPublisher;
+    private final EmailVerificationIssuer verificationIssuer;
     private final MessageSource messageSource;
 
     public UserCommandServiceImpl(UserRepository userRepository,
@@ -55,12 +56,14 @@ public class UserCommandServiceImpl implements UserCommandService {
                                   EmailDomainValidator emailDomainValidator,
                                   TokenGenerator tokenGenerator,
                                   DomainEventPublisher eventPublisher,
+                                  EmailVerificationIssuer verificationIssuer,
                                   MessageSource messageSource) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.emailDomainValidator = emailDomainValidator;
         this.tokenGenerator = tokenGenerator;
         this.eventPublisher = eventPublisher;
+        this.verificationIssuer = verificationIssuer;
         this.messageSource = messageSource;
     }
 
@@ -87,6 +90,8 @@ public class UserCommandServiceImpl implements UserCommandService {
         }
 
         User user = new User(username, email, passwordHasher.hashPassword(command.password()), command.role());
+        // The account starts unverified, with the token of the verification email saved along with it.
+        EmailVerificationIssuer.IssuedToken verification = verificationIssuer.issue(user);
         Result<User> saved = save(user);
         if (saved.isFailure()) {
             return saved;
@@ -95,6 +100,7 @@ public class UserCommandServiceImpl implements UserCommandService {
         // Other bounded contexts (the wallet, later the free plan) react to the new account.
         User created = saved.value();
         eventPublisher.publish(new UserRegistered(created.getId(), created.getRole()));
+        verificationIssuer.requestEmail(created, verification);
         return saved;
     }
 
@@ -111,6 +117,11 @@ public class UserCommandServiceImpl implements UserCommandService {
         }
 
         User user = found.get();
+        if (!user.isVerified()) {
+            // Only with the right password: a wrong one keeps answering InvalidCredentials.
+            resendVerificationEmail(user);
+            return failure(IamError.EMAIL_NOT_VERIFIED);
+        }
         return Result.success(new AuthenticatedUser(user, tokenGenerator.generateToken(user)));
     }
 
@@ -134,6 +145,15 @@ public class UserCommandServiceImpl implements UserCommandService {
 
         user.updateBio(bio);
         return save(user);
+    }
+
+    /** A failure to send it again must not hide the reason of the rejected sign-in, so it is only logged. */
+    private void resendVerificationEmail(User user) {
+        try {
+            verificationIssuer.reissue(user);
+        } catch (RuntimeException exception) {
+            log.error("A new verification email for the user {} could not be issued", user.getId(), exception);
+        }
     }
 
     private Result<User> save(User user) {

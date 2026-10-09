@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.innovify.skillswap.iam.application.fakes.FakeEmailSender;
 import com.innovify.skillswap.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,18 +25,25 @@ class AuthenticationFlowIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private WebApplicationContext context;
 
+    @Autowired
+    private FakeEmailSender emailSender;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUpMockMvc() {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+        emailSender.clear();
     }
 
+    /** Signs up and opens the link of the verification email, as the student does before signing in. */
     private void signUp(String username, String email) throws Exception {
         mockMvc.perform(post("/api/v1/authentication/sign-up").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username + "\",\"email\":\"" + email
                                 + "\",\"password\":\"password123\"}"))
                 .andExpect(status().isCreated());
+        mockMvc.perform(get("/api/v1/authentication/verify-email").param("token", emailSender.lastTokenFor(email)))
+                .andExpect(status().isOk());
     }
 
     private String signInAndGetToken(String username) throws Exception {

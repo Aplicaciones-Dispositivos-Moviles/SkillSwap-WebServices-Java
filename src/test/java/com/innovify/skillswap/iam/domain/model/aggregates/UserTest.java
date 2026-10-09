@@ -8,6 +8,9 @@ import com.innovify.skillswap.iam.domain.model.valueobjects.DeviceToken;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.time.Instant;
+
 class UserTest {
 
     @Test
@@ -76,5 +79,74 @@ class UserTest {
         User user = TestData.newUser();
 
         assertThatThrownBy(() -> user.registerDeviceToken("  ")).isInstanceOf(DomainException.class);
+    }
+
+    // ---------- Email verification ----------
+
+    private static final String HASH = "a".repeat(64);
+    private static final Instant NOW = Instant.parse("2026-10-09T12:00:00Z");
+
+    @Test
+    void issueVerificationToken_storesTheHashTheExpirationAndWhenItWasSent() {
+        User user = TestData.newUser();
+
+        user.issueVerificationToken(HASH, NOW.plus(Duration.ofHours(24)), NOW);
+
+        assertThat(user.getVerificationTokenHash()).isEqualTo(HASH);
+        assertThat(user.getVerificationTokenExpiresAt()).isEqualTo(NOW.plus(Duration.ofHours(24)));
+        assertThat(user.getVerificationEmailSentAt()).isEqualTo(NOW);
+        assertThat(user.isVerificationTokenExpired(NOW)).isFalse();
+        assertThat(user.isVerificationTokenExpired(NOW.plus(Duration.ofHours(24)))).isTrue();
+    }
+
+    @Test
+    void issueVerificationToken_onAVerifiedAccount_throwsDomainException() {
+        User user = TestData.newUser().verify();
+
+        assertThatThrownBy(() -> user.issueVerificationToken(HASH, NOW.plusSeconds(60), NOW))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void issueVerificationToken_withSomethingThatIsNotASha256Hex_throwsDomainException() {
+        User user = TestData.newUser();
+
+        assertThatThrownBy(() -> user.issueVerificationToken("plain-token", NOW.plusSeconds(60), NOW))
+                .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> user.issueVerificationToken("A".repeat(64), NOW.plusSeconds(60), NOW))
+                .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> user.issueVerificationToken("z".repeat(64), NOW.plusSeconds(60), NOW))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void issueVerificationToken_thatExpiresBeforeItIsIssued_throwsDomainException() {
+        User user = TestData.newUser();
+
+        assertThatThrownBy(() -> user.issueVerificationToken(HASH, NOW, NOW)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void verify_clearsThePendingTokenSoItCannotBeUsedAgain() {
+        User user = TestData.newUser();
+        user.issueVerificationToken(HASH, NOW.plus(Duration.ofHours(24)), NOW);
+
+        user.verify();
+
+        assertThat(user.getVerificationTokenHash()).isNull();
+        assertThat(user.isVerificationTokenExpired(NOW)).isTrue();
+    }
+
+    @Test
+    void canReceiveVerificationEmail_respectsTheCooldownAndNeverForAVerifiedAccount() {
+        User user = TestData.newUser();
+        assertThat(user.canReceiveVerificationEmail(NOW, Duration.ofMinutes(2))).isTrue();
+
+        user.issueVerificationToken(HASH, NOW.plus(Duration.ofHours(24)), NOW);
+        assertThat(user.canReceiveVerificationEmail(NOW.plusSeconds(119), Duration.ofMinutes(2))).isFalse();
+        assertThat(user.canReceiveVerificationEmail(NOW.plusSeconds(120), Duration.ofMinutes(2))).isTrue();
+
+        user.verify();
+        assertThat(user.canReceiveVerificationEmail(NOW.plus(Duration.ofDays(1)), Duration.ofMinutes(2))).isFalse();
     }
 }

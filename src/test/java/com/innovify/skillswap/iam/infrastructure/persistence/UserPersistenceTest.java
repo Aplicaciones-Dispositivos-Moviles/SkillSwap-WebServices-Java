@@ -15,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
 class UserPersistenceTest extends PostgresIntegrationTest {
 
     @Autowired
@@ -30,6 +33,24 @@ class UserPersistenceTest extends PostgresIntegrationTest {
         assertThat(repository.existsByEmail(new Email("ana@upc.edu.pe"))).isTrue();
         assertThat(repository.existsByUsername(new Username("nobody"))).isFalse();
         assertThat(repository.existsByEmail(new Email("nobody@upc.edu.pe"))).isFalse();
+    }
+
+    @Test
+    void verificationToken_isStoredAndFoundByItsHash() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        User user = TestData.newUser("ana", "ana@upc.edu.pe", UserRole.STUDENT);
+        user.issueVerificationToken("b".repeat(64), now.plusSeconds(3600), now);
+        repository.save(user);
+
+        User found = repository.findByVerificationTokenHash("b".repeat(64)).orElseThrow();
+        assertThat(found.getUsername().value()).isEqualTo("ana");
+        assertThat(found.getVerificationTokenExpiresAt()).isEqualTo(now.plusSeconds(3600));
+        assertThat(found.getVerificationEmailSentAt()).isEqualTo(now);
+        assertThat(repository.findByVerificationTokenHash("c".repeat(64))).isEmpty();
+
+        found.verify();
+        repository.save(found);
+        assertThat(repository.findByVerificationTokenHash("b".repeat(64))).isEmpty();
     }
 
     @Test

@@ -39,6 +39,11 @@ public class UserRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public Optional<User> findByVerificationTokenHash(String tokenHash) {
+        return jpaRepository.findByVerificationTokenHash(tokenHash);
+    }
+
+    @Override
     public boolean existsByUsername(Username username) {
         return jpaRepository.existsByUsername(username);
     }

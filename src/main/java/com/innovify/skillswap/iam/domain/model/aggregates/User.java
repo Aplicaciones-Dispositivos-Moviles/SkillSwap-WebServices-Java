@@ -12,6 +12,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.Objects;
 
 /**
@@ -53,6 +56,16 @@ public class User {
     @Column(name = "device_token", length = 512)
     private DeviceToken deviceToken;
 
+    // Email verification: only the SHA-256 of the token sent by email is stored, never the token itself.
+    @Column(name = "verification_token_hash", length = 64)
+    private String verificationTokenHash;
+
+    @Column(name = "verification_token_expires_at")
+    private Instant verificationTokenExpiresAt;
+
+    @Column(name = "verification_email_sent_at")
+    private Instant verificationEmailSentAt;
+
     /** Required by JPA. */
     protected User() {
     }
@@ -64,10 +77,65 @@ public class User {
         this.role = Objects.requireNonNull(role, "role");
     }
 
-    /** Mark the account as verified once the institutional validation is confirmed. */
+    /**
+     * Mark the account as verified once the institutional validation is confirmed. The pending verification
+     * token, if any, can no longer be used.
+     */
     public User verify() {
         this.verified = true;
+        this.verificationTokenHash = null;
+        this.verificationTokenExpiresAt = null;
         return this;
+    }
+
+    /**
+     * Stores a new email verification token, replacing the previous one (whose link stops working).
+     *
+     * @param tokenHash the SHA-256 of the token, in hexadecimal
+     * @param expiresAt when the token stops being valid
+     * @param issuedAt  when the verification email is requested
+     * @throws DomainException when the account is already verified or the values are not valid
+     */
+    public User issueVerificationToken(String tokenHash, Instant expiresAt, Instant issuedAt) {
+        if (verified) {
+            throw new DomainException("The email of the account is already verified.");
+        }
+        if (!isSha256Hex(tokenHash)) {
+            throw new DomainException("The verification token hash must be a SHA-256 in hexadecimal.");
+        }
+        if (expiresAt == null || issuedAt == null || !expiresAt.isAfter(issuedAt)) {
+            throw new DomainException("The verification token must expire after it is issued.");
+        }
+        this.verificationTokenHash = tokenHash;
+        this.verificationTokenExpiresAt = expiresAt;
+        this.verificationEmailSentAt = issuedAt;
+        return this;
+    }
+
+    /**
+     * Whether a new verification email may be sent now: the account is not verified and the last one was sent
+     * at least {@code cooldown} ago, so the inbox of the student cannot be flooded.
+     */
+    public boolean canReceiveVerificationEmail(Instant now, Duration cooldown) {
+        return !verified
+                && (verificationEmailSentAt == null || !now.isBefore(verificationEmailSentAt.plus(cooldown)));
+    }
+
+    /** Whether the pending verification token can no longer be used (or there is none). */
+    public boolean isVerificationTokenExpired(Instant now) {
+        return verificationTokenExpiresAt == null || !now.isBefore(verificationTokenExpiresAt);
+    }
+
+    private static boolean isSha256Hex(String value) {
+        if (value == null || value.length() != 64) {
+            return false;
+        }
+        try {
+            HexFormat.of().parseHex(value);
+            return value.chars().noneMatch(Character::isUpperCase);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     /**
@@ -120,6 +188,21 @@ public class User {
 
     public String getBio() {
         return bio;
+    }
+
+    /** Null when there is no pending verification token. */
+    public String getVerificationTokenHash() {
+        return verificationTokenHash;
+    }
+
+    /** Null when there is no pending verification token. */
+    public Instant getVerificationTokenExpiresAt() {
+        return verificationTokenExpiresAt;
+    }
+
+    /** Null until the first verification email is requested. */
+    public Instant getVerificationEmailSentAt() {
+        return verificationEmailSentAt;
     }
 
     /** Null until the mobile client registers one. */

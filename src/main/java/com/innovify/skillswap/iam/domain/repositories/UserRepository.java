@@ -20,6 +20,9 @@ public interface UserRepository {
 
     Optional<User> findByEmail(Email email);
 
+    /** The account whose pending email verification token has this SHA-256 hash. */
+    Optional<User> findByVerificationTokenHash(String tokenHash);
+
     boolean existsByUsername(Username username);
 
     boolean existsByEmail(Email email);

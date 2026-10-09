@@ -6,7 +6,10 @@ import com.innovify.skillswap.shared.domain.errors.ErrorCodes;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
-/** The codes are part of the API contract (title of the error responses): they must match the C# names. */
+/**
+ * The codes are part of the API contract (title of the error responses): they must match the C# names, plus the
+ * ones of the email verification added by the Java API.
+ */
 class IamErrorTest {
 
     @Test
@@ -14,6 +17,7 @@ class IamErrorTest {
         assertThat(Arrays.stream(IamError.values()).map(ErrorCodes::of)).containsExactly(
                 "None", "InvalidCredentials", "UserBanned", "UsernameAlreadyTaken", "EmailAlreadyTaken",
                 "InvalidInstitutionalEmail", "InvalidUsername", "WeakPassword", "UserNotFound",
-                "NotProfileOwner", "BioTooLong", "OperationCancelled", "DatabaseError", "InternalServerError");
+                "NotProfileOwner", "BioTooLong", "EmailNotVerified", "InvalidVerificationToken",
+                "VerificationTokenExpired", "OperationCancelled", "DatabaseError", "InternalServerError");
     }
 }

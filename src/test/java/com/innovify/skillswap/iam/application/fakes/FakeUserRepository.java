@@ -61,6 +61,11 @@ public class FakeUserRepository implements UserRepository {
     }
 
     @Override
+    public Optional<User> findByVerificationTokenHash(String tokenHash) {
+        return users.stream().filter(user -> Objects.equals(user.getVerificationTokenHash(), tokenHash)).findFirst();
+    }
+
+    @Override
     public boolean existsByUsername(Username username) {
         return findByUsername(username).isPresent();
     }

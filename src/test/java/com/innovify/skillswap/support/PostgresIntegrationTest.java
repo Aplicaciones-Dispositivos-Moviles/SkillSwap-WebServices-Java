@@ -13,23 +13,15 @@ import org.springframework.context.annotation.Import;
 
 /**
  * Base class of the tests that run the whole application against a real PostgreSQL, started by Testcontainers
- * through its JDBC URL (jdbc:tc:...). The schema comes from iam-test-schema.sql,
- * credential-verification-test-schema.sql, learning-path-test-schema.sql and
- * assessment-peer-review-test-schema.sql, reputation-test-schema.sql and recognition-incentives-test-schema.sql, copies of what the C# API's migrations create, and Hibernate only
- * validates it. The file storage and the question generator are in-memory fakes. All the subclasses share one
- * Spring context and one container. They are skipped when Docker is not available.
+ * through its JDBC URL (jdbc:tc:...). The schema is created by the same Flyway migrations as production
+ * (db/migration), and Hibernate only validates it, so a mapping that drifts from the migrations fails the tests.
+ * The file storage and the question generator are in-memory fakes. All the subclasses share one Spring context
+ * and one container. They are skipped when Docker is not available.
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///skillswap?stringtype=unspecified",
         "spring.datasource.driver-class-name=org.testcontainers.jdbc.ContainerDatabaseDriver",
         "spring.jpa.hibernate.ddl-auto=validate",
-        "spring.sql.init.mode=always",
-        "spring.sql.init.schema-locations=classpath:iam-test-schema.sql,"
-                + "classpath:credential-verification-test-schema.sql,"
-                + "classpath:learning-path-test-schema.sql,"
-                + "classpath:assessment-peer-review-test-schema.sql,"
-                + "classpath:reputation-test-schema.sql,"
-                + "classpath:recognition-incentives-test-schema.sql",
         "token.settings.secret=test-secret-with-at-least-32-characters-long!",
         "cloudinary.cloud-name=test-cloud",
         "cloudinary.api-key=test-key",

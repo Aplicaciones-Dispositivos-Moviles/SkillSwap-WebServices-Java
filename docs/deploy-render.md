@@ -23,7 +23,22 @@ Not used anymore (delete them): `SEED_COORDINATOR_*`, `ASPNETCORE_*`, `Connectio
 
 - Health Check Path: `/health`
 - Auto-Deploy: on the `main` (or `develop`) branch you choose.
-- Hibernate only validates the schema (`ddl-auto=validate`): the tables must already exist in the database.
+- Hibernate only validates the schema (`ddl-auto=validate`). The schema is owned by the Flyway migrations in
+  `src/main/resources/db/migration`, which run on every start before Hibernate validates.
+
+## Database migrations (Flyway)
+
+- `V1__baseline_schema.sql` is the schema the C# API created (plus the two appeal columns of
+  `verification_cases`, added by hand). An empty database gets everything from it.
+- The Render database already has those tables. With `spring.flyway.baseline-on-migrate=true` and
+  `spring.flyway.baseline-version=1`, the first start creates `flyway_schema_history` with V1 marked as
+  **baseline** (not executed) and applies only V2 and later. Nothing has to be done by hand.
+- Check it after that first deploy: the log shows `Successfully baselined schema with version: 1`, and
+  `SELECT version, type, success FROM flyway_schema_history ORDER BY installed_rank;` lists `1 | BASELINE` followed
+  by the later versions.
+- A schema change is always a new `V<n>__description.sql`. A migration that was already applied is never edited:
+  Flyway checks its checksum and stops the start.
+- The `__EFMigrationsHistory` table of the C# API stays in the database; neither Flyway nor Hibernate uses it.
 
 ## Smoke test after the deploy
 

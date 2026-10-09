@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.innovify.skillswap.learningpathengine.TestData;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeAssessmentBlueprintRepository;
+import com.innovify.skillswap.learningpathengine.application.fakes.FakeCertificateSkillAffinityScorer;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeCredentialContextFacade;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeLearningPathRepository;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeSkillTaxonomyMatcher;
@@ -35,6 +36,7 @@ class LearningPathContextFacadeImplTest {
         messages.setFallbackToSystemLocale(false);
 
         var commandService = new LearningPathCommandServiceImpl(paths, FakeSkillTaxonomyMatcher.sample(),
+                FakeCertificateSkillAffinityScorer.sample(),
                 new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY),
                 new FakeCredentialContextFacade(), new FakeSubscriptionContextFacade(),
                 TransactionOperations.withoutTransaction(), messages);

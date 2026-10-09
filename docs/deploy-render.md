@@ -15,6 +15,9 @@ SkillSwap runs as a **Web Service** with **Runtime: Docker** (the `Dockerfile` a
 | `GEMINI_API_KEY` | yes | The application does not start without it. |
 | `GEMINI_MODEL` | no | Default `gemini-3.5-flash`. |
 | `GEMINI_FALLBACK_MODELS` | no | Comma-separated, tried in order. |
+| `GEMINI_GOAL_INTERPRETATION_ENABLED` | no | Default `true`: Gemini interprets the goal of a new path, choosing only skills of `skill-catalog.json`, and the keyword matcher answers when Gemini fails. `false` = keyword matching only (no Gemini call when declaring a goal). |
+| `GEMINI_GOAL_INTERPRETATION_TIMEOUT_SECONDS` | no | Default `20`. Maximum wait for Gemini when declaring a goal (retries and fallback models included) before the keyword matcher answers. |
+| `LEARNING_PATH_ASSESSMENT_REQUIRE_LINKED_CERTIFICATE` | no | Default `false`. `true` = a node needs a certificate linked (`POST /api/v1/path-nodes/{id}/certificate`) before its assessment can be generated (409 `CertificateRequired`). |
 | `CORS_ALLOWED_ORIGINS` | no | Comma-separated front-end origins. Empty = any origin. |
 | `REVENUECAT_API_KEY` | no | Secret API key (`sk_...`) of the RevenueCat project. **Empty = purchases are simulated** (nothing is charged). |
 | `REVENUECAT_WEBHOOK_AUTH` | with RevenueCat | The exact *Authorization header value* of the RevenueCat webhook. Empty = every notification gets 401. |

@@ -27,8 +27,10 @@ import java.util.Set;
 
 /**
  * The personalized learning path of a student: an ordered sequence of {@link PathNode}s to complete toward the
- * declared {@link CareerGoal}. A node is locked until all its prerequisites are completed; a linked
- * certificate is supporting evidence only and never completes a node.
+ * declared {@link CareerGoal}. A node is locked until all its prerequisites are completed. A certificate linked
+ * to a node is supporting evidence only and never completes it, except a certificate validated by a verifier
+ * that covers the skill: that skill counts as already demonstrated, so its node is completed and linked to the
+ * certificate ({@link #recognizeCertifiedSkill(String, int)}).
  *
  * <p>A path is {@link PathStatus#ACTIVE} until all its nodes are completed. The plan of the student limits how many
  * paths are active at once, so a path can be {@link PathStatus#PAUSED}: it keeps its progress and still receives
@@ -210,17 +212,52 @@ public class LearningPath {
         }
 
         node.complete();
+        advance();
+        return this;
+    }
 
-        Set<String> completed = completedSkillTags();
-        nodes.stream()
-                .filter(n -> n.getStatus() == NodeStatus.LOCKED && completed.containsAll(n.getPrerequisiteSkillTags()))
-                .forEach(PathNode::unlock);
-
-        if (nodes.stream().allMatch(n -> n.getStatus() == NodeStatus.COMPLETED)) {
-            status = PathStatus.COMPLETED;
+    /**
+     * Recognizes a skill the student already demonstrated with a certificate validated by a verifier: its node is
+     * completed and linked to the certificate, and the nodes it unlocks become available. A completed node is
+     * kept as it is. Works on nodes that are not saved yet, and on a paused path (the certificate was validated
+     * outside of the path).
+     *
+     * @return whether a node was completed; false when the skill is not part of the path or already completed
+     * @throws DomainException when the certificate id is not valid or the path is completed
+     */
+    public boolean recognizeCertifiedSkill(String skillTag, int certificateId) {
+        requireValidCertificate(certificateId);
+        if (status == PathStatus.COMPLETED) {
+            throw new DomainException("A completed path cannot change.");
         }
+
+        Optional<PathNode> found = nodes.stream()
+                .filter(node -> node.getSkillTag().equals(skillTag) && node.getStatus() != NodeStatus.COMPLETED)
+                .findFirst();
+        if (found.isEmpty()) {
+            return false;
+        }
+
+        found.get().completeWithCertificate(certificateId);
+        advance();
+        return true;
+    }
+
+    /**
+     * Associates a certificate chosen by the student with a node that is not completed, replacing the one linked
+     * before, if any. Whether the certificate covers the skill of the node is decided by the application.
+     *
+     * @throws DomainException when the certificate id is not valid, the node is not part of the path or it is
+     *                         already completed
+     */
+    public LearningPath associateCertificate(int nodeId, int certificateId) {
+        requireValidCertificate(certificateId);
+        PathNode node = requireNode(nodeId);
+        if (node.getStatus() == NodeStatus.COMPLETED) {
+            throw new DomainException("The node '%s' is already completed.".formatted(node.getSkillTag()));
+        }
+        node.linkCertificate(certificateId);
         updatedAt = Instant.now();
-        lastProgressAt = updatedAt;
         return this;
     }
 
@@ -280,6 +317,20 @@ public class LearningPath {
         updatedAt = Instant.now();
         lastProgressAt = updatedAt;
         return this;
+    }
+
+    /** Unlocks the nodes whose prerequisites are now completed, and completes the path after its last node. */
+    private void advance() {
+        Set<String> completed = completedSkillTags();
+        nodes.stream()
+                .filter(n -> n.getStatus() == NodeStatus.LOCKED && completed.containsAll(n.getPrerequisiteSkillTags()))
+                .forEach(PathNode::unlock);
+
+        if (nodes.stream().allMatch(n -> n.getStatus() == NodeStatus.COMPLETED)) {
+            status = PathStatus.COMPLETED;
+        }
+        updatedAt = Instant.now();
+        lastProgressAt = updatedAt;
     }
 
     private Set<String> completedSkillTags() {

@@ -30,6 +30,8 @@ public class OpenApiTagsConfig {
                 "Learning Path Engine. Declare a goal and get the certification path with its nodes.");
         group("assessment-blueprints-controller", "Assessment Blueprints",
                 "Learning Path Engine. Generate the AI questions that assess a path node.");
+        group("path-node-certificates-controller", "Path Node Certificates",
+                "Learning Path Engine. Associate a verified certificate with the path node whose skill it covers.");
         group("certificates-controller", "Certificates",
                 "Credential Verification. Upload a certificate (JPG, PNG or PDF) and check its risk and status.");
         group("assessment-attempts-controller", "Assessment Attempts",

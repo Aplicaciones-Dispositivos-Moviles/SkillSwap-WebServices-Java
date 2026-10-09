@@ -1,11 +1,14 @@
 package com.innovify.skillswap.credentialverification.application.internal.commandservices;
 
 import com.innovify.skillswap.credentialverification.application.fakes.FakeCertificateRepository;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeDomainEventPublisher;
 import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
 import com.innovify.skillswap.credentialverification.domain.model.CredentialVerificationError;
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.model.commands.ResolveCertificateDisputeCommand;
 import com.innovify.skillswap.credentialverification.domain.model.commands.UploadCertificateCommand;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerificationResolved;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerified;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.RiskLevel;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationMethod;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
@@ -29,8 +32,6 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerificationResolved;
-import com.innovify.skillswap.iam.application.fakes.FakeDomainEventPublisher;
 
 class CertificateCommandServiceImplTest {
 
@@ -353,6 +354,25 @@ class CertificateCommandServiceImplTest {
     }
 
     @Test
+    void resolve_asAuthentic_publishesCertificateVerifiedForTheOwner() {
+        Certificate suspicious = suspiciousCertificate();
+
+        Certificate verified = service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), true)).value();
+
+        assertThat(events.published()).filteredOn(CertificateVerified.class::isInstance).containsExactly(
+                new CertificateVerified(verified.getId(), 7, verified.getVerifiedAt()));
+    }
+
+    @Test
+    void resolve_asNotAuthentic_doesNotPublishCertificateVerified() {
+        Certificate suspicious = suspiciousCertificate();
+
+        service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), false));
+
+        assertThat(events.published()).noneMatch(CertificateVerified.class::isInstance);
+    }
+
+    @Test
     void resolve_ofUnknownCertificate_returnsNotFound() {
         Result<Certificate> result = service.handle(new ResolveCertificateDisputeCommand(999, true));
 
@@ -390,6 +410,7 @@ class CertificateCommandServiceImplTest {
                 new ResolveCertificateDisputeCommand(suspicious.getId(), true));
 
         assertFailure(result, CredentialVerificationError.DATABASE_ERROR);
+        assertThat(events.published()).isEmpty();
     }
 
     @Test
@@ -398,8 +419,9 @@ class CertificateCommandServiceImplTest {
 
         service.handle(new ResolveCertificateDisputeCommand(suspicious.getId(), true, "ignored when verified"));
 
-        assertThat(events.published()).singleElement().isEqualTo(new CertificateVerificationResolved(
-                suspicious.getId(), 7, VerificationStatus.VERIFIED, suspicious.getCourseName(), null));
+        assertThat(events.published()).filteredOn(CertificateVerificationResolved.class::isInstance)
+                .singleElement().isEqualTo(new CertificateVerificationResolved(
+                        suspicious.getId(), 7, VerificationStatus.VERIFIED, suspicious.getCourseName(), null));
     }
 
     @Test

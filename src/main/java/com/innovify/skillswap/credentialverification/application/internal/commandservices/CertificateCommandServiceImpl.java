@@ -7,6 +7,7 @@ import com.innovify.skillswap.credentialverification.domain.model.aggregates.Cer
 import com.innovify.skillswap.credentialverification.domain.model.commands.ResolveCertificateDisputeCommand;
 import com.innovify.skillswap.credentialverification.domain.model.commands.UploadCertificateCommand;
 import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerificationResolved;
+import com.innovify.skillswap.credentialverification.domain.model.events.CertificateVerified;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
 import com.innovify.skillswap.credentialverification.domain.repositories.CertificateRepository;
 import com.innovify.skillswap.credentialverification.domain.services.CertificateRiskScorer;
@@ -34,7 +35,7 @@ import java.util.Map;
  *
  * <p>It is deliberately not {@code @Transactional}: each {@link CertificateRepository#save} commits on its own,
  * so a persistence failure is caught here, returned as a {@link Result}, and the file already stored is
- * deleted.
+ * deleted. A resolved dispute publishes {@link CertificateVerificationResolved} (push to the student) and, when\n * the certificate is confirmed as authentic, {@link CertificateVerified} (evidence for the Learning Path Engine).
  */
 @Service
 public class CertificateCommandServiceImpl implements CertificateCommandService {
@@ -156,6 +157,11 @@ public class CertificateCommandServiceImpl implements CertificateCommandService 
         // The student is notified on their device (US16) once the final status is saved.
         eventPublisher.publish(new CertificateVerificationResolved(resolved.getId(), resolved.getOwnerId(),
                 resolved.getStatus(), resolved.getCourseName(), reason));
+        // A certificate upheld as authentic is evidence for the Learning Path Engine.
+        if (resolved.getStatus() == VerificationStatus.VERIFIED) {
+            eventPublisher.publish(new CertificateVerified(resolved.getId(), resolved.getOwnerId(),
+                    resolved.getVerifiedAt()));
+        }
         return Result.success(resolved);
     }
 

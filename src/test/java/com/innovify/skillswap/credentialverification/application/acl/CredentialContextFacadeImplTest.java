@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,6 +61,46 @@ class CredentialContextFacadeImplTest {
         assertThat(result.get(1).id()).isEqualTo(withoutData.getId());
         assertThat(result.get(1).courseName()).isNull();
         assertThat(result.get(1).institutionName()).isNull();
+    }
+
+    @Test
+    void getValidatedCertificates_keepsOnlyTheVerifiedOnesOfTheOwnerOldestFirst() {
+        stored(7, "h1", 0); // unverified: supporting evidence, not validated
+        Certificate second = stored(7, "h2", 60).resolveDispute(true);
+        stored(7, "h3", 60); // suspicious
+        stored(8, "h4", 60).resolveDispute(true); // another student
+        Certificate first = stored(7, "h5", 60).resolveDispute(true);
+
+        List<CertificateEvidence> result = facade.getValidatedCertificates(7);
+
+        assertThat(result).extracting(CertificateEvidence::id).containsExactly(second.getId(), first.getId());
+        assertThat(result).allSatisfy(evidence -> {
+            assertThat(evidence.validated()).isTrue();
+            assertThat(evidence.supportingEvidence()).isTrue();
+            assertThat(evidence.ownerId()).isEqualTo(7);
+        });
+    }
+
+    @Test
+    void getCertificate_exposesTheExtractedDataAndWhetherItIsEvidence() {
+        Certificate unverified = stored(7, "h1", 0);
+        Certificate suspicious = stored(7, "h2", 60);
+        Certificate verified = stored(7, "h3", 60).resolveDispute(true);
+
+        CertificateEvidence evidence = facade.getCertificate(unverified.getId()).orElseThrow();
+        assertThat(evidence.ownerId()).isEqualTo(7);
+        assertThat(evidence.courseName()).isEqualTo("Backend with Spring");
+        assertThat(evidence.ocrText()).isEqualTo(unverified.getOcrText());
+        assertThat(evidence.supportingEvidence()).isTrue();
+        assertThat(evidence.validated()).isFalse();
+
+        assertThat(facade.getCertificate(suspicious.getId()).orElseThrow().supportingEvidence()).isFalse();
+        assertThat(facade.getCertificate(verified.getId()).orElseThrow().validated()).isTrue();
+    }
+
+    @Test
+    void getCertificate_unknown_isEmpty() {
+        assertThat(facade.getCertificate(999)).isEqualTo(Optional.empty());
     }
 
     @Test

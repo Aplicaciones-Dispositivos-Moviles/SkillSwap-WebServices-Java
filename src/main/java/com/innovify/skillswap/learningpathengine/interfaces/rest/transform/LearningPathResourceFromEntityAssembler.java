@@ -22,7 +22,8 @@ public final class LearningPathResourceFromEntityAssembler {
                         node.getStatus().value(),
                         node.getPrerequisiteSkillTags(),
                         node.getLinkedCertificateId(),
-                        node.getAssessmentBlueprintId()))
+                        node.getAssessmentBlueprintId(),
+                        node.isCompletedByCertificate()))
                 .toList();
 
         return new LearningPathResource(

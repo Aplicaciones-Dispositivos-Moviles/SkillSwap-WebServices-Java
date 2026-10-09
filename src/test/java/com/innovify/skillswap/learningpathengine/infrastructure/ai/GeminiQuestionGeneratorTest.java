@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -464,5 +465,47 @@ class GeminiQuestionGeneratorTest {
 
         assertThatThrownBy(() -> create().generateQuestions("rest-api-design"))
                 .isInstanceOf(DomainException.class);
+    }
+    // ---------- New attempts (US17) ----------
+
+    private String promptOf(Captured request) {
+        Map<?, ?> body = (Map<?, ?>) Json.parse(request.body());
+        Map<?, ?> content = (Map<?, ?>) ((List<?>) body.get("contents")).get(0);
+        return (String) ((Map<?, ?>) ((List<?>) content.get("parts")).get(0)).get("text");
+    }
+
+    @Test
+    void generate_forAFirstAttempt_sendsNoPreviousQuestions() {
+        create().generateQuestions("rest-api-design", List.of());
+
+        assertThat(promptOf(requests.get(0))).doesNotContain("PREVIOUS_QUESTIONS");
+    }
+
+    @Test
+    @DisplayName("US17 escenario 3: a new attempt asks Gemini not to repeat the previous questions")
+    void generate_forANewAttempt_sendsThePreviousQuestionsToAvoid() {
+        create().generateQuestions("rest-api-design",
+                List.of("What does REST stand for?", "Which verb\nis idempotent?", "What does REST stand for?"));
+
+        String prompt = promptOf(requests.get(0));
+        assertThat(prompt).contains("Do NOT repeat or paraphrase")
+                .containsOnlyOnce("- What does REST stand for?")
+                .contains("- Which verb is idempotent?")
+                .contains("<<<PREVIOUS_QUESTIONS").contains(">>>PREVIOUS_QUESTIONS");
+    }
+
+    @Test
+    void generate_sendsAtMostTheMostRecentPreviousQuestions() {
+        List<String> previous = new ArrayList<>();
+        for (int i = 1; i <= GeminiQuestionGenerator.MAX_EXCLUDED_QUESTIONS + 5; i++) {
+            previous.add("Previous question number " + i + "?");
+        }
+
+        create().generateQuestions("rest-api-design", previous);
+
+        String prompt = promptOf(requests.get(0));
+        assertThat(prompt).contains("Previous question number 1?")
+                .contains("Previous question number " + GeminiQuestionGenerator.MAX_EXCLUDED_QUESTIONS + "?")
+                .doesNotContain("Previous question number " + (GeminiQuestionGenerator.MAX_EXCLUDED_QUESTIONS + 1) + "?");
     }
 }

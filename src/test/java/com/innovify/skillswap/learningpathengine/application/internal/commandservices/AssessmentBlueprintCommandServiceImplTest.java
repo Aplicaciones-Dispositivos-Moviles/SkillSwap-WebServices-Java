@@ -50,7 +50,7 @@ class AssessmentBlueprintCommandServiceImplTest {
         };
 
         LocaleContextHolder.setLocale(Locale.US);
-        service = new AssessmentBlueprintCommandServiceImpl(paths, blueprints, generator, counting, messages);
+        service = new AssessmentBlueprintCommandServiceImpl(paths, blueprints, generator, counting, messages, false);
     }
 
     @AfterEach

@@ -2,6 +2,12 @@ package com.innovify.skillswap.recognitionincentives.domain.model.aggregates;
 
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.util.Objects;
 
 /**
@@ -9,13 +15,22 @@ import java.util.Objects;
  * only be spent on benefits of the platform. The movements are recorded as
  * {@link com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction}.
  */
+@Entity
+@Table(name = "wallets")
 public class Wallet {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Integer id;
+
+    @Column(name = "wallet_owner_id", nullable = false)
     private int walletOwnerId;
+
+    @Column(name = "balance", nullable = false)
     private int balance;
 
-    /** Required by JPA once the aggregate is mapped. */
+    /** Required by JPA. */
     protected Wallet() {
     }
 

@@ -3,6 +3,12 @@ package com.innovify.skillswap.recognitionincentives.domain.model.entities;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
@@ -10,19 +16,36 @@ import java.time.Instant;
  * never changes once it was recorded. An earned transaction can point to the case that originated it, which
  * keeps a case from crediting twice.
  */
+@Entity
+@Table(name = "credit_transactions")
 public class CreditTransaction {
 
     public static final int MAX_DESCRIPTION_LENGTH = 200;
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Integer id;
+
+    @Column(name = "wallet_id", nullable = false)
     private int walletId;
+
+    @Column(name = "amount", nullable = false)
     private Credits amount;
+
+    @Column(name = "type", nullable = false, length = 20)
     private TransactionType type;
+
+    @Column(name = "description", nullable = false, length = MAX_DESCRIPTION_LENGTH)
     private String description;
+
+    @Column(name = "related_case_id")
     private Integer relatedCaseId;
+
+    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    /** Required by JPA once the entity is mapped. */
+    /** Required by JPA. */
     protected CreditTransaction() {
     }
 

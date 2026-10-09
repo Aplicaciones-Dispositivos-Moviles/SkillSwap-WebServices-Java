@@ -46,6 +46,11 @@ public class OpenApiTagsConfig {
                 "Recognition & Incentives. SkillCredits balance and transaction history (owner only).");
         group("credit-transactions-controller", "Credit Transactions",
                 "Recognition & Incentives. Redeem SkillCredits for a benefit.");
+        group("subscriptions-controller", "Subscriptions",
+                "Subscription & Billing. Activate the monthly plan after a Google Play purchase (verified with "
+                        + "RevenueCat), read the plan limits and cancel.");
+        group("revenue-cat-webhook-controller", "RevenueCat Webhook",
+                "Subscription & Billing. Notifications of RevenueCat, protected by its own Authorization secret.");
         group("health-controller", "Health", "Service health check, used by the host and the keep-alive ping.");
     }
 

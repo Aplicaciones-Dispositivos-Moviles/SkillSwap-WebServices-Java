@@ -64,6 +64,18 @@ class ApiDocumentationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void apiDocs_listTheSubscriptionEndpointsAndTheWebhook() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(Matchers.containsString("/api/v1/subscriptions/{id}/cancel")))
+                .andExpect(content().string(Matchers.containsString("/api/v1/subscriptions/webhooks/revenuecat")))
+                .andExpect(content().string(Matchers.containsString("\"StudentPlanResource\"")))
+                .andExpect(content().string(Matchers.containsString("\"name\":\"Subscriptions\"")))
+                .andExpect(content().string(Matchers.containsString("\"name\":\"RevenueCat Webhook\"")))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("revenue-cat-webhook-controller"))));
+    }
+
+    @Test
     void apiEndpoints_stillNeedAToken() throws Exception {
         mockMvc.perform(get("/api/v1/wallets/1")).andExpect(status().isUnauthorized());
     }

@@ -16,6 +16,12 @@ SkillSwap runs as a **Web Service** with **Runtime: Docker** (the `Dockerfile` a
 | `GEMINI_MODEL` | no | Default `gemini-3.5-flash`. |
 | `GEMINI_FALLBACK_MODELS` | no | Comma-separated, tried in order. |
 | `CORS_ALLOWED_ORIGINS` | no | Comma-separated front-end origins. Empty = any origin. |
+| `REVENUECAT_API_KEY` | no | Secret API key (`sk_...`) of the RevenueCat project. **Empty = purchases are simulated** (nothing is charged). |
+| `REVENUECAT_WEBHOOK_AUTH` | with RevenueCat | The exact *Authorization header value* of the RevenueCat webhook. Empty = every notification gets 401. |
+| `REVENUECAT_ENTITLEMENT_ID` | no | Entitlement that grants the monthly plan. Default `premium`. |
+| `REVENUECAT_ACCEPT_SANDBOX` | no | Apply test purchases (`environment: SANDBOX`). Default `true`; set `false` once the app is in production. |
+| `BILLING_EXPIRATION_CHECK_INTERVAL` | no | How often the subscriptions whose paid period ended are checked with RevenueCat. Default `1h`. |
+| `BILLING_SIMULATED_PERIOD` | no | Length of a period of the simulated gateway (no API key). Default `30d`; e.g. `10m` to demo the expiration. |
 
 Not used anymore (delete them): `SEED_COORDINATOR_*`, `ASPNETCORE_*`, `ConnectionStrings__*`.
 
@@ -40,8 +46,54 @@ Not used anymore (delete them): `SEED_COORDINATOR_*`, `ASPNETCORE_*`, `Connectio
   Flyway checks its checksum and stops the start.
 - The `__EFMigrationsHistory` table of the C# API stays in the database; neither Flyway nor Hibernate uses it.
 
+## Monthly subscription (RevenueCat)
+
+RevenueCat is not a payment processor: Google Play Billing charges the student, and RevenueCat validates the
+purchase with Google Play (through a Google Cloud service account) and tells the backend about it. The backend
+never trusts the app: it asks RevenueCat for the state of the student, whose **App User ID is the user id of the
+API** (the app must call `Purchases.logIn("<userId>")` after sign-in).
+
+### Dashboard
+
+1. **Product and entitlement:** create the monthly subscription product (S/ 29.90) in Google Play Console, import
+   it in RevenueCat and attach it to an entitlement with the identifier `premium` (or set
+   `REVENUECAT_ENTITLEMENT_ID`).
+2. **API key:** *Project settings > API keys > + New secret API key*. Put it in `REVENUECAT_API_KEY` (Render
+   environment only, never in the app or the repository).
+3. **Webhook:** *Project settings > Integrations > Webhooks > + Add new webhook*:
+   - Webhook URL: `https://<service>.onrender.com/api/v1/subscriptions/webhooks/revenuecat`
+   - Authorization header value: a long random value, e.g. `Bearer ` followed by `openssl rand -hex 32`. Put
+     **the same exact text** in `REVENUECAT_WEBHOOK_AUTH`; the backend compares it in constant time.
+   - Environment: *Both* while testing (sandbox purchases, Test Store); *Production only* later, or keep both
+     and set `REVENUECAT_ACCEPT_SANDBOX=false`.
+4. **Send a test event:** on the webhook page, *Send test event*. The backend answers 200 with
+   `{"outcome":"Ignored"}`; a 401 means the Authorization value differs.
+
+### How the backend applies it
+
+- `POST /api/v1/subscriptions`: the app calls it right after the purchase; the backend reads
+  `GET https://api.revenuecat.com/v1/subscribers/{userId}` and activates the subscription with the period of the
+  `premium` entitlement (422 if RevenueCat reports no active purchase).
+- The webhook (`INITIAL_PURCHASE`, `RENEWAL`, `CANCELLATION`, `UNCANCELLATION`, `EXPIRATION`, `BILLING_ISSUE`,
+  `PRODUCT_CHANGE`...) is applied once per `event.id` (table `processed_webhook_events`). Whatever the type, the
+  state is read again from RevenueCat, as RevenueCat recommends; `TEST` events are only acknowledged. When
+  RevenueCat does not answer, the webhook gets 503 and RevenueCat retries it (5, 10, 20, 40 and 80 minutes later).
+- `PATCH /api/v1/subscriptions/{id}/cancel` stops the renewals in Google Play through RevenueCat; the plan is kept
+  until the end of the paid period. A periodic check (`BILLING_EXPIRATION_CHECK_INTERVAL`) renews or expires the
+  subscriptions whose period ended, in case a webhook was lost.
+
+### Testing without Google Play
+
+- **Without RevenueCat at all:** leave `REVENUECAT_API_KEY` empty. Every `POST /api/v1/subscriptions` is an
+  approved purchase of `BILLING_SIMULATED_PERIOD` (state in memory; it is lost on restart).
+- **RevenueCat Test Store:** RevenueCat can simulate purchases without any Google Play setup (Android SDK 9.9.0 or
+  later, using the Test Store API key in the app). The purchases reach the entitlement and the webhooks like real
+  ones, with `environment: SANDBOX`, so keep `REVENUECAT_ACCEPT_SANDBOX=true` while testing.
+
 ## Smoke test after the deploy
 
 1. `GET /health` answers 200.
 2. `POST /api/v1/authentication/sign-up` and `sign-in` with a test account, then use the token in the other calls.
 3. `GET /api/v1/wallets/{id}` of that account answers 200 with balance 0.
+4. `GET /api/v1/subscriptions/{id}` of that account answers 200 with `"plan": "Free"`.
+5. From the RevenueCat dashboard, *Send test event* to the webhook: 200.

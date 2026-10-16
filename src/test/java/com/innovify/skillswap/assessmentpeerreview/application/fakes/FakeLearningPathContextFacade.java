@@ -3,6 +3,7 @@ package com.innovify.skillswap.assessmentpeerreview.application.fakes;
 import com.innovify.skillswap.learningpathengine.application.acl.BlueprintQuestionView;
 import com.innovify.skillswap.learningpathengine.application.acl.BlueprintView;
 import com.innovify.skillswap.learningpathengine.application.acl.LearningPathContextFacade;
+import com.innovify.skillswap.learningpathengine.application.acl.MiniProjectView;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionOutcome;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeReopenOutcome;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
     public static final List<Integer> CORRECT = List.of(1, 2, 3, 0, 1);
 
     private final Map<Integer, BlueprintView> blueprints = new HashMap<>();
+    private final Map<Integer, MiniProjectView> miniProjects = new HashMap<>();
     private final Set<String> completedSkills = new HashSet<>();
     private final List<Integer> completedNodes = new ArrayList<>();
     private final List<Integer> reopenedNodes = new ArrayList<>();
@@ -79,6 +81,25 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
                 nodeIsAvailable, questions);
         blueprints.put(blueprintId, view);
         return view;
+    }
+
+    /** The mini-project 1 of node 10, owned by student 1, about "http-basics", due in five days. */
+    public MiniProjectView addMiniProject() {
+        return addMiniProject(1, 10, 1, "http-basics", java.time.Instant.now().plus(java.time.Duration.ofDays(5)),
+                true, true);
+    }
+
+    public MiniProjectView addMiniProject(int miniProjectId, int pathNodeId, int studentId, String skillTag,
+                                          java.time.Instant dueAt, boolean isLatest, boolean nodeIsAvailable) {
+        MiniProjectView view = new MiniProjectView(miniProjectId, pathNodeId, studentId, skillTag, dueAt, isLatest,
+                nodeIsAvailable);
+        miniProjects.put(miniProjectId, view);
+        return view;
+    }
+
+    @Override
+    public Optional<MiniProjectView> getMiniProject(int miniProjectId) {
+        return Optional.ofNullable(miniProjects.get(miniProjectId));
     }
 
     @Override

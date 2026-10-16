@@ -7,11 +7,13 @@ import com.innovify.skillswap.learningpathengine.application.fakes.FakeAssessmen
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeCertificateSkillAffinityScorer;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeCredentialContextFacade;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeLearningPathRepository;
+import com.innovify.skillswap.learningpathengine.application.fakes.FakeMiniProjectRepository;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeSkillTaxonomyMatcher;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeSubscriptionContextFacade;
 import com.innovify.skillswap.learningpathengine.application.internal.commandservices.LearningPathCommandServiceImpl;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.AssessmentBlueprint;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
+import com.innovify.skillswap.learningpathengine.domain.model.aggregates.MiniProject;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.Question;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
@@ -27,6 +29,7 @@ import org.springframework.transaction.support.TransactionOperations;
 class LearningPathContextFacadeImplTest {
 
     private final FakeAssessmentBlueprintRepository blueprints = new FakeAssessmentBlueprintRepository();
+    private final FakeMiniProjectRepository miniProjects = new FakeMiniProjectRepository();
     private final FakeLearningPathRepository paths = new FakeLearningPathRepository();
     private final LearningPathContextFacadeImpl facade;
 
@@ -43,7 +46,7 @@ class LearningPathContextFacadeImplTest {
                 new com.innovify.skillswap.learningpathengine.application.fakes.FakeAdvancedPathUnlockRepository(),
                 new com.innovify.skillswap.learningpathengine.application.fakes.FakeRecognitionContextFacade(),
                 TransactionOperations.withoutTransaction(), messages);
-        facade = new LearningPathContextFacadeImpl(paths, blueprints, commandService);
+        facade = new LearningPathContextFacadeImpl(paths, blueprints, miniProjects, commandService);
     }
 
     private LearningPath addPath(int studentId) {
@@ -241,5 +244,66 @@ class LearningPathContextFacadeImplTest {
     @Test
     void reopenNode_ofAnUnknownNode_reportsNodeNotFound() {
         assertThat(facade.reopenNode(999)).isEqualTo(NodeReopenOutcome.NODE_NOT_FOUND);
+    }
+
+    // ---------- getMiniProject ----------
+
+    private MiniProject addMiniProject(PathNode node) {
+        return miniProjects.save(new MiniProject(node.getId(), node.getSkillTag(), TestData.miniProjectDraft()));
+    }
+
+    @Test
+    void getMiniProject_returnsTheDataNeededToReceiveItsDelivery() {
+        LearningPath path = addPath(7);
+        PathNode node = availableNode(path);
+        MiniProject miniProject = addMiniProject(node);
+
+        MiniProjectView view = facade.getMiniProject(miniProject.getId()).orElseThrow();
+
+        assertThat(view.miniProjectId()).isEqualTo(miniProject.getId());
+        assertThat(view.pathNodeId()).isEqualTo(node.getId());
+        assertThat(view.studentId()).isEqualTo(7);
+        assertThat(view.skillTag()).isEqualTo(node.getSkillTag());
+        assertThat(view.dueAt()).isEqualTo(miniProject.getDueAt());
+        assertThat(view.isLatest()).isTrue();
+        assertThat(view.nodeIsAvailable()).isTrue();
+    }
+
+    @Test
+    void getMiniProject_forAnUnknownMiniProject_returnsEmpty() {
+        assertThat(facade.getMiniProject(999)).isEmpty();
+    }
+
+    @Test
+    void getMiniProject_ofAnOlderMiniProject_isNotTheLatest() {
+        LearningPath path = addPath(1);
+        PathNode node = availableNode(path);
+        MiniProject older = addMiniProject(node);
+        MiniProject latest = addMiniProject(node);
+
+        assertThat(facade.getMiniProject(older.getId()).orElseThrow().isLatest()).isFalse();
+        assertThat(facade.getMiniProject(latest.getId()).orElseThrow().isLatest()).isTrue();
+    }
+
+    @Test
+    void getMiniProject_ofACompletedNodeOrAPausedPath_isNotAvailable() {
+        LearningPath completedPath = addPath(1);
+        PathNode completedNode = availableNode(completedPath);
+        MiniProject completed = addMiniProject(completedNode);
+        completedPath.completeNode(completedNode.getId());
+
+        LearningPath pausedPath = addPath(2);
+        MiniProject paused = addMiniProject(availableNode(pausedPath));
+        pausedPath.pause();
+
+        assertThat(facade.getMiniProject(completed.getId()).orElseThrow().nodeIsAvailable()).isFalse();
+        assertThat(facade.getMiniProject(paused.getId()).orElseThrow().nodeIsAvailable()).isFalse();
+    }
+
+    @Test
+    void getMiniProject_whoseNodeNoLongerExists_returnsEmpty() {
+        miniProjects.save(new MiniProject(999, "http-basics", TestData.miniProjectDraft()));
+
+        assertThat(facade.getMiniProject(1)).isEmpty();
     }
 }

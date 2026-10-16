@@ -10,11 +10,13 @@ import com.innovify.skillswap.learningpathengine.application.internal.outboundse
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultLearningPathBuilder;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultSkillGapAnalyzer;
 import com.innovify.skillswap.learningpathengine.domain.services.LearningPathBuilder;
+import com.innovify.skillswap.learningpathengine.domain.services.MiniProjectGenerationService;
 import com.innovify.skillswap.learningpathengine.domain.services.QuestionGenerationService;
 import com.innovify.skillswap.learningpathengine.domain.services.SkillGapAnalyzer;
 import com.innovify.skillswap.learningpathengine.domain.services.SkillTaxonomy;
 import com.innovify.skillswap.learningpathengine.infrastructure.ai.GeminiClient;
 import com.innovify.skillswap.learningpathengine.infrastructure.ai.GeminiGoalInterpretationSettings;
+import com.innovify.skillswap.learningpathengine.infrastructure.ai.GeminiMiniProjectGenerator;
 import com.innovify.skillswap.learningpathengine.infrastructure.ai.GeminiQuestionGenerator;
 import com.innovify.skillswap.learningpathengine.infrastructure.ai.GeminiSettings;
 import com.innovify.skillswap.learningpathengine.infrastructure.ai.GeminiSkillTaxonomyMatcher;
@@ -100,6 +102,11 @@ public class LearningPathEngineConfig {
     @Bean
     public QuestionGenerationService questionGenerationService(GeminiClient geminiClient) {
         return new GeminiQuestionGenerator(geminiClient);
+    }
+
+    @Bean
+    public MiniProjectGenerationService miniProjectGenerationService(GeminiClient geminiClient) {
+        return new GeminiMiniProjectGenerator(geminiClient);
     }
 
     /**

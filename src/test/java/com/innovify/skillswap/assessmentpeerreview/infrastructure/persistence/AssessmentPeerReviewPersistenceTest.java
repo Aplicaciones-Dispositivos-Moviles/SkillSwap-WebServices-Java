@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.MiniProjectSubmission;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
@@ -14,6 +15,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Rev
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Score;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
+import com.innovify.skillswap.assessmentpeerreview.domain.repositories.MiniProjectSubmissionRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.ReevaluationRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerifierProfileRepository;
@@ -42,6 +44,9 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
 
     @Autowired
     private ReevaluationRepository reevaluations;
+
+    @Autowired
+    private MiniProjectSubmissionRepository submissions;
 
     /** Saves a new case; the id is assigned to the instance that was saved. */
     private VerificationCase addCase(int attemptId, int studentId, int nodeId, String skill) {
@@ -424,5 +429,33 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         VerificationCase created = addCase(1, 7, 10);
 
         assertThat(loadCase(created.getId()).getReevaluationCount()).isZero();
+    }
+
+    // ---------- Mini-project submissions ----------
+
+    @Test
+    void submission_roundTripsTheMiniProjectTheStudentAndTheRepository() {
+        submissions.save(new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/repo"));
+
+        MiniProjectSubmission loaded = submissions.findByMiniProjectId(3).orElseThrow();
+
+        assertThat(loaded.getId()).isNotNull();
+        assertThat(loaded.getMiniProjectId()).isEqualTo(3);
+        assertThat(loaded.getStudentId()).isEqualTo(7);
+        assertThat(loaded.getPathNodeId()).isEqualTo(10);
+        assertThat(loaded.getSkillTag()).isEqualTo("http-basics");
+        assertThat(loaded.getRepositoryUrl()).isEqualTo("https://github.com/ana/repo");
+        assertThat(loaded.getSubmittedAt()).isNotNull();
+        assertThat(submissions.findById(loaded.getId())).isPresent();
+        assertThat(submissions.findByMiniProjectId(4)).isEmpty();
+    }
+
+    @Test
+    void submission_ofTheSameMiniProjectTwice_isRejectedByTheDatabase() {
+        submissions.save(new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/repo"));
+
+        assertThatThrownBy(() -> submissions.save(
+                new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/other")))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

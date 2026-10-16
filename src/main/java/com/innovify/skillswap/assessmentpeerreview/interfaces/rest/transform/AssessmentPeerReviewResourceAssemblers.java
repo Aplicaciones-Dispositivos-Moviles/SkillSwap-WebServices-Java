@@ -5,11 +5,13 @@ import com.innovify.skillswap.assessmentpeerreview.application.commandservices.S
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.AssessmentAttemptDetail;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.MiniProjectSubmission;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.AssessmentAttemptResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.FailedQuestionResource;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.MiniProjectSubmissionResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.PlanLimitReachedResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.ReevaluationResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseDetailResource;
@@ -20,6 +22,12 @@ import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.Ver
 public final class AssessmentPeerReviewResourceAssemblers {
 
     private AssessmentPeerReviewResourceAssemblers() {
+    }
+
+    public static MiniProjectSubmissionResource toResource(MiniProjectSubmission submission) {
+        return new MiniProjectSubmissionResource(submission.getId(), submission.getMiniProjectId(),
+                submission.getPathNodeId(), submission.getSkillTag(), submission.getRepositoryUrl(),
+                submission.getSubmittedAt());
     }
 
     public static ReevaluationResource toResource(Reevaluation reevaluation) {

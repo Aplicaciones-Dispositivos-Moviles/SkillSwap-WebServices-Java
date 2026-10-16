@@ -33,6 +33,8 @@ public class OpenApiTagsConfig {
                         + "limits of the plan.");
         group("assessment-blueprints-controller", "Assessment Blueprints",
                 "Learning Path Engine. Generate the AI questions that assess a path node.");
+        group("mini-projects-controller", "Mini-Projects",
+                "Learning Path Engine. Generate the AI mini-project and rubric that demonstrate a path node.");
         group("path-node-certificates-controller", "Path Node Certificates",
                 "Learning Path Engine. Associate a verified certificate with the path node whose skill it covers.");
         group("certificates-controller", "Certificates",
@@ -43,6 +45,8 @@ public class OpenApiTagsConfig {
                 "Assessment & Peer Review. Attach evidence, resolve a case as verifier and appeal a rejection.");
         group("reevaluations-controller", "Reevaluations",
                 "Assessment & Peer Review. A Verificador senior orders the reevaluation of an approved result.");
+        group("mini-project-submissions-controller", "Mini-Project Submissions",
+                "Assessment & Peer Review. The student delivers the repository of a mini-project.");
         group("verifier-profiles-controller", "Verifier Profiles",
                 "Assessment & Peer Review. Become a verifier for a skill and set the availability.");
         group("review-deadline-policies-controller", "Review Deadline Policies",

@@ -11,6 +11,9 @@ public interface LearningPathContextFacade {
     /** The blueprint with the data needed to grade an attempt, or empty when it does not exist. */
     Optional<BlueprintView> getBlueprint(int blueprintId);
 
+    /** The mini-project with the data needed to receive its delivery, or empty when it does not exist. */
+    Optional<MiniProjectView> getMiniProject(int miniProjectId);
+
     /** Completes the node, unlocking the ones that depended on it. A persistence failure is reported as FAILED. */
     NodeCompletionOutcome completeNode(int pathNodeId);
 

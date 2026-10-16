@@ -4,12 +4,14 @@ import com.innovify.skillswap.learningpathengine.application.commandservices.Lea
 import com.innovify.skillswap.learningpathengine.domain.model.LearningPathError;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.AssessmentBlueprint;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
+import com.innovify.skillswap.learningpathengine.domain.model.aggregates.MiniProject;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.CompletePathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.ReopenPathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.repositories.AssessmentBlueprintRepository;
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
+import com.innovify.skillswap.learningpathengine.domain.repositories.MiniProjectRepository;
 import com.innovify.skillswap.shared.application.Result;
 import java.util.List;
 import java.util.Objects;
@@ -21,13 +23,16 @@ public class LearningPathContextFacadeImpl implements LearningPathContextFacade 
 
     private final LearningPathRepository learningPathRepository;
     private final AssessmentBlueprintRepository blueprintRepository;
+    private final MiniProjectRepository miniProjectRepository;
     private final LearningPathCommandService learningPathCommandService;
 
     public LearningPathContextFacadeImpl(LearningPathRepository learningPathRepository,
                                          AssessmentBlueprintRepository blueprintRepository,
+                                         MiniProjectRepository miniProjectRepository,
                                          LearningPathCommandService learningPathCommandService) {
         this.learningPathRepository = learningPathRepository;
         this.blueprintRepository = blueprintRepository;
+        this.miniProjectRepository = miniProjectRepository;
         this.learningPathCommandService = learningPathCommandService;
     }
 
@@ -59,6 +64,34 @@ public class LearningPathContextFacadeImpl implements LearningPathContextFacade 
                 // A paused path keeps its nodes, but no new attempt can be made on them until it is resumed.
                 node.get().getStatus() == NodeStatus.AVAILABLE && path.get().isActive(),
                 questions));
+    }
+
+    @Override
+    public Optional<MiniProjectView> getMiniProject(int miniProjectId) {
+        Optional<MiniProject> found = miniProjectRepository.findById(miniProjectId);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        MiniProject miniProject = found.get();
+
+        Optional<LearningPath> path = learningPathRepository.findByNodeId(miniProject.getPathNodeId());
+        Optional<PathNode> node = path.flatMap(p -> p.getNode(miniProject.getPathNodeId()));
+        if (path.isEmpty() || node.isEmpty()) {
+            return Optional.empty();
+        }
+
+        boolean isLatest = miniProjectRepository.findLatestByPathNodeId(miniProject.getPathNodeId())
+                .map(latest -> Objects.equals(latest.getId(), miniProject.getId()))
+                .orElse(false);
+        return Optional.of(new MiniProjectView(
+                miniProject.getId(),
+                miniProject.getPathNodeId(),
+                path.get().getStudentId(),
+                miniProject.getSkillTag(),
+                miniProject.getDueAt(),
+                isLatest,
+                // A paused path keeps its nodes, but nothing new can be delivered until it is resumed.
+                node.get().getStatus() == NodeStatus.AVAILABLE && path.get().isActive()));
     }
 
     @Override

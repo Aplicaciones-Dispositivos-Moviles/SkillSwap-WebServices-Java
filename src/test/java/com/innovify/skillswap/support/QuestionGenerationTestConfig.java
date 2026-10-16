@@ -1,6 +1,8 @@
 package com.innovify.skillswap.support;
 
+import com.innovify.skillswap.learningpathengine.application.fakes.FakeMiniProjectGenerationService;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeQuestionGenerationService;
+import com.innovify.skillswap.learningpathengine.domain.services.MiniProjectGenerationService;
 import com.innovify.skillswap.learningpathengine.domain.services.QuestionGenerationService;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -14,5 +16,11 @@ public class QuestionGenerationTestConfig {
     @Primary
     public QuestionGenerationService testQuestionGenerationService() {
         return new FakeQuestionGenerationService();
+    }
+
+    @Bean
+    @Primary
+    public MiniProjectGenerationService testMiniProjectGenerationService() {
+        return new FakeMiniProjectGenerationService();
     }
 }

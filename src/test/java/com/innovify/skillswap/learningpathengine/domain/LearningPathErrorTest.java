@@ -21,7 +21,8 @@ class LearningPathErrorTest {
                 "NodeLocked", "NodeAlreadyCompleted", "NodeNotCompleted", "NodeCompletedByCertificate",
                 "CertificateNotFound", "NotCertificateOwner",
                 "CertificateNotVerified", "CertificateSkillMismatch", "CertificateRequired",
-                "QuestionGenerationFailed", "AdvancedPathUnlockRequired", "OperationCancelled", "DatabaseError",
+                "QuestionGenerationFailed", "MiniProjectGenerationFailed", "MiniProjectNotFound",
+                "AdvancedPathUnlockRequired", "OperationCancelled", "DatabaseError",
                 "InternalServerError");
     }
 

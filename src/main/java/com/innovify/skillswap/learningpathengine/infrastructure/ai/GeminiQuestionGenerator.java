@@ -85,6 +85,8 @@ public class GeminiQuestionGenerator implements QuestionGenerationService {
                 - Do not use "all of the above" or "none of the above".
                 - Vary the position of the correct option across questions.
                 - The questions must be different from each other and cover different sub-topics of the skill.
+                - Name the sub-topic of each question in 2 to 4 words (under 60 characters). Questions about the same
+                  sub-topic must use exactly the same name.
                 - Write in English. Keep each question under 300 characters and each option under 150 characters.
                 """.formatted(AssessmentBlueprint.QUESTION_COUNT, skill, Question.ANSWER_COUNT);
 
@@ -103,7 +105,8 @@ public class GeminiQuestionGenerator implements QuestionGenerationService {
         return prompt + """
 
                 Respond ONLY with a JSON array of exactly %1$d objects, each with this shape:
-                {"question": string, "answers": [string, string, string, string], "correctIndex": number from 0 to 3}
+                {"question": string, "answers": [string, string, string, string], "correctIndex": number from 0 to 3,
+                 "subTopic": string}
                 """.formatted(AssessmentBlueprint.QUESTION_COUNT);
     }
 
@@ -127,9 +130,18 @@ public class GeminiQuestionGenerator implements QuestionGenerationService {
             questions.add(new Question(
                     fields.get("question") instanceof String text ? text : "",
                     answersOf(fields.get("answers")),
-                    index.intValue()));
+                    index.intValue(),
+                    subTopicOf(fields.get("subTopic"))));
         }
         return List.copyOf(questions);
+    }
+
+    /** The sub-topic is optional: a missing, blank or too long one leaves the question without it. */
+    private static String subTopicOf(Object value) {
+        if (value instanceof String text && !text.isBlank() && text.strip().length() <= Question.MAX_SUB_TOPIC_LENGTH) {
+            return text.strip();
+        }
+        return null;
     }
 
     private static List<String> answersOf(Object value) {

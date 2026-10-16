@@ -5,6 +5,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.LearningPathError;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.AssessmentBlueprint;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.CompletePathNodeCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.ReopenPathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.repositories.AssessmentBlueprintRepository;
@@ -76,6 +77,24 @@ public class LearningPathContextFacadeImpl implements LearningPathContextFacade 
             };
         }
         return NodeCompletionOutcome.FAILED;
+    }
+
+    @Override
+    public NodeReopenOutcome reopenNode(int pathNodeId) {
+        Result<LearningPath> result = learningPathCommandService.handle(new ReopenPathNodeCommand(pathNodeId));
+        if (result.isSuccess()) {
+            return NodeReopenOutcome.REOPENED;
+        }
+
+        if (result.error() instanceof LearningPathError error) {
+            return switch (error) {
+                case NODE_NOT_FOUND -> NodeReopenOutcome.NODE_NOT_FOUND;
+                case NODE_NOT_COMPLETED -> NodeReopenOutcome.NOT_COMPLETED;
+                case NODE_COMPLETED_BY_CERTIFICATE -> NodeReopenOutcome.COMPLETED_BY_CERTIFICATE;
+                default -> NodeReopenOutcome.FAILED;
+            };
+        }
+        return NodeReopenOutcome.FAILED;
     }
 
     @Override

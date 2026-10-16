@@ -18,6 +18,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.commands.DeclareGo
 import com.innovify.skillswap.learningpathengine.domain.model.commands.EnforcePlanLimitsCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.PauseLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RefreshCertificateLinksCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.ReopenPathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.ResumeLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.CareerGoal;
@@ -542,6 +543,64 @@ class LearningPathCommandServiceImplTest {
                 LearningPathError.DATABASE_ERROR);
     }
 
+
+    // ---------- Reopen node ----------
+
+    @Test
+    void reopenNode_onACompletedNode_makesItAvailableAgainAndKeepsTheUnlockedOnes() {
+        LearningPath path = declare("I want to learn HTTP").value();
+        int networking = nodeId(path, "networking-basics");
+        service.handle(new CompletePathNodeCommand(networking));
+
+        Result<LearningPath> result = service.handle(new ReopenPathNodeCommand(networking));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(node(path, "networking-basics").getStatus()).isEqualTo(NodeStatus.AVAILABLE);
+        assertThat(node(path, "http-basics").getStatus()).isEqualTo(NodeStatus.AVAILABLE);
+    }
+
+    @Test
+    void reopenNode_onTheLastNodeOfACompletedPath_activatesThePathAgain() {
+        completeWholePath("I want to learn HTTP");
+        LearningPath path = paths.paths().get(0);
+        int last = path.getNodes().get(path.getNodes().size() - 1).getId();
+
+        assertThat(service.handle(new ReopenPathNodeCommand(last)).isSuccess()).isTrue();
+        assertThat(path.getStatus()).isEqualTo(PathStatus.ACTIVE);
+    }
+
+    @Test
+    void reopenNode_onANodeThatIsNotCompleted_returnsNodeNotCompleted() {
+        LearningPath path = declare().value();
+
+        assertFailure(service.handle(new ReopenPathNodeCommand(nodeId(path, "networking-basics"))),
+                LearningPathError.NODE_NOT_COMPLETED);
+    }
+
+    @Test
+    void reopenNode_onANodeCompletedWithACertificate_returnsNodeCompletedByCertificate() {
+        LearningPath path = declare().value();
+        path.recognizeCertifiedSkill("networking-basics", 50);
+
+        assertFailure(service.handle(new ReopenPathNodeCommand(nodeId(path, "networking-basics"))),
+                LearningPathError.NODE_COMPLETED_BY_CERTIFICATE);
+        assertThat(node(path, "networking-basics").getStatus()).isEqualTo(NodeStatus.COMPLETED);
+    }
+
+    @Test
+    void reopenNode_forAnUnknownNode_returnsNodeNotFound() {
+        assertFailure(service.handle(new ReopenPathNodeCommand(99)), LearningPathError.NODE_NOT_FOUND);
+    }
+
+    @Test
+    void reopenNode_whenSavingFails_returnsDatabaseError() {
+        LearningPath path = declare().value();
+        int networking = nodeId(path, "networking-basics");
+        service.handle(new CompletePathNodeCommand(networking));
+        paths.failOnSave(new DataIntegrityViolationException("failure"));
+
+        assertFailure(service.handle(new ReopenPathNodeCommand(networking)), LearningPathError.DATABASE_ERROR);
+    }
     // ---------- Refresh certificate links ----------
 
     @Test

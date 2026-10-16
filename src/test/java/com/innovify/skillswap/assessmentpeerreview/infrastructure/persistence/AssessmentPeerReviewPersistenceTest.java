@@ -4,13 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReevaluationSourceType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Score;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
+import com.innovify.skillswap.assessmentpeerreview.domain.repositories.ReevaluationRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerifierProfileRepository;
 import com.innovify.skillswap.support.PostgresIntegrationTest;
@@ -35,6 +39,9 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
 
     @Autowired
     private VerifierProfileRepository profiles;
+
+    @Autowired
+    private ReevaluationRepository reevaluations;
 
     /** Saves a new case; the id is assigned to the instance that was saved. */
     private VerificationCase addCase(int attemptId, int studentId, int nodeId, String skill) {
@@ -365,5 +372,57 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         assertThat(cases.findPendingBySkillTag("http-basics")).extracting(VerificationCase::getId)
                 .containsExactly(id);
         assertThat(cases.countOpenByVerifierUserIds(List.of(2))).isEmpty();
+    }
+
+    // ---------- Reevaluations ----------
+
+    @Test
+    void reevaluation_roundTripsTheSourceTheSeniorAndTheJustification() {
+        reevaluations.save(new Reevaluation(ReevaluationSourceType.CASE, 4, 7, 9, "The rubric was not applied."));
+
+        List<Reevaluation> found = reevaluations.findBySource(ReevaluationSourceType.CASE, 4);
+
+        assertThat(found).hasSize(1);
+        Reevaluation reevaluation = found.get(0);
+        assertThat(reevaluation.getId()).isNotNull();
+        assertThat(reevaluation.getSourceType()).isEqualTo(ReevaluationSourceType.CASE);
+        assertThat(reevaluation.getSourceId()).isEqualTo(4);
+        assertThat(reevaluation.getStudentId()).isEqualTo(7);
+        assertThat(reevaluation.getOrderedByUserId()).isEqualTo(9);
+        assertThat(reevaluation.getJustification()).isEqualTo("The rubric was not applied.");
+        assertThat(reevaluation.getCreatedAt()).isNotNull();
+        assertThat(reevaluations.findBySource(ReevaluationSourceType.ATTEMPT, 4)).isEmpty();
+    }
+
+    @Test
+    void reevaluation_ofTheSameSourceTwice_areListedFromTheOldestToTheNewest() {
+        reevaluations.save(new Reevaluation(ReevaluationSourceType.ATTEMPT, 5, 7, 9, "First doubt."));
+        reevaluations.save(new Reevaluation(ReevaluationSourceType.ATTEMPT, 5, 7, 8, "Second doubt."));
+
+        assertThat(reevaluations.findBySource(ReevaluationSourceType.ATTEMPT, 5))
+                .extracting(Reevaluation::getJustification).containsExactly("First doubt.", "Second doubt.");
+    }
+
+    @Test
+    void case_reopenedForReevaluation_keepsTheCountAndForgetsTheDecision() {
+        VerificationCase created = addCase(1, 7, 10);
+        changeCase(created.getId(), c -> c.assignVerifier(2).resolve(ReviewDecision.APPROVED, "Good."));
+        changeCase(created.getId(), c -> c.reopenForReevaluation(ReviewDeadline.hours(48)));
+
+        VerificationCase loaded = loadCase(created.getId());
+
+        assertThat(loaded.getReevaluationCount()).isEqualTo(1);
+        assertThat(loaded.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(loaded.getDecision()).isNull();
+        assertThat(loaded.getVerifierUserId()).isNull();
+        assertThat(loaded.getPreviousVerifierUserId()).isEqualTo(2);
+        assertThat(loaded.getReviewDueAt()).isNotNull();
+    }
+
+    @Test
+    void case_neverReevaluated_hasACountOfZero() {
+        VerificationCase created = addCase(1, 7, 10);
+
+        assertThat(loadCase(created.getId()).getReevaluationCount()).isZero();
     }
 }

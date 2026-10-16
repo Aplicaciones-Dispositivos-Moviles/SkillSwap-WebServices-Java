@@ -109,6 +109,10 @@ public class VerificationCase {
     @Column(name = "reassignment_count", nullable = false)
     private int reassignmentCount;
 
+    /** How many times a senior verifier ordered the reevaluation of the case after it was approved. */
+    @Column(name = "reevaluation_count", nullable = false)
+    private int reevaluationCount;
+
     /** Required by JPA. */
     protected VerificationCase() {
     }
@@ -248,6 +252,10 @@ public class VerificationCase {
         return reassignmentCount;
     }
 
+    public int getReevaluationCount() {
+        return reevaluationCount;
+    }
+
     /** Whether the case is assigned and its review was due before that moment. */
     public boolean isOverdue(Instant now) {
         return status == CaseStatus.ASSIGNED && reviewDueAt != null && now != null && !now.isBefore(reviewDueAt);
@@ -323,10 +331,13 @@ public class VerificationCase {
     /**
      * The verifier whose rejection the current decision overturned: the one who rejected the case before the
      * appeal, when the new decision is an approval. Null for a case never appealed, a rejection that was
-     * confirmed, or a case that is not resolved.
+     * confirmed, a case that is not resolved, or a case reopened by a reevaluation (the verifier who approved it
+     * before is not overturned by a new decision).
      */
     public Integer overturnedVerifierUserId() {
-        return status == CaseStatus.RESOLVED && decision == ReviewDecision.APPROVED ? previousVerifierUserId : null;
+        return status == CaseStatus.RESOLVED && decision == ReviewDecision.APPROVED && reevaluationCount == 0
+                ? previousVerifierUserId
+                : null;
     }
 
     public boolean hasAppealsLeft() {
@@ -436,6 +447,40 @@ public class VerificationCase {
         this.rubricNotes = null;
         this.assignedAt = null;
         this.resolvedAt = null;
+        this.status = CaseStatus.PENDING;
+        return this;
+    }
+
+    /** True when the case is resolved with an approval, which a senior verifier can order to evaluate again. */
+    public boolean canBeReevaluated() {
+        return status == CaseStatus.RESOLVED && decision == ReviewDecision.APPROVED;
+    }
+
+    /**
+     * Reopens an approved case so another verifier reviews it. The decision and the notes of the first review are
+     * cleared, the evidence stays, and the case goes back to pending without a verifier. The verifier who approved it
+     * cannot review it again, and the review deadline is counted again from now. It is not an appeal: it does not use
+     * the appeal of the student.
+     *
+     * @param reviewDeadline the deadline to apply to the new review, or null for none
+     * @throws DomainException when the case is not approved
+     */
+    public VerificationCase reopenForReevaluation(ReviewDeadline reviewDeadline) {
+        if (!canBeReevaluated()) {
+            throw new DomainException("Only an approved case can be reevaluated.");
+        }
+
+        this.previousVerifierUserId = verifierUserId;
+        this.reevaluationCount++;
+        this.verifierUserId = null;
+        this.decision = null;
+        this.rubricNotes = null;
+        this.assignedAt = null;
+        this.resolvedAt = null;
+        this.deadlineMissedAt = null;
+        this.reviewDueAt = reviewDeadline == null ? null : reviewDeadline.dueFrom(Instant.now());
+        this.reviewDeadlineAmount = reviewDeadline == null ? null : reviewDeadline.amount();
+        this.reviewDeadlineUnit = reviewDeadline == null ? null : reviewDeadline.unit().value();
         this.status = CaseStatus.PENDING;
         return this;
     }

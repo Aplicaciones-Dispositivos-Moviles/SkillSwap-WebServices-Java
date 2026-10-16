@@ -138,6 +138,11 @@ public class PathNode {
         status = NodeStatus.COMPLETED;
     }
 
+    /** Called by the learning path: the student has to demonstrate the skill again. */
+    public void reopen() {
+        status = NodeStatus.AVAILABLE;
+    }
+
     /** Called by the learning path. */
     public void linkCertificate(int certificateId) {
         this.linkedCertificateId = certificateId;

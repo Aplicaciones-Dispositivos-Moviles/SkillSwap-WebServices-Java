@@ -6,8 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -342,5 +344,96 @@ class VerificationCaseTest {
         org.assertj.core.api.Assertions.assertThat(verificationCase.getDeadlineMissedAt()).isNull();
         org.assertj.core.api.Assertions.assertThat(verificationCase.getReassignmentCount()).isEqualTo(1);
         org.assertj.core.api.Assertions.assertThat(verificationCase.isOverdue(now)).isFalse();
+    }
+
+    // ---------- Reevaluation ----------
+
+    private static VerificationCase approvedCase() {
+        return assignedCase().resolve(ReviewDecision.APPROVED, "Meets the rubric.");
+    }
+
+    @Test
+    void canBeReevaluated_isTrueOnlyForAnApprovedCase() {
+        assertThat(approvedCase().canBeReevaluated()).isTrue();
+        assertThat(newCase().canBeReevaluated()).isFalse();
+        assertThat(assignedCase().canBeReevaluated()).isFalse();
+        assertThat(rejectedCase().canBeReevaluated()).isFalse();
+    }
+
+    @Test
+    void reopenForReevaluation_reopensTheApprovedCaseWithoutVerifierNorDecision() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(ReviewDeadline.hours(48));
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.isOpen()).isTrue();
+        assertThat(verificationCase.getVerifierUserId()).isNull();
+        assertThat(verificationCase.getDecision()).isNull();
+        assertThat(verificationCase.getRubricNotes()).isNull();
+        assertThat(verificationCase.getAssignedAt()).isNull();
+        assertThat(verificationCase.getResolvedAt()).isNull();
+        assertThat(verificationCase.getReevaluationCount()).isEqualTo(1);
+        assertThat(verificationCase.getAppealCount()).isZero();
+        assertThat(verificationCase.getPreviousVerifierUserId()).isEqualTo(VERIFIER_ID);
+    }
+
+    @Test
+    void reopenForReevaluation_countsTheDeadlineAgainFromNow() {
+        Instant before = Instant.now();
+
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(ReviewDeadline.hours(48));
+
+        assertThat(verificationCase.getReviewDueAt())
+                .isBetween(before.plus(Duration.ofHours(48)), Instant.now().plus(Duration.ofHours(48)));
+        assertThat(verificationCase.getReviewDeadline()).isEqualTo(ReviewDeadline.hours(48));
+    }
+
+    @Test
+    void reopenForReevaluation_withoutDeadline_leavesTheCaseWithoutOne() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null);
+
+        assertThat(verificationCase.getReviewDueAt()).isNull();
+        assertThat(verificationCase.getReviewDeadline()).isNull();
+    }
+
+    @Test
+    void reopenForReevaluation_keepsTheVerifierWhoApprovedItFromReviewingItAgain() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null);
+
+        assertThatThrownBy(() -> verificationCase.assignVerifier(VERIFIER_ID)).isInstanceOf(DomainException.class);
+        assertThat(verificationCase.assignVerifier(3).getVerifierUserId()).isEqualTo(3);
+    }
+
+    @Test
+    void reopenForReevaluation_ofACaseThatIsNotApproved_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().reopenForReevaluation(null)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> assignedCase().reopenForReevaluation(null)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> rejectedCase().reopenForReevaluation(null)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void reopenForReevaluation_canHappenAgainAfterANewApproval() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null).assignVerifier(3)
+                .resolve(ReviewDecision.APPROVED, "Meets the rubric.");
+
+        verificationCase.reopenForReevaluation(null);
+
+        assertThat(verificationCase.getReevaluationCount()).isEqualTo(2);
+        assertThat(verificationCase.getPreviousVerifierUserId()).isEqualTo(3);
+    }
+
+    @Test
+    void reopenForReevaluation_doesNotUseTheAppealOfTheStudent() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null).assignVerifier(3)
+                .resolve(ReviewDecision.REJECTED, "Not enough.");
+
+        assertThat(verificationCase.canBeAppealed()).isTrue();
+    }
+
+    @Test
+    void overturnedVerifierUserId_isNullWhenAReevaluatedCaseIsApprovedAgain() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null).assignVerifier(3)
+                .resolve(ReviewDecision.APPROVED, "Meets the rubric.");
+
+        assertThat(verificationCase.overturnedVerifierUserId()).isNull();
     }
 }

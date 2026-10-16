@@ -4,6 +4,7 @@ import com.innovify.skillswap.learningpathengine.application.acl.BlueprintQuesti
 import com.innovify.skillswap.learningpathengine.application.acl.BlueprintView;
 import com.innovify.skillswap.learningpathengine.application.acl.LearningPathContextFacade;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionOutcome;
+import com.innovify.skillswap.learningpathengine.application.acl.NodeReopenOutcome;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -20,10 +21,21 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
     private final Map<Integer, BlueprintView> blueprints = new HashMap<>();
     private final Set<String> completedSkills = new HashSet<>();
     private final List<Integer> completedNodes = new ArrayList<>();
+    private final List<Integer> reopenedNodes = new ArrayList<>();
+    private NodeReopenOutcome nextReopenOutcome = NodeReopenOutcome.REOPENED;
     private NodeCompletionOutcome nextOutcome = NodeCompletionOutcome.COMPLETED;
 
     public List<Integer> completedNodes() {
         return completedNodes;
+    }
+
+    public List<Integer> reopenedNodes() {
+        return reopenedNodes;
+    }
+
+    /** What {@link #reopenNode} reports; the node is recorded only when it is REOPENED. */
+    public void setNextReopenOutcome(NodeReopenOutcome nextReopenOutcome) {
+        this.nextReopenOutcome = nextReopenOutcome;
     }
 
     /** What {@link #completeNode} reports; the node is recorded only when it is COMPLETED. */
@@ -67,6 +79,14 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
                 nodeIsAvailable, questions);
         blueprints.put(blueprintId, view);
         return view;
+    }
+
+    @Override
+    public NodeReopenOutcome reopenNode(int pathNodeId) {
+        if (nextReopenOutcome == NodeReopenOutcome.REOPENED) {
+            reopenedNodes.add(pathNodeId);
+        }
+        return nextReopenOutcome;
     }
 
     @Override

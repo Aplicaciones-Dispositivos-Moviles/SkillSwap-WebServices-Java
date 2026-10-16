@@ -209,4 +209,37 @@ class LearningPathContextFacadeImplTest {
 
         assertThat(facade.hasCompletedSkill(1, node.getSkillTag())).isFalse();
     }
+
+    // ---------- reopenNode ----------
+
+    @Test
+    void reopenNode_ofACompletedNode_makesItAvailableAgain() {
+        LearningPath path = addPath(7);
+        PathNode node = availableNode(path);
+        path.completeNode(node.getId());
+
+        assertThat(facade.reopenNode(node.getId())).isEqualTo(NodeReopenOutcome.REOPENED);
+        assertThat(path.getNode(node.getId()).orElseThrow().getStatus()).isEqualTo(NodeStatus.AVAILABLE);
+    }
+
+    @Test
+    void reopenNode_ofANodeThatIsNotCompleted_reportsNotCompleted() {
+        LearningPath path = addPath(7);
+
+        assertThat(facade.reopenNode(availableNode(path).getId())).isEqualTo(NodeReopenOutcome.NOT_COMPLETED);
+    }
+
+    @Test
+    void reopenNode_ofANodeCompletedWithACertificate_reportsCompletedByCertificate() {
+        LearningPath path = addPath(7);
+        PathNode node = availableNode(path);
+        path.recognizeCertifiedSkill(node.getSkillTag(), 50);
+
+        assertThat(facade.reopenNode(node.getId())).isEqualTo(NodeReopenOutcome.COMPLETED_BY_CERTIFICATE);
+    }
+
+    @Test
+    void reopenNode_ofAnUnknownNode_reportsNodeNotFound() {
+        assertThat(facade.reopenNode(999)).isEqualTo(NodeReopenOutcome.NODE_NOT_FOUND);
+    }
 }

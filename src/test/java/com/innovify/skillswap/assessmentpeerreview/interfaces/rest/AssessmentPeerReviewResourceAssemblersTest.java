@@ -7,11 +7,14 @@ import com.innovify.skillswap.assessmentpeerreview.application.queryservices.Ass
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.FailedQuestion;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReevaluationSourceType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.AssessmentAttemptResource;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.ReevaluationResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseDetailResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerifierProfileResource;
@@ -146,6 +149,22 @@ class AssessmentPeerReviewResourceAssemblersTest {
         assertThat(resource.available()).isTrue();
         assertThat(resource.verified()).isTrue();
         assertThat(resource.reviewCount()).isEqualTo(1);
+        assertThat(resource.createdAt()).isNotNull();
+    }
+
+    @Test
+    void reevaluation_carriesItsSourceTheSeniorAndTheJustification() {
+        Reevaluation reevaluation = new Reevaluation(ReevaluationSourceType.CASE, 9, 7, 4, "Doubts about the rubric.");
+        ReflectionTestUtils.setField(reevaluation, "id", 2);
+
+        ReevaluationResource resource = AssessmentPeerReviewResourceAssemblers.toResource(reevaluation);
+
+        assertThat(resource.id()).isEqualTo(2);
+        assertThat(resource.sourceType()).isEqualTo("Case");
+        assertThat(resource.sourceId()).isEqualTo(9);
+        assertThat(resource.studentId()).isEqualTo(7);
+        assertThat(resource.orderedByUserId()).isEqualTo(4);
+        assertThat(resource.justification()).isEqualTo("Doubts about the rubric.");
         assertThat(resource.createdAt()).isNotNull();
     }
 }

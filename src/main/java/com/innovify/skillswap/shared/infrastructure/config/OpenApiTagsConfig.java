@@ -33,6 +33,8 @@ public class OpenApiTagsConfig {
                         + "limits of the plan.");
         group("assessment-blueprints-controller", "Assessment Blueprints",
                 "Learning Path Engine. Generate the AI questions that assess a path node.");
+        group("mini-projects-controller", "Mini-Projects",
+                "Learning Path Engine. Generate the AI mini-project and rubric that demonstrate a path node.");
         group("path-node-certificates-controller", "Path Node Certificates",
                 "Learning Path Engine. Associate a verified certificate with the path node whose skill it covers.");
         group("certificates-controller", "Certificates",

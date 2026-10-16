@@ -54,7 +54,8 @@ public final class TestData {
 
     public static Question question(int index) {
         return new Question("Question " + index + "?",
-                List.of("a" + index, "b" + index, "c" + index, "d" + index), index % 4);
+                List.of("a" + index, "b" + index, "c" + index, "d" + index), index % 4,
+                "Sub-topic " + index % 2);
     }
 
     public static List<Question> questions(int count) {

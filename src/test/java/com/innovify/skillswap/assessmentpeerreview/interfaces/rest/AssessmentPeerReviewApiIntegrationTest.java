@@ -326,6 +326,33 @@ class AssessmentPeerReviewApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void submit_failingAnswers_reportsTheSubTopicToReinforce() throws Exception {
+        BlueprintView blueprint = newBlueprint(ana, anaToken);
+
+        MvcResult result = submit(anaToken, blueprint.blueprintId(), failing(blueprint));
+
+        assertThat((String) read(result, "$.weakSubTopic")).isEqualTo("Sub-topic 1");
+    }
+
+    @Test
+    void submit_passingAnswers_reportsNoSubTopicToReinforce() throws Exception {
+        MvcResult result = passAssessment(ana, anaToken);
+
+        assertThat((Object) read(result, "$.weakSubTopic")).isNull();
+    }
+
+    @Test
+    void getAttempt_afterAFailedAttempt_returnsTheSubTopicToReinforce() throws Exception {
+        BlueprintView blueprint = newBlueprint(ana, anaToken);
+        int attemptId = read(submit(anaToken, blueprint.blueprintId(), failing(blueprint)), "$.id");
+
+        MvcResult result = call(get(ATTEMPTS + "/" + attemptId), anaToken, null);
+
+        assertThat(status(result)).isEqualTo(200);
+        assertThat((String) read(result, "$.weakSubTopic")).isEqualTo("Sub-topic 1");
+    }
+
+    @Test
     void getAttempt_asAnotherStudent_returns403() throws Exception {
         int attemptId = read(passAssessment(ana, anaToken), "$.id");
 

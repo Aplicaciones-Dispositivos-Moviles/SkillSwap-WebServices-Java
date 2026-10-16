@@ -23,7 +23,7 @@ class LearningPathActionResultAssemblerTest {
             "PATH_NOT_FOUND,404", "NOT_PATH_OWNER,403", "NODE_NOT_FOUND,404",
             "NODE_LOCKED,409", "NODE_ALREADY_COMPLETED,409",
             "NODE_NOT_COMPLETED,409", "NODE_COMPLETED_BY_CERTIFICATE,409", "QUESTION_GENERATION_FAILED,503",
-            "OPERATION_CANCELLED,409", "DATABASE_ERROR,500", "INTERNAL_SERVER_ERROR,500", "NONE,400"
+            "MINI_PROJECT_GENERATION_FAILED,503", "MINI_PROJECT_NOT_FOUND,404", "OPERATION_CANCELLED,409", "DATABASE_ERROR,500", "INTERNAL_SERVER_ERROR,500", "NONE,400"
     })
     void everyErrorMapsToItsStatus(LearningPathError error, int status) {
         assertThat(LearningPathActionResultAssembler.toStatusFromError(error).value()).isEqualTo(status);

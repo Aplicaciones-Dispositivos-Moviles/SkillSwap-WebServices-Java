@@ -3,7 +3,9 @@ package com.innovify.skillswap.learningpathengine;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.Question;
+import com.innovify.skillswap.learningpathengine.domain.model.entities.RubricCriterion;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.CareerGoal;
+import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.MiniProjectDraft;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultLearningPathBuilder;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultSkillGapAnalyzer;
 import java.util.ArrayList;
@@ -64,5 +66,19 @@ public final class TestData {
             questions.add(question(index));
         }
         return questions;
+    }
+
+    /** A valid rubric: four different criteria whose weights add up to 100. */
+    public static List<RubricCriterion> rubric() {
+        return List.of(
+                new RubricCriterion("Functionality", "The application does what the statement asks.", 40),
+                new RubricCriterion("Code quality", "The code is organized, readable and tested.", 30),
+                new RubricCriterion("Documentation", "The repository explains how to run and use it.", 20),
+                new RubricCriterion("Version control", "The history shows small, meaningful commits.", 10));
+    }
+
+    /** What a generator would propose for a valid mini-project. */
+    public static MiniProjectDraft miniProjectDraft() {
+        return new MiniProjectDraft("Build a REST API", "Build a small REST API that manages tasks.", rubric());
     }
 }

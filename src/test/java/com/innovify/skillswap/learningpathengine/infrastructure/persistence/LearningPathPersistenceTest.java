@@ -6,11 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.innovify.skillswap.learningpathengine.TestData;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.AssessmentBlueprint;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
+import com.innovify.skillswap.learningpathengine.domain.model.aggregates.MiniProject;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathStatus;
 import com.innovify.skillswap.learningpathengine.domain.repositories.AssessmentBlueprintRepository;
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
+import com.innovify.skillswap.learningpathengine.domain.repositories.MiniProjectRepository;
 import com.innovify.skillswap.support.PostgresIntegrationTest;
 import java.sql.SQLException;
 import java.util.List;
@@ -28,6 +30,9 @@ class LearningPathPersistenceTest extends PostgresIntegrationTest {
 
     @Autowired
     private AssessmentBlueprintRepository blueprints;
+
+    @Autowired
+    private MiniProjectRepository miniProjects;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -286,5 +291,54 @@ class LearningPathPersistenceTest extends PostgresIntegrationTest {
                 .isEqualTo("Available");
         assertThat(List.of(queryString("SELECT prerequisites FROM path_nodes WHERE skill_tag = 'rest-api-design'")))
                 .containsExactly("http-basics,programming-fundamentals");
+    }
+
+    // ---------- Mini-projects ----------
+
+    @Test
+    void miniProject_roundTripsTheStatementTheRubricAndTheDeadline() {
+        MiniProject original = new MiniProject(7, "http-basics", TestData.miniProjectDraft());
+        miniProjects.save(original);
+
+        MiniProject loaded = miniProjects.findLatestByPathNodeId(7).orElseThrow();
+
+        assertThat(loaded.getId()).isPositive();
+        assertThat(loaded.getSkillTag()).isEqualTo("http-basics");
+        assertThat(loaded.getTitle()).isEqualTo("Build a REST API");
+        assertThat(loaded.getStatement()).isEqualTo("Build a small REST API that manages tasks.");
+        assertThat(loaded.getRubric()).isEqualTo(TestData.rubric());
+        assertThat(loaded.getPassingScore()).isEqualTo(70);
+        assertThat(loaded.getDueAt()).isEqualTo(original.getDueAt());
+        assertThat(java.time.Duration.between(loaded.getCreatedAt(), loaded.getDueAt()))
+                .isEqualTo(java.time.Duration.ofDays(5));
+    }
+
+    @Test
+    void findLatestMiniProject_returnsTheNewestOneOfTheNode() {
+        miniProjects.save(new MiniProject(7, "http-basics", TestData.miniProjectDraft()));
+        MiniProject newest = new MiniProject(7, "http-basics", "A newer one", "Build something else.",
+                TestData.rubric());
+        miniProjects.save(newest);
+        miniProjects.save(new MiniProject(8, "sql-fundamentals", TestData.miniProjectDraft()));
+
+        MiniProject found = miniProjects.findLatestByPathNodeId(7).orElseThrow();
+
+        assertThat(found.getId()).isEqualTo(newest.getId());
+        assertThat(found.getTitle()).isEqualTo("A newer one");
+        assertThat(miniProjects.findLatestByPathNodeId(99)).isEmpty();
+    }
+
+    @Test
+    void findMiniProjectById_withAnUnknownId_returnsEmpty() {
+        assertThat(miniProjects.findById(9999)).isEmpty();
+    }
+
+    @Test
+    void miniProjectRubric_isStoredAsJsonb() throws SQLException {
+        miniProjects.save(new MiniProject(7, "http-basics", TestData.miniProjectDraft()));
+
+        assertThat(queryString("SELECT jsonb_typeof(rubric) FROM mini_projects")).isEqualTo("array");
+        assertThat(queryString("SELECT jsonb_array_length(rubric) FROM mini_projects")).isEqualTo("4");
+        assertThat(queryString("SELECT rubric -> 0 ->> 'name' FROM mini_projects")).isEqualTo("Functionality");
     }
 }

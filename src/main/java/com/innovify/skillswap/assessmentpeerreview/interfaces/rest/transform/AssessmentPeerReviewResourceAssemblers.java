@@ -5,11 +5,13 @@ import com.innovify.skillswap.assessmentpeerreview.application.commandservices.S
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.AssessmentAttemptDetail;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.AssessmentAttemptResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.FailedQuestionResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.PlanLimitReachedResource;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.ReevaluationResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseDetailResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerificationCaseResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.VerifierProfileResource;
@@ -18,6 +20,12 @@ import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.Ver
 public final class AssessmentPeerReviewResourceAssemblers {
 
     private AssessmentPeerReviewResourceAssemblers() {
+    }
+
+    public static ReevaluationResource toResource(Reevaluation reevaluation) {
+        return new ReevaluationResource(reevaluation.getId(), reevaluation.getSourceType().value(),
+                reevaluation.getSourceId(), reevaluation.getStudentId(), reevaluation.getOrderedByUserId(),
+                reevaluation.getJustification(), reevaluation.getCreatedAt());
     }
 
     /** The attempt alone; the case is only known right after submitting (see the other overload). */

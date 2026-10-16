@@ -14,6 +14,12 @@ public interface LearningPathContextFacade {
     /** Completes the node, unlocking the ones that depended on it. A persistence failure is reported as FAILED. */
     NodeCompletionOutcome completeNode(int pathNodeId);
 
+    /**
+     * Takes a completed node back to available, so the student demonstrates the skill again. A node completed with a
+     * validated certificate is not reopened. A persistence failure is reported as FAILED.
+     */
+    NodeReopenOutcome reopenNode(int pathNodeId);
+
     /** Whether the student has a completed node for the skill in any of their paths. */
     boolean hasCompletedSkill(int studentId, String skillTag);
 }

@@ -19,6 +19,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.commands.GrantAdva
 import com.innovify.skillswap.learningpathengine.domain.model.commands.PauseLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RecognizeValidatedCertificateCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.RefreshCertificateLinksCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.ReopenPathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.ResumeLearningPathCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.SyncAdvancedPathUnlocksCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
@@ -322,6 +323,30 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
             return Result.success(learningPathRepository.save(path));
         } catch (RuntimeException exception) {
             return failureFrom(exception, "complete the node " + command.pathNodeId());
+        }
+    }
+
+    @Override
+    public Result<LearningPath> handle(ReopenPathNodeCommand command) {
+        try {
+            Optional<LearningPath> found = learningPathRepository.findByNodeId(command.pathNodeId());
+            if (found.isEmpty()) {
+                return failures.failure(LearningPathError.NODE_NOT_FOUND);
+            }
+            LearningPath path = found.get();
+
+            PathNode node = path.getNode(command.pathNodeId()).orElseThrow();
+            if (node.getStatus() != NodeStatus.COMPLETED) {
+                return failures.failure(LearningPathError.NODE_NOT_COMPLETED);
+            }
+            if (node.isCompletedByCertificate()) {
+                return failures.failure(LearningPathError.NODE_COMPLETED_BY_CERTIFICATE);
+            }
+
+            path.reopenNode(node.getId());
+            return Result.success(learningPathRepository.save(path));
+        } catch (RuntimeException exception) {
+            return failureFrom(exception, "reopen the node " + command.pathNodeId());
         }
     }
 

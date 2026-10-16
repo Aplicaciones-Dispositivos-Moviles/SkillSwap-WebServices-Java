@@ -3,6 +3,7 @@ package com.innovify.skillswap.learningpathengine.application.commandservices;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.AdvancedPathUnlock;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.CompletePathNodeCommand;
+import com.innovify.skillswap.learningpathengine.domain.model.commands.ReopenPathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.DeclareGoalCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.EnforcePlanLimitsCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.LinkCertificateToNodeCommand;
@@ -68,6 +69,9 @@ public interface LearningPathCommandService {
 
     /** Completes a node, issued once the student approved the node's assessment. */
     Result<LearningPath> handle(CompletePathNodeCommand command);
+
+    /** Takes a completed node back to available, so the student demonstrates the skill again. */
+    Result<LearningPath> handle(ReopenPathNodeCommand command);
 
     /**
      * Returns the student's latest path after linking the certificates uploaded since it was created. Linking

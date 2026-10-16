@@ -243,6 +243,34 @@ public class LearningPath {
     }
 
     /**
+     * Takes a completed node back to available, so the student demonstrates the skill again (a senior verifier
+     * doubted the result that completed it). The nodes that already depended on it keep their state: the progress of
+     * the student is not undone. A completed path becomes active again. A node completed with a validated certificate
+     * cannot be reopened, because an assessment did not demonstrate it. A paused path accepts it too: the student
+     * resumes the path before starting the new assessment.
+     *
+     * @throws DomainException when the node is not part of the path, is not completed, or was completed with a
+     *                         certificate
+     */
+    public LearningPath reopenNode(int nodeId) {
+        PathNode node = requireNode(nodeId);
+        if (node.getStatus() != NodeStatus.COMPLETED) {
+            throw new DomainException("The node '%s' is not completed.".formatted(node.getSkillTag()));
+        }
+        if (node.isCompletedByCertificate()) {
+            throw new DomainException(
+                    "The node '%s' was completed with a certificate: it cannot be reopened.".formatted(node.getSkillTag()));
+        }
+
+        node.reopen();
+        if (status == PathStatus.COMPLETED) {
+            status = PathStatus.ACTIVE;
+        }
+        updatedAt = Instant.now();
+        return this;
+    }
+
+    /**
      * Recognizes a skill the student already demonstrated with a certificate validated by a verifier: its node is
      * completed and linked to the certificate, and the nodes it unlocks become available. A completed node is
      * kept as it is. Works on nodes that are not saved yet, and on a paused path (the certificate was validated

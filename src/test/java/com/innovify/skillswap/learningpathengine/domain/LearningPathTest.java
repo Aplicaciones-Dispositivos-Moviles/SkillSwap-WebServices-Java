@@ -142,6 +142,69 @@ class LearningPathTest {
                 .hasMessageContaining("already completed");
     }
 
+    // ---- reopenNode ----
+
+    @Test
+    void reopenNode_makesACompletedNodeAvailableAgainAndKeepsTheNodesThatDependOnIt() {
+        LearningPath path = TestData.newPath();
+        path.completeNode(1).completeNode(2);
+
+        path.reopenNode(1);
+
+        assertThat(statuses(path)).containsExactly(NodeStatus.AVAILABLE, NodeStatus.COMPLETED, NodeStatus.AVAILABLE,
+                NodeStatus.LOCKED, NodeStatus.LOCKED);
+    }
+
+    @Test
+    void reopenNode_onTheLastNodeOfACompletedPath_activatesThePathAgain() {
+        LearningPath path = TestData.newPath();
+        for (int id = 1; id <= 5; id++) {
+            path.completeNode(id);
+        }
+        assertThat(path.getStatus()).isEqualTo(PathStatus.COMPLETED);
+
+        path.reopenNode(5);
+
+        assertThat(path.getStatus()).isEqualTo(PathStatus.ACTIVE);
+        assertThat(path.getNode(5).orElseThrow().getStatus()).isEqualTo(NodeStatus.AVAILABLE);
+    }
+
+    @Test
+    void reopenNode_letsTheStudentCompleteTheNodeAgain() {
+        LearningPath path = TestData.newPath();
+        path.completeNode(1).reopenNode(1);
+
+        path.completeNode(1);
+
+        assertThat(path.getNode(1).orElseThrow().getStatus()).isEqualTo(NodeStatus.COMPLETED);
+    }
+
+    @Test
+    void reopenNode_rejectsANodeThatIsNotCompleted() {
+        LearningPath path = TestData.newPath();
+
+        assertThatThrownBy(() -> path.reopenNode(1)).isInstanceOf(DomainException.class)
+                .hasMessageContaining("not completed");
+        assertThatThrownBy(() -> path.reopenNode(3)).isInstanceOf(DomainException.class)
+                .hasMessageContaining("not completed");
+    }
+
+    @Test
+    void reopenNode_rejectsANodeCompletedWithACertificate() {
+        LearningPath path = TestData.newPath();
+        path.recognizeCertifiedSkill("networking-basics", 50);
+
+        assertThatThrownBy(() -> path.reopenNode(1)).isInstanceOf(DomainException.class)
+                .hasMessageContaining("certificate");
+        assertThat(path.getNode(1).orElseThrow().getStatus()).isEqualTo(NodeStatus.COMPLETED);
+    }
+
+    @Test
+    void reopenNode_rejectsAnUnknownNode() {
+        assertThatThrownBy(() -> TestData.newPath().reopenNode(99)).isInstanceOf(DomainException.class)
+                .hasMessageContaining("does not belong");
+    }
+
     @Test
     void completeNode_rejectsAnUnknownNode() {
         LearningPath path = TestData.newPath();

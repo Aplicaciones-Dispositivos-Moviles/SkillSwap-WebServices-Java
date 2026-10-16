@@ -18,7 +18,8 @@ class LearningPathErrorTest {
         assertThat(Arrays.stream(LearningPathError.values()).map(ErrorCodes::of)).containsExactly(
                 "None", "InvalidGoal", "GoalNotInterpretable", "GoalAlreadyAchieved", "PlanLimitReached",
                 "PathNotFound", "PathNotActive", "PathNotPaused", "PathPaused", "NotPathOwner", "NodeNotFound",
-                "NodeLocked", "NodeAlreadyCompleted", "CertificateNotFound", "NotCertificateOwner",
+                "NodeLocked", "NodeAlreadyCompleted", "NodeNotCompleted", "NodeCompletedByCertificate",
+                "CertificateNotFound", "NotCertificateOwner",
                 "CertificateNotVerified", "CertificateSkillMismatch", "CertificateRequired",
                 "QuestionGenerationFailed", "AdvancedPathUnlockRequired", "OperationCancelled", "DatabaseError",
                 "InternalServerError");

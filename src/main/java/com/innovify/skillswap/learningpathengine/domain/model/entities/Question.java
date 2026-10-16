@@ -15,6 +15,7 @@ public final class Question {
     public static final int ANSWER_COUNT = 4;
     public static final int MAX_QUESTION_LENGTH = 1000;
     public static final int MAX_ANSWER_LENGTH = 500;
+    public static final int MAX_SUB_TOPIC_LENGTH = 100;
 
     private static final Pattern DIACRITICS = Pattern.compile("\\p{Mn}+");
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^a-z0-9]+");
@@ -22,12 +23,21 @@ public final class Question {
     private final String questionString;
     private final List<String> answers;
     private final int correctAnswer;
+    /** Part of the skill the question evaluates. Optional: blueprints created before sub-topics have none. */
+    private final String subTopic;
+
+
+    /** A question without a sub-topic. */
+    public Question(String questionString, List<String> answers, int correctAnswer) {
+        this(questionString, answers, correctAnswer, null);
+    }
 
     /**
      * @param correctAnswer index (0 to 3) of the correct answer
+     * @param subTopic      part of the skill the question evaluates; optional, a blank value is kept as null
      * @throws DomainException when the question does not meet the rules
      */
-    public Question(String questionString, List<String> answers, int correctAnswer) {
+    public Question(String questionString, List<String> answers, int correctAnswer, String subTopic) {
         if (questionString == null || questionString.isBlank()) {
             throw new DomainException("The question text cannot be empty.");
         }
@@ -58,9 +68,16 @@ public final class Question {
                     "The correct answer must be an index between 0 and %d.".formatted(ANSWER_COUNT - 1));
         }
 
+        String cleanedSubTopic = subTopic == null || subTopic.isBlank() ? null : subTopic.strip();
+        if (cleanedSubTopic != null && cleanedSubTopic.length() > MAX_SUB_TOPIC_LENGTH) {
+            throw new DomainException(
+                    "The sub-topic cannot exceed %d characters.".formatted(MAX_SUB_TOPIC_LENGTH));
+        }
+
         this.questionString = text;
         this.answers = cleaned;
         this.correctAnswer = correctAnswer;
+        this.subTopic = cleanedSubTopic;
     }
 
     /**
@@ -93,16 +110,22 @@ public final class Question {
         return correctAnswer;
     }
 
+    /** The sub-topic of the question, or null when it has none. */
+    public String getSubTopic() {
+        return subTopic;
+    }
+
     @Override
     public boolean equals(Object other) {
         return other instanceof Question question
                 && correctAnswer == question.correctAnswer
                 && questionString.equals(question.questionString)
-                && answers.equals(question.answers);
+                && answers.equals(question.answers)
+                && Objects.equals(subTopic, question.subTopic);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(questionString, answers, correctAnswer);
+        return Objects.hash(questionString, answers, correctAnswer, subTopic);
     }
 }

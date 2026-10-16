@@ -26,6 +26,42 @@ class QuestionAndBlueprintTest {
         assertThat(question.getAnswers().get(0)).isEqualTo("OK");
     }
 
+    @Test
+    void question_withoutSubTopic_hasNone() {
+        Question question = new Question("Question?", List.of("a", "b", "c", "d"), 0);
+
+        assertThat(question.getSubTopic()).isNull();
+    }
+
+    @Test
+    void question_trimsTheSubTopic() {
+        Question question = new Question("Question?", List.of("a", "b", "c", "d"), 0, "  Joins  ");
+
+        assertThat(question.getSubTopic()).isEqualTo("Joins");
+    }
+
+    @Test
+    void question_withABlankSubTopic_keepsItAsNull() {
+        Question question = new Question("Question?", List.of("a", "b", "c", "d"), 0, "   ");
+
+        assertThat(question.getSubTopic()).isNull();
+    }
+
+    @Test
+    void question_withASubTopicOverTheLimit_throws() {
+        assertThatThrownBy(() -> new Question("Question?", List.of("a", "b", "c", "d"), 0,
+                "s".repeat(Question.MAX_SUB_TOPIC_LENGTH + 1))).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void question_withDifferentSubTopics_areNotEqual() {
+        Question joins = new Question("Question?", List.of("a", "b", "c", "d"), 0, "Joins");
+        Question indexes = new Question("Question?", List.of("a", "b", "c", "d"), 0, "Indexes");
+
+        assertThat(joins).isNotEqualTo(indexes);
+        assertThat(joins).isEqualTo(new Question("Question?", List.of("a", "b", "c", "d"), 0, "Joins"));
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {3, 5})
     void question_withADifferentNumberOfAnswers_throws(int count) {

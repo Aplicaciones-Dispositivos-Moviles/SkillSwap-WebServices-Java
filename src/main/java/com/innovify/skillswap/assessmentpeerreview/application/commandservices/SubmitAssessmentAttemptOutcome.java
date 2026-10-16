@@ -10,11 +10,17 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Verif
  * @param verificationCase       the case opened when the attempt did not pass; null when it passed, or when the
  *                               monthly escalations of the plan were used up
  * @param escalationLimitReached why a failed attempt opened no case; null otherwise
+ * @param weakSubTopic           the sub-topic to reinforce; null when the wrong answers have none
  */
 public record SubmitAssessmentAttemptOutcome(AssessmentAttempt attempt, VerificationCase verificationCase,
-                                             EscalationLimitReached escalationLimitReached) {
+                                             EscalationLimitReached escalationLimitReached, String weakSubTopic) {
+
+    public SubmitAssessmentAttemptOutcome(AssessmentAttempt attempt, VerificationCase verificationCase,
+                                          EscalationLimitReached escalationLimitReached) {
+        this(attempt, verificationCase, escalationLimitReached, null);
+    }
 
     public SubmitAssessmentAttemptOutcome(AssessmentAttempt attempt, VerificationCase verificationCase) {
-        this(attempt, verificationCase, null);
+        this(attempt, verificationCase, null, null);
     }
 }

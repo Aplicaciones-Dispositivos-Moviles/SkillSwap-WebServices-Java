@@ -92,6 +92,41 @@ class AssessmentAttemptCommandServiceImplTest {
         assertThat(result.message()).isNotBlank();
     }
 
+    // ---------- Sub-topic to reinforce ----------
+
+    @Test
+    void submit_withAFailingAttempt_reportsTheSubTopicWhereTheStudentFailedTheMost() {
+        learningPath.addBlueprintWithSubTopics(List.of("Joins", "Indexes", "Indexes", "Joins", "Indexes"));
+
+        Result<SubmitAssessmentAttemptOutcome> result = submit(FAILING);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().attempt().isPassed()).isFalse();
+        assertThat(result.value().weakSubTopic()).isEqualTo("Indexes");
+    }
+
+    @Test
+    void submit_withAPassingAttemptAndOneError_reportsTheSubTopicOfTheError() {
+        learningPath.addBlueprintWithSubTopics(List.of("Joins", "Indexes", "Indexes", "Joins", "Keys"));
+
+        Result<SubmitAssessmentAttemptOutcome> result = submit(List.of(1, 2, 3, 0, 3));
+
+        assertThat(result.value().attempt().isPassed()).isTrue();
+        assertThat(result.value().weakSubTopic()).isEqualTo("Keys");
+    }
+
+    @Test
+    void submit_withEveryAnswerCorrect_reportsNoSubTopic() {
+        learningPath.addBlueprintWithSubTopics(List.of("Joins", "Indexes", "Indexes", "Joins", "Keys"));
+
+        assertThat(submit(PASSING).value().weakSubTopic()).isNull();
+    }
+
+    @Test
+    void submit_whenTheQuestionsHaveNoSubTopic_reportsNone() {
+        assertThat(submit(FAILING).value().weakSubTopic()).isNull();
+    }
+
     // ---------- Approved attempt ----------
 
     @Test

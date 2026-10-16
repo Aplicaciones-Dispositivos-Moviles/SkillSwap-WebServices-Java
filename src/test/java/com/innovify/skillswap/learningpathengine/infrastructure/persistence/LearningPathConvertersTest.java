@@ -100,6 +100,26 @@ class LearningPathConvertersTest {
     }
 
     @Test
+    void questions_withASubTopic_storeItAndLoadItBack() {
+        List<Question> questions = List.of(new Question("What is a join?", List.of("a", "b", "c", "d"), 1, "Joins"));
+
+        String stored = questionsConverter.convertToDatabaseColumn(questions);
+
+        assertThat(stored).contains("\"subTopic\":\"Joins\"");
+        assertThat(questionsConverter.convertToEntityAttribute(stored)).isEqualTo(questions);
+    }
+
+    @Test
+    void questions_storedBeforeSubTopics_loadWithoutOne() {
+        String legacy = "[{\"question\":\"What is HTTP?\",\"answers\":[\"a\",\"b\",\"c\",\"d\"],\"correctAnswer\":2}]";
+
+        List<Question> loaded = questionsConverter.convertToEntityAttribute(legacy);
+
+        assertThat(loaded).hasSize(1);
+        assertThat(loaded.get(0).getSubTopic()).isNull();
+    }
+
+    @Test
     void questions_keepNullsAsNulls() {
         assertThat(questionsConverter.convertToDatabaseColumn(null)).isNull();
         assertThat(questionsConverter.convertToEntityAttribute(null)).isNull();

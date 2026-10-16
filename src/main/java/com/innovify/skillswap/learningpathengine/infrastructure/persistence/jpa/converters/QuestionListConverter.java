@@ -11,7 +11,8 @@ import java.util.Map;
 
 /**
  * Stores the questions of a blueprint in its jsonb column, as the C# API did:
- * {@code [{"question": "...", "answers": ["..."], "correctAnswer": 0}]}. It is not auto-applied (a list has no
+ * {@code [{"question": "...", "answers": ["..."], "correctAnswer": 0, "subTopic": "..."}]}. The sub-topic
+ * is only written when the question has one, so older blueprints keep their shape. It is not auto-applied (a list has no
  * type of its own to match): {@code AssessmentBlueprint.questions} names it explicitly.
  */
 @Converter
@@ -28,6 +29,9 @@ public class QuestionListConverter implements AttributeConverter<List<Question>,
             item.put("question", question.getQuestionString());
             item.put("answers", question.getAnswers());
             item.put("correctAnswer", question.getCorrectAnswer());
+            if (question.getSubTopic() != null) {
+                item.put("subTopic", question.getSubTopic());
+            }
             items.add(item);
         }
         return Json.write(items);
@@ -43,7 +47,8 @@ public class QuestionListConverter implements AttributeConverter<List<Question>,
             Map<?, ?> item = (Map<?, ?>) entry;
             List<String> answers = ((List<?>) item.get("answers")).stream().map(String::valueOf).toList();
             questions.add(new Question((String) item.get("question"), answers,
-                    ((Number) item.get("correctAnswer")).intValue()));
+                    ((Number) item.get("correctAnswer")).intValue(),
+                    item.get("subTopic") instanceof String subTopic ? subTopic : null));
         }
         return List.copyOf(questions);
     }

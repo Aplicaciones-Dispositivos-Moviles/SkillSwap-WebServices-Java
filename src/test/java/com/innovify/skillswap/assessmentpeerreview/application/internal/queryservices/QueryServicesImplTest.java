@@ -12,6 +12,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Asses
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetAssessmentAttemptByIdQuery;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetAssessmentAttemptDetailQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerificationCaseByIdQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerificationCaseDetailQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerificationCasesByVerifierQuery;
@@ -41,10 +42,44 @@ class QueryServicesImplTest {
     @Test
     void attemptQuery_returnsTheAttemptOrEmpty() {
         AssessmentAttempt attempt = addAttempt(List.of(1, 2, 3, 0, 1));
-        var service = new AssessmentAttemptQueryServiceImpl(attempts);
+        var service = new AssessmentAttemptQueryServiceImpl(attempts, learningPath);
 
         assertThat(service.handle(new GetAssessmentAttemptByIdQuery(attempt.getId()))).containsSame(attempt);
         assertThat(service.handle(new GetAssessmentAttemptByIdQuery(99))).isEmpty();
+    }
+
+    @Test
+    void attemptDetailQuery_returnsTheSubTopicToReinforce() {
+        learningPath.addBlueprintWithSubTopics(List.of("Joins", "Indexes", "Indexes", "Joins", "Indexes"));
+        AssessmentAttempt attempt = addAttempt(List.of(0, 0, 0, 1, 0));
+        var service = new AssessmentAttemptQueryServiceImpl(attempts, learningPath);
+
+        var detail = service.handle(new GetAssessmentAttemptDetailQuery(attempt.getId())).orElseThrow();
+
+        assertThat(detail.attempt()).isSameAs(attempt);
+        assertThat(detail.weakSubTopic()).isEqualTo("Indexes");
+    }
+
+    @Test
+    void attemptDetailQuery_withoutSubTopicsOrBlueprint_hasNoSubTopic() {
+        AssessmentAttempt attempt = addAttempt(List.of(0, 0, 0, 1, 0));
+        var service = new AssessmentAttemptQueryServiceImpl(attempts, learningPath);
+
+        // The blueprint is not known yet.
+        assertThat(service.handle(new GetAssessmentAttemptDetailQuery(attempt.getId())).orElseThrow()
+                .weakSubTopic()).isNull();
+
+        // The blueprint is known, but its questions have no sub-topic.
+        learningPath.addBlueprint();
+        assertThat(service.handle(new GetAssessmentAttemptDetailQuery(attempt.getId())).orElseThrow()
+                .weakSubTopic()).isNull();
+    }
+
+    @Test
+    void attemptDetailQuery_forAnUnknownAttempt_returnsEmpty() {
+        var service = new AssessmentAttemptQueryServiceImpl(attempts, learningPath);
+
+        assertThat(service.handle(new GetAssessmentAttemptDetailQuery(99))).isEmpty();
     }
 
     @Test

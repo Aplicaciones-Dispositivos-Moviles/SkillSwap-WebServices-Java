@@ -17,8 +17,11 @@ import java.time.Instant;
  * @param verificationCaseStatus Pending, Assigned or Resolved; null like the id
  * @param planLimitReached     set when the attempt failed but opened no case because the student used every
  *                             escalation of the month of their plan; null otherwise
+ * @param weakSubTopic         the sub-topic where the student failed the most, to reinforce it; null when the
+ *                             wrong answers have none (also when there are no wrong answers)
  */
 public record AssessmentAttemptResource(int id, int blueprintId, int studentId, int score, int totalQuestions,
                                         boolean passed, Instant completedAt, Integer verificationCaseId,
-                                        String verificationCaseStatus, PlanLimitReachedResource planLimitReached) {
+                                        String verificationCaseStatus, PlanLimitReachedResource planLimitReached,
+                                        String weakSubTopic) {
 }

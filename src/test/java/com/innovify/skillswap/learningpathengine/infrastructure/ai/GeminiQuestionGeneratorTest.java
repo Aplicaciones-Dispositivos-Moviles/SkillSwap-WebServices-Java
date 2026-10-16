@@ -128,6 +128,7 @@ class GeminiQuestionGeneratorTest {
             item.put("question", "Question " + i + "?");
             item.put("answers", List.of("a" + i, "b" + i, "c" + i, "d" + i));
             item.put("correctIndex", i % 4);
+            item.put("subTopic", "Topic " + i);
             items.add(item);
         }
         return Json.write(items);
@@ -233,6 +234,34 @@ class GeminiQuestionGeneratorTest {
         assertThat(questions.get(2).getQuestionString()).isEqualTo("Question 3?");
         assertThat(questions.get(2).getAnswers()).containsExactly("a3", "b3", "c3", "d3");
         assertThat(questions.get(2).getCorrectAnswer()).isEqualTo(3);
+    }
+
+    @Test
+    void generate_returnsTheSubTopicOfEachQuestion() {
+        List<Question> questions = create().generateQuestions("rest-api-design");
+
+        assertThat(questions.get(0).getSubTopic()).isEqualTo("Topic 1");
+        assertThat(questions.get(4).getSubTopic()).isEqualTo("Topic 5");
+    }
+
+    @Test
+    void generate_whenTheSubTopicIsMissingOrTooLong_leavesTheQuestionWithoutIt() {
+        List<Object> items = new ArrayList<>();
+        for (int i = 1; i <= 5; i++) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("question", "Question " + i + "?");
+            item.put("answers", List.of("a" + i, "b" + i, "c" + i, "d" + i));
+            item.put("correctIndex", i % 4);
+            if (i == 2) {
+                item.put("subTopic", "s".repeat(Question.MAX_SUB_TOPIC_LENGTH + 1));
+            }
+            items.add(item);
+        }
+        responder = (call, model) -> Reply.ok(envelope(Json.write(items)));
+
+        List<Question> questions = create().generateQuestions("rest-api-design");
+
+        assertThat(questions).hasSize(5).allSatisfy(question -> assertThat(question.getSubTopic()).isNull());
     }
 
     @Test

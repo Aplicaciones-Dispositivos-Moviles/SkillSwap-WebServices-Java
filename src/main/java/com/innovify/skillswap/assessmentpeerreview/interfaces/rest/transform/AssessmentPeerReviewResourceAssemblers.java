@@ -2,6 +2,7 @@ package com.innovify.skillswap.assessmentpeerreview.interfaces.rest.transform;
 
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.EscalationLimitReached;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
+import com.innovify.skillswap.assessmentpeerreview.application.queryservices.AssessmentAttemptDetail;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
@@ -26,16 +27,23 @@ public final class AssessmentPeerReviewResourceAssemblers {
 
     /** The attempt right after submitting it, with the case it opened or the limit that kept it from opening one. */
     public static AssessmentAttemptResource toResource(SubmitAssessmentAttemptOutcome outcome) {
-        return toResource(outcome.attempt(), outcome.verificationCase(), outcome.escalationLimitReached());
+        return toResource(outcome.attempt(), outcome.verificationCase(), outcome.escalationLimitReached(),
+                outcome.weakSubTopic());
+    }
+
+    /** The attempt read by id, with the sub-topic the student should reinforce. */
+    public static AssessmentAttemptResource toResource(AssessmentAttemptDetail detail) {
+        return toResource(detail.attempt(), null, null, detail.weakSubTopic());
     }
 
     /** The attempt with the case it opened, if any. */
     public static AssessmentAttemptResource toResource(AssessmentAttempt attempt, VerificationCase verificationCase) {
-        return toResource(attempt, verificationCase, null);
+        return toResource(attempt, verificationCase, null, null);
     }
 
     private static AssessmentAttemptResource toResource(AssessmentAttempt attempt, VerificationCase verificationCase,
-                                                        EscalationLimitReached limitReached) {
+                                                        EscalationLimitReached limitReached,
+                                                        String weakSubTopic) {
         return new AssessmentAttemptResource(
                 attempt.getId(),
                 attempt.getBlueprintId(),
@@ -47,7 +55,8 @@ public final class AssessmentPeerReviewResourceAssemblers {
                 verificationCase == null ? null : verificationCase.getId(),
                 verificationCase == null ? null : verificationCase.getStatus().value(),
                 limitReached == null ? null : new PlanLimitReachedResource("MonthlyEscalations", limitReached.plan(),
-                        limitReached.max(), limitReached.current(), limitReached.upgradeAvailable()));
+                        limitReached.max(), limitReached.current(), limitReached.upgradeAvailable()),
+                weakSubTopic);
     }
 
     public static VerificationCaseResource toResource(VerificationCase verificationCase) {

@@ -2,6 +2,8 @@ package com.innovify.skillswap.assessmentpeerreview.interfaces.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
+import com.innovify.skillswap.assessmentpeerreview.application.queryservices.AssessmentAttemptDetail;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.FailedQuestion;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
@@ -58,6 +60,35 @@ class AssessmentPeerReviewResourceAssemblersTest {
         assertThat(resource.passed()).isFalse();
         assertThat(resource.verificationCaseId()).isEqualTo(9);
         assertThat(resource.verificationCaseStatus()).isEqualTo("Pending");
+    }
+
+    @Test
+    void attempt_withoutASubTopic_hasNoneToReinforce() {
+        assertThat(AssessmentPeerReviewResourceAssemblers.toResource(attempt(List.of(0, 0, 0, 0, 0)))
+                .weakSubTopic()).isNull();
+    }
+
+    @Test
+    void attempt_justSubmitted_carriesTheSubTopicToReinforce() {
+        var outcome = new SubmitAssessmentAttemptOutcome(attempt(List.of(0, 0, 0, 0, 0)), verificationCase(), null,
+                "Indexes");
+
+        AssessmentAttemptResource resource = AssessmentPeerReviewResourceAssemblers.toResource(outcome);
+
+        assertThat(resource.weakSubTopic()).isEqualTo("Indexes");
+        assertThat(resource.verificationCaseId()).isEqualTo(9);
+    }
+
+    @Test
+    void attempt_readById_carriesTheSubTopicToReinforce() {
+        var detail = new AssessmentAttemptDetail(attempt(List.of(1, 2, 3, 0, 3)), "Keys");
+
+        AssessmentAttemptResource resource = AssessmentPeerReviewResourceAssemblers.toResource(detail);
+
+        assertThat(resource.id()).isEqualTo(3);
+        assertThat(resource.passed()).isTrue();
+        assertThat(resource.weakSubTopic()).isEqualTo("Keys");
+        assertThat(resource.verificationCaseId()).isNull();
     }
 
     @Test

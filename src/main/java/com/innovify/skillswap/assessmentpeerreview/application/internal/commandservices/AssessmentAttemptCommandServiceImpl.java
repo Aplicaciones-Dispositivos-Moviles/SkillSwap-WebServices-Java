@@ -4,6 +4,7 @@ import com.innovify.skillswap.assessmentpeerreview.application.commandservices.A
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.EscalationLimitReached;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
 import com.innovify.skillswap.assessmentpeerreview.application.internal.CaseAssignmentService;
+import com.innovify.skillswap.assessmentpeerreview.application.internal.WeakSubTopicResolver;
 import com.innovify.skillswap.assessmentpeerreview.application.internal.ReviewDeadlineResolver;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.AssessmentPeerReviewError;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
@@ -111,6 +112,7 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
                     .toList();
             AssessmentAttempt graded = new AssessmentAttempt(blueprint.blueprintId(), command.studentId(),
                     command.selectedAnswers(), correctAnswers);
+            String weakSubTopic = WeakSubTopicResolver.resolve(graded, blueprint.questions());
 
             SubmitAssessmentAttemptOutcome outcome = transactions.execute(status -> {
                 AssessmentAttempt attempt = attemptRepository.save(graded);
@@ -120,7 +122,7 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
                     if (completion != NodeCompletionOutcome.COMPLETED) {
                         throw new NodeCompletionFailedException(completion);
                     }
-                    return new SubmitAssessmentAttemptOutcome(attempt, null);
+                    return new SubmitAssessmentAttemptOutcome(attempt, null, null, weakSubTopic);
                 }
 
                 caseRepository.lockStudentEscalations(command.studentId());
@@ -130,7 +132,7 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
                 if (used >= limits.monthlyEscalations()) {
                     // The attempt stays recorded; the student can try the node again or change their plan.
                     return new SubmitAssessmentAttemptOutcome(attempt, null,
-                            new EscalationLimitReached(limits.plan(), limits.monthlyEscalations(), used));
+                            new EscalationLimitReached(limits.plan(), limits.monthlyEscalations(), used), weakSubTopic);
                 }
 
                 // The attempts are the answers of the quiz of the node: the only work that opens a case today. Its
@@ -138,7 +140,7 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
                 VerificationCase opened = new VerificationCase(attempt.getId(), command.studentId(),
                         blueprint.pathNodeId(), blueprint.skillTag(), CaseType.QUIZ, deadlineResolver.forPlan(limits));
                 caseAssignmentService.tryAssign(opened);
-                return new SubmitAssessmentAttemptOutcome(attempt, caseRepository.save(opened));
+                return new SubmitAssessmentAttemptOutcome(attempt, caseRepository.save(opened), null, weakSubTopic);
             });
 
             if (outcome.attempt().isPassed()) {

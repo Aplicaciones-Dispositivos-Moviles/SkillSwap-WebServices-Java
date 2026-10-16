@@ -4,7 +4,7 @@ import com.innovify.skillswap.assessmentpeerreview.application.commandservices.A
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.AssessmentAttemptQueryService;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.AssessmentPeerReviewError;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.SubmitAssessmentAttemptCommand;
-import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetAssessmentAttemptByIdQuery;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetAssessmentAttemptDetailQuery;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.AssessmentAttemptResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.SubmitAssessmentAttemptResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.transform.AssessmentPeerReviewActionResultAssembler;
@@ -68,17 +68,17 @@ public class AssessmentAttemptsController {
                         .body(AssessmentPeerReviewResourceAssemblers.toResource(outcome)));
     }
 
-    /** An attempt. Only its student can read it. 200, 403 or 404. */
+    /** An attempt, with the sub-topic to reinforce. Only its student can read it. 200, 403 or 404. */
     @GetMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<?> getById(@PathVariable int id, @AuthenticationPrincipal User actor) {
-        var attempt = queryService.handle(new GetAssessmentAttemptByIdQuery(id));
-        if (attempt.isEmpty()) {
+        var detail = queryService.handle(new GetAssessmentAttemptDetailQuery(id));
+        if (detail.isEmpty()) {
             return AssessmentPeerReviewErrorResponses.of(messageSource, AssessmentPeerReviewError.ATTEMPT_NOT_FOUND);
         }
-        if (attempt.get().getStudentId() != actor.getId()) {
+        if (detail.get().attempt().getStudentId() != actor.getId()) {
             return AssessmentPeerReviewErrorResponses.of(messageSource, AssessmentPeerReviewError.NOT_ATTEMPT_OWNER);
         }
-        return ResponseEntity.ok(AssessmentPeerReviewResourceAssemblers.toResource(attempt.get()));
+        return ResponseEntity.ok(AssessmentPeerReviewResourceAssemblers.toResource(detail.get()));
     }
 }

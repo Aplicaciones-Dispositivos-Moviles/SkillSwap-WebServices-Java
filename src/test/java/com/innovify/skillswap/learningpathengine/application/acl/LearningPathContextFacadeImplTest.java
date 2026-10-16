@@ -17,6 +17,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.entities.Question;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultLearningPathBuilder;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultSkillGapAnalyzer;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
@@ -80,6 +81,25 @@ class LearningPathContextFacadeImplTest {
                 .containsExactlyElementsOf(blueprint.getQuestions().stream().map(Question::getCorrectAnswer).toList());
         assertThat(view.questions()).extracting(BlueprintQuestionView::text)
                 .containsExactlyElementsOf(blueprint.getQuestions().stream().map(Question::getQuestionString).toList());
+    }
+
+    @Test
+    void getBlueprint_includesTheSubTopicOfEachQuestion() {
+        LearningPath path = addPath(7);
+        PathNode node = availableNode(path);
+        List<Question> questions = java.util.stream.IntStream.rangeClosed(1, 5)
+                .mapToObj(number -> new Question("Question " + number + "?",
+                        List.of("a" + number, "b" + number, "c" + number, "d" + number), number % 4,
+                        "Topic " + number))
+                .toList();
+        AssessmentBlueprint blueprint = blueprints.save(
+                new AssessmentBlueprint(node.getId(), node.getSkillTag(), questions));
+        path.attachBlueprint(node.getId(), blueprint.getId());
+
+        BlueprintView view = facade.getBlueprint(blueprint.getId()).orElseThrow();
+
+        assertThat(view.questions()).extracting(BlueprintQuestionView::subTopic)
+                .containsExactly("Topic 1", "Topic 2", "Topic 3", "Topic 4", "Topic 5");
     }
 
     @Test

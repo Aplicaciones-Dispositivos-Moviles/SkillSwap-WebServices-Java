@@ -44,13 +44,24 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
         return addBlueprint(1, 10, 1, "http-basics", isLatest, nodeIsAvailable);
     }
 
+    /** The blueprint 1 of {@link #addBlueprint()}, with a sub-topic for each of its questions. */
+    public BlueprintView addBlueprintWithSubTopics(List<String> subTopics) {
+        return addBlueprint(1, 10, 1, "http-basics", true, true, subTopics);
+    }
+
     public BlueprintView addBlueprint(int blueprintId, int pathNodeId, int studentId, String skillTag,
                                       boolean isLatest, boolean nodeIsAvailable) {
+        return addBlueprint(blueprintId, pathNodeId, studentId, skillTag, isLatest, nodeIsAvailable, null);
+    }
+
+    private BlueprintView addBlueprint(int blueprintId, int pathNodeId, int studentId, String skillTag,
+                                       boolean isLatest, boolean nodeIsAvailable, List<String> subTopics) {
         List<BlueprintQuestionView> questions = new ArrayList<>();
         for (int index = 0; index < CORRECT.size(); index++) {
             int number = index + 1;
             questions.add(new BlueprintQuestionView("Question " + number + "?",
-                    List.of("a" + number, "b" + number, "c" + number, "d" + number), CORRECT.get(index)));
+                    List.of("a" + number, "b" + number, "c" + number, "d" + number), CORRECT.get(index),
+                    subTopics == null ? null : subTopics.get(index)));
         }
         BlueprintView view = new BlueprintView(blueprintId, pathNodeId, studentId, skillTag, isLatest,
                 nodeIsAvailable, questions);

@@ -45,7 +45,8 @@ public class LearningPathContextFacadeImpl implements LearningPathContextFacade 
         }
 
         List<BlueprintQuestionView> questions = blueprint.getQuestions().stream()
-                .map(q -> new BlueprintQuestionView(q.getQuestionString(), q.getAnswers(), q.getCorrectAnswer()))
+                .map(q -> new BlueprintQuestionView(q.getQuestionString(), q.getAnswers(), q.getCorrectAnswer(),
+                        q.getSubTopic()))
                 .toList();
 
         return Optional.of(new BlueprintView(

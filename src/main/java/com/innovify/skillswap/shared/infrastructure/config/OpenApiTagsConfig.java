@@ -45,6 +45,8 @@ public class OpenApiTagsConfig {
                 "Assessment & Peer Review. Attach evidence, resolve a case as verifier and appeal a rejection.");
         group("reevaluations-controller", "Reevaluations",
                 "Assessment & Peer Review. A Verificador senior orders the reevaluation of an approved result.");
+        group("mini-project-submissions-controller", "Mini-Project Submissions",
+                "Assessment & Peer Review. The student delivers the repository of a mini-project.");
         group("verifier-profiles-controller", "Verifier Profiles",
                 "Assessment & Peer Review. Become a verifier for a skill and set the availability.");
         group("review-deadline-policies-controller", "Review Deadline Policies",

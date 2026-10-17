@@ -12,20 +12,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
  * {@link EmailSender} on top of the Brevo transactional email API ({@code POST /v3/smtp/email}). It works over
- * HTTPS, so it is not affected by the SMTP ports that Render's free plan blocks. The API key is a header of the
- * client and is never logged.
+ * HTTPS, so it is not affected by the SMTP ports that Render's free plan blocks. Every attempt is logged with its
+ * recipient and its result (INFO when Brevo accepts it, ERROR with the status and the body when it does not). The API
+ * key is a header of the client and is never logged.
  */
 public class BrevoEmailSenderAdapter implements EmailSender {
 
     private static final Logger log = LoggerFactory.getLogger(BrevoEmailSenderAdapter.class);
 
     static final String SEND_PATH = "smtp/email";
+    static final int MAX_LOGGED_BODY = 500;
 
     private final RestClient restClient;
     private final String senderAddress;
@@ -50,18 +53,26 @@ public class BrevoEmailSenderAdapter implements EmailSender {
 
     @Override
     public void send(EmailMessage message) {
+        String to = message.toAddress();
+        log.info("Sending the email '{}' to {} through Brevo.", message.subject(), to);
         try {
-            restClient.post()
+            ResponseEntity<String> response = restClient.post()
                     .uri(SEND_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Json.write(toRequest(message)))
                     .retrieve()
-                    .toBodilessEntity();
-            log.info("Email '{}' sent through Brevo to {}", message.subject(), mask(message.toAddress()));
+                    .toEntity(String.class);
+            log.info("Brevo accepted the email '{}' to {} (HTTP {}): {}", message.subject(), to,
+                    response.getStatusCode().value(), abbreviate(response.getBody()));
         } catch (RestClientResponseException exception) {
+            String body = abbreviate(exception.getResponseBodyAsString());
+            log.error("Brevo rejected the email '{}' to {} (HTTP {}): {}", message.subject(), to,
+                    exception.getStatusCode().value(), body);
             throw new EmailDeliveryException("Brevo rejected the email (HTTP %d): %s".formatted(
-                    exception.getStatusCode().value(), exception.getResponseBodyAsString()), exception);
+                    exception.getStatusCode().value(), body), exception);
         } catch (RestClientException exception) {
+            log.error("Brevo could not be reached to send the email '{}' to {}: {}", message.subject(), to,
+                    exception.getMessage());
             throw new EmailDeliveryException("Brevo could not be reached: " + exception.getMessage(), exception);
         }
     }
@@ -82,12 +93,12 @@ public class BrevoEmailSenderAdapter implements EmailSender {
         return request;
     }
 
-    /** "a***@upc.edu.pe": enough to follow a delivery in the logs without exposing the whole address. */
-    public static String mask(String address) {
-        int at = address.indexOf('@');
-        if (at <= 0) {
-            return "***";
+    /** Brevo answers with short JSON bodies; the cap only protects the log from an unexpected page. */
+    private static String abbreviate(String body) {
+        if (body == null || body.isBlank()) {
+            return "(empty response)";
         }
-        return address.charAt(0) + "***" + address.substring(at);
+        String text = body.strip();
+        return text.length() <= MAX_LOGGED_BODY ? text : text.substring(0, MAX_LOGGED_BODY) + "...";
     }
 }

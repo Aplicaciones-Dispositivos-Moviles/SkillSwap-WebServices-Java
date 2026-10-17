@@ -16,7 +16,7 @@ public class LoggingEmailSenderAdapter implements EmailSender {
 
     @Override
     public void send(EmailMessage message) {
-        log.info("Email NOT sent (BREVO_API_KEY is not set). To: {} | Subject: {}%n{}".formatted(
-                message.toAddress(), message.subject(), message.textContent()));
+        log.info("Email NOT sent (Brevo is not configured). To: {} | Subject: {}\n{}", message.toAddress(),
+                message.subject(), message.textContent());
     }
 }

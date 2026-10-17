@@ -86,6 +86,16 @@ How it works:
 - Migration `V6__email_verification.sql` marks **every account that existed before it as verified**, so the demo
   accounts keep signing in. Accounts created after it must verify their email.
 - Without Brevo (local, tests, demos) the email is written to the log; copy the link from there.
+- What the log of Render shows (search for `Brevo` or `verification`):
+  - At start: `Emails are sent through Brevo from <address>.` or the warning that says which variable is missing
+    (`BREVO_API_KEY` or `EMAIL_SENDER_ADDRESS`), and `The verification link of the emails points to <url>/...`. A warning
+    there means `APP_VERIFICATION_BASE_URL` points to a local address.
+  - On each sign-up: `Sending the email '<subject>' to <address> through Brevo.`, followed by `Brevo accepted the
+    email ... (HTTP 201)` or `Brevo rejected the email ... (HTTP <status>): <body>`. The body says why (an unverified
+    sender, an invalid key...). If Brevo cannot be reached the error says so.
+  - A failed delivery never undoes the sign-up: the log has `The user <id> (<address>) was created but the verification
+    email could not be sent`, and the student gets a new email when signing in or on `resend-verification`.
+  - The API key is never written to the log.
 
 ## Push notifications (Firebase Cloud Messaging)
 

@@ -7,12 +7,16 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 import com.innovify.skillswap.iam.application.internal.outboundservices.EmailDeliveryException;
 import com.innovify.skillswap.iam.application.internal.outboundservices.EmailMessage;
 import com.innovify.skillswap.iam.infrastructure.email.brevo.BrevoEmailSenderAdapter;
+import com.innovify.skillswap.support.CapturedLogs;
+import ch.qos.logback.classic.Level;
+import java.io.IOException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -83,9 +87,62 @@ class BrevoEmailSenderAdapterTest {
         assertThatThrownBy(() -> adapter.send(MESSAGE)).isInstanceOf(EmailDeliveryException.class);
     }
 
+    // ---------- Logs ----------
+
     @Test
-    void mask_hidesMostOfTheAddress() {
-        assertThat(BrevoEmailSenderAdapter.mask("ana@upc.edu.pe")).isEqualTo("a***@upc.edu.pe");
-        assertThat(BrevoEmailSenderAdapter.mask("invalid")).isEqualTo("***");
+    void send_logsTheAttemptAndTheAnswerOfBrevoWithTheRecipient() {
+        server.expect(requestTo(BASE + "smtp/email"))
+                .andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"messageId\":\"<id@smtp-relay.mailin.fr>\"}"));
+
+        try (CapturedLogs logs = CapturedLogs.of(BrevoEmailSenderAdapter.class)) {
+            adapter.send(MESSAGE);
+
+            assertThat(logs.messages(Level.INFO)).hasSize(2);
+            assertThat(logs.messages(Level.INFO).get(0)).contains("ana@upc.edu.pe", "Asunto");
+            assertThat(logs.messages(Level.INFO).get(1)).contains("ana@upc.edu.pe", "HTTP 201", "messageId");
+            assertThat(logs.messages(Level.ERROR)).isEmpty();
+        }
+    }
+
+    @Test
+    void send_whenBrevoRejectsTheEmail_logsAnErrorWithTheStatusAndTheBodyButNeverTheKey() {
+        server.expect(requestTo(BASE + "smtp/email"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"message\":\"Key not found\",\"code\":\"unauthorized\"}"));
+
+        try (CapturedLogs logs = CapturedLogs.of(BrevoEmailSenderAdapter.class)) {
+            assertThatThrownBy(() -> adapter.send(MESSAGE)).isInstanceOf(EmailDeliveryException.class);
+
+            assertThat(logs.messages(Level.ERROR)).singleElement().satisfies(error ->
+                    assertThat(error).contains("ana@upc.edu.pe", "HTTP 401", "Key not found"));
+            assertThat(logs.events()).noneMatch(event -> event.getFormattedMessage().contains(KEY));
+        }
+    }
+
+    @Test
+    void send_whenTheBodyIsVeryLong_logsOnlyItsBeginning() {
+        server.expect(requestTo(BASE + "smtp/email"))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY).body("x".repeat(5_000)));
+
+        try (CapturedLogs logs = CapturedLogs.of(BrevoEmailSenderAdapter.class)) {
+            assertThatThrownBy(() -> adapter.send(MESSAGE)).isInstanceOf(EmailDeliveryException.class);
+
+            assertThat(logs.messages(Level.ERROR).get(0)).hasSizeLessThan(700).endsWith("...");
+        }
+    }
+
+    @Test
+    void send_whenBrevoCannotBeReached_logsAnErrorAndThrowsEmailDeliveryException() {
+        server.expect(requestTo(BASE + "smtp/email")).andRespond(withException(new IOException("connection reset")));
+
+        try (CapturedLogs logs = CapturedLogs.of(BrevoEmailSenderAdapter.class)) {
+            assertThatThrownBy(() -> adapter.send(MESSAGE))
+                    .isInstanceOf(EmailDeliveryException.class)
+                    .hasMessageContaining("could not be reached");
+
+            assertThat(logs.messages(Level.ERROR)).singleElement().satisfies(error ->
+                    assertThat(error).contains("ana@upc.edu.pe", "could not be reached"));
+        }
     }
 }

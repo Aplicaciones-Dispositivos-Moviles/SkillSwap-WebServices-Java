@@ -82,7 +82,22 @@ public class IamConfig {
     @Bean
     public DomainEventHandler<EmailVerificationRequested> sendVerificationEmailEventHandler(
             EmailSender emailSender, EmailVerificationSettings settings) {
+        logVerificationLink(settings);
         return new SendVerificationEmailEventHandler(emailSender, new VerificationEmailComposer(settings.baseUrl()));
+    }
+
+    /**
+     * Writes where the link of the verification email points to, so a wrong APP_VERIFICATION_BASE_URL (for example the
+     * address of a local machine) is seen in the log of the first start instead of by a student.
+     */
+    static void logVerificationLink(EmailVerificationSettings settings) {
+        String baseUrl = settings.baseUrl();
+        log.info("The verification link of the emails points to {}/api/v1/authentication/verify-email", baseUrl);
+        String lower = baseUrl.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("localhost") || lower.contains("127.0.0.1") || lower.contains("0.0.0.0")) {
+            log.warn("APP_VERIFICATION_BASE_URL points to this machine ({}): the students cannot open that link. "
+                    + "Set it to the public URL of the backend.", baseUrl);
+        }
     }
 
     /**

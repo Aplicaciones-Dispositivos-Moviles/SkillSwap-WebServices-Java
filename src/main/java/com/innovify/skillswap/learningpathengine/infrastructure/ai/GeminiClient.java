@@ -23,7 +23,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Sends a prompt to the Gemini REST API and returns the text of the answer, asking for JSON. It is the single
  * entry point to Gemini of the Learning Path Engine, shared by the question generator and the goal interpreter,
- * so both use the same key, model chain, retries and timeouts ({@link GeminiSettings}).
+ * so both use the same key, model chain, retries and timeouts ({@link GeminiSettings}). The preliminary evaluation
+ * of the mini-projects (Assessment &amp; Peer Review) reuses the same bean from its own infrastructure.
  *
  * <p>Availability problems (429, 5xx, no answer in time, a connection that fails, a retired model) are retried
  * and then handed over to the next model of the configured chain, as {@link GeminiUnavailableException}.
@@ -58,12 +59,28 @@ public class GeminiClient {
      * @return the text of the answer, without the reasoning parts
      */
     public String generateJson(String prompt, Duration budget) {
+        return generate(prompt, budget, false);
+    }
+
+    /**
+     * Like {@link #generateJson(String, Duration)}, but the model may open the links written in the prompt with the
+     * URL context tool of Gemini (the preliminary evaluation of a mini-project reads the repository of the student
+     * this way). Not every model accepts the JSON output mode together with a tool, so it is not requested: the
+     * prompt itself must ask for the JSON, and {@link #parseAnswer} accepts it inside a Markdown code fence.
+     *
+     * @return the text of the answer, without the reasoning parts
+     */
+    public String generateJsonReadingUrls(String prompt, Duration budget) {
+        return generate(prompt, budget, true);
+    }
+
+    private String generate(String prompt, Duration budget, boolean readUrls) {
         Duration total = Duration.ofSeconds(settings.totalTimeoutSeconds());
         if (budget != null && budget.compareTo(total) < 0 && !budget.isNegative() && !budget.isZero()) {
             total = budget;
         }
         long deadline = System.nanoTime() + total.toNanos();
-        return requestFromAnyModel(prompt, deadline);
+        return requestFromAnyModel(prompt, deadline, readUrls);
     }
 
     /**
@@ -76,11 +93,11 @@ public class GeminiClient {
         return parseJson(cleaned, errorMessage);
     }
 
-    private String requestFromAnyModel(String prompt, long deadline) {
+    private String requestFromAnyModel(String prompt, long deadline, boolean readUrls) {
         List<String> models = settings.modelChain();
         for (int index = 0; index < models.size(); index++) {
             try {
-                return requestFromModel(models.get(index), prompt, deadline);
+                return requestFromModel(models.get(index), prompt, deadline, readUrls);
             } catch (GeminiUnavailableException exception) {
                 if (index == models.size() - 1) {
                     throw exception;
@@ -96,29 +113,36 @@ public class GeminiClient {
      * Asks one model. The reasoning-effort parameter is best effort: a model that rejects it is asked again
      * without it.
      */
-    private String requestFromModel(String model, String prompt, long deadline) {
+    private String requestFromModel(String model, String prompt, long deadline, boolean readUrls) {
         boolean withThinking = settings.thinkingLevel() != null;
         try {
-            return requestWithRetries(model, buildRequestBody(prompt, withThinking), deadline);
+            return requestWithRetries(model, buildRequestBody(prompt, withThinking, readUrls), deadline);
         } catch (ThinkingNotSupportedException exception) {
             if (!withThinking) {
                 throw exception;
             }
             log.warn("Gemini model {} does not accept thinkingLevel; asking again without it", model);
-            return requestWithRetries(model, buildRequestBody(prompt, false), deadline);
+            return requestWithRetries(model, buildRequestBody(prompt, false, readUrls), deadline);
         }
     }
 
-    private String buildRequestBody(String prompt, boolean withThinking) {
+    private String buildRequestBody(String prompt, boolean withThinking, boolean readUrls) {
         Map<String, Object> generationConfig = new LinkedHashMap<>();
-        generationConfig.put("responseMimeType", "application/json");
+        if (!readUrls) {
+            generationConfig.put("responseMimeType", "application/json");
+        }
         if (withThinking) {
             generationConfig.put("thinkingConfig", Map.of("thinkingLevel", settings.thinkingLevel()));
         }
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))));
-        body.put("generationConfig", generationConfig);
+        if (readUrls) {
+            body.put("tools", List.of(Map.of("url_context", Map.of())));
+        }
+        if (!generationConfig.isEmpty()) {
+            body.put("generationConfig", generationConfig);
+        }
         return Json.write(body);
     }
 

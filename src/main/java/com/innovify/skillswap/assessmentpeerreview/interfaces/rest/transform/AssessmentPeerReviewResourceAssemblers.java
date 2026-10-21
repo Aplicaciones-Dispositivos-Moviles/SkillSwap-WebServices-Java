@@ -3,6 +3,7 @@ package com.innovify.skillswap.assessmentpeerreview.interfaces.rest.transform;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.EscalationLimitReached;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.AssessmentAttemptDetail;
+import com.innovify.skillswap.assessmentpeerreview.application.queryservices.MiniProjectSubmissionDetail;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.MiniProjectSubmission;
@@ -27,6 +28,11 @@ public final class AssessmentPeerReviewResourceAssemblers {
     /** The delivery right after submitting it: its preliminary evaluation is still Pending. */
     public static MiniProjectSubmissionResource toResource(MiniProjectSubmission submission) {
         return toResource(submission, null);
+    }
+
+    /** The delivery read by id, with its preliminary evaluation and its case. */
+    public static MiniProjectSubmissionResource toResource(MiniProjectSubmissionDetail detail) {
+        return toResource(detail.submission(), detail.verificationCase());
     }
 
     /** The delivery with its preliminary evaluation and the case it opened, if any. */

@@ -514,6 +514,86 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
         assertThat(status(submit(null, 1, REPOSITORY))).isEqualTo(401);
     }
 
+    // ---------- Reading the delivery and its evaluation ----------
+
+    private MvcResult getDelivery(String token, int miniProjectId, int submissionId) throws Exception {
+        return call(get("/api/v1/mini-projects/" + miniProjectId + "/submissions/" + submissionId), token, null);
+    }
+
+    @Test
+    void getDelivery_sentToAVerifier_showsTheEvaluationAndTheCase() throws Exception {
+        int miniProjectId = generateMiniProject(false);
+        String location = submit(anaToken, miniProjectId, REPOSITORY).getResponse().getHeader("Location");
+
+        MvcResult result = call(get(location), anaToken, null);
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat((int) read(result, "$.id")).isEqualTo(delivery(miniProjectId).getId());
+        assertThat((String) read(result, "$.evaluationStatus")).isEqualTo("Escalated");
+        assertThat((int) read(result, "$.preliminaryScore")).isEqualTo(55);
+        assertThat((int) read(result, "$.preliminaryConfidence")).isEqualTo(80);
+        assertThat((String) read(result, "$.preliminaryFeedback"))
+                .isEqualTo(FakeMiniProjectEvaluationService.NOT_ENOUGH.feedback());
+        assertThat((String) read(result, "$.evaluatedAt")).isNotBlank();
+        assertThat((int) read(result, "$.verificationCaseId")).isEqualTo(caseOf(miniProjectId));
+        assertThat((String) read(result, "$.verificationCaseStatus")).isEqualTo("Pending");
+    }
+
+    @Test
+    void getDelivery_approvedByTheAi_hasNoCase() throws Exception {
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
+        int miniProjectId = generateMiniProject(false);
+        int submissionId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.id");
+
+        MvcResult result = getDelivery(anaToken, miniProjectId, submissionId);
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat((String) read(result, "$.evaluationStatus")).isEqualTo("Approved");
+        assertThat((int) read(result, "$.preliminaryScore")).isEqualTo(85);
+        assertThat((Object) read(result, "$.verificationCaseId")).isNull();
+    }
+
+    @Test
+    void getDelivery_withoutEscalationsLeft_reportsIt() throws Exception {
+        useTheEscalationsOfTheMonth();
+        int miniProjectId = generateMiniProject(false);
+        int submissionId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.id");
+
+        MvcResult result = getDelivery(anaToken, miniProjectId, submissionId);
+
+        assertThat((String) read(result, "$.evaluationStatus")).isEqualTo("EscalationLimitReached");
+        assertThat((Object) read(result, "$.verificationCaseId")).isNull();
+    }
+
+    @Test
+    void getDelivery_ofAnotherStudent_returns403() throws Exception {
+        int miniProjectId = generateMiniProject(false);
+        int submissionId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.id");
+
+        MvcResult result = getDelivery(bobToken, miniProjectId, submissionId);
+
+        assertThat(status(result)).isEqualTo(403);
+        assertThat(title(result)).isEqualTo("NotSubmissionOwner");
+    }
+
+    @Test
+    void getDelivery_unknownOrOfAnotherMiniProject_returns404() throws Exception {
+        int miniProjectId = generateMiniProject(false);
+        int submissionId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.id");
+
+        MvcResult unknown = getDelivery(anaToken, miniProjectId, 9999);
+        MvcResult otherMiniProject = getDelivery(anaToken, miniProjectId + 1, submissionId);
+
+        assertThat(status(unknown)).isEqualTo(404);
+        assertThat(title(unknown)).isEqualTo("MiniProjectSubmissionNotFound");
+        assertThat(status(otherMiniProject)).isEqualTo(404);
+    }
+
+    @Test
+    void getDelivery_withoutToken_returns401() throws Exception {
+        assertThat(status(getDelivery(null, 1, 1))).isEqualTo(401);
+    }
+
     @Test
     void getMiniProject_isStillTheOneThatWasDelivered() throws Exception {
         int miniProjectId = generateMiniProject(false);

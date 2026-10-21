@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -123,7 +124,9 @@ public class MiniProject {
         this.statement = statement.strip();
         this.rubric = criteria;
         this.passingScore = PASSING_SCORE;
-        this.createdAt = Instant.now();
+        // PostgreSQL keeps microseconds and rounds the rest: truncated here, the deadline read back is the same one on
+        // every OS (the clock of Windows has 100 ns steps).
+        this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         this.dueAt = createdAt.plus(DELIVERY_PERIOD);
     }
 

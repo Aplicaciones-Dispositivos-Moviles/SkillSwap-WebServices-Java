@@ -9,6 +9,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.entities.RubricCri
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,8 @@ class MiniProjectTest {
 
     @Test
     void constructor_keepsTheCleanedDataAndAFixedFiveDayDeadline() {
-        Instant before = Instant.now();
+        // The moment is stored with microseconds, so it is compared with the same precision.
+        Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         MiniProject miniProject = miniProject();
 
@@ -42,6 +44,14 @@ class MiniProjectTest {
         assertThat(miniProject.getPassingScore()).isEqualTo(70);
         assertThat(miniProject.getCreatedAt()).isBetween(before, Instant.now());
         assertThat(Duration.between(miniProject.getCreatedAt(), miniProject.getDueAt())).isEqualTo(Duration.ofDays(5));
+    }
+
+    @Test
+    void constructor_keepsTheMomentsWithTheMicrosecondsPostgresStores() {
+        MiniProject miniProject = miniProject();
+
+        assertThat(miniProject.getCreatedAt()).isEqualTo(miniProject.getCreatedAt().truncatedTo(ChronoUnit.MICROS));
+        assertThat(miniProject.getDueAt()).isEqualTo(miniProject.getDueAt().truncatedTo(ChronoUnit.MICROS));
     }
 
     @Test

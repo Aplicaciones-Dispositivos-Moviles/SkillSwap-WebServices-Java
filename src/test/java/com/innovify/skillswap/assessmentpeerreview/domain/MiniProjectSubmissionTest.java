@@ -8,6 +8,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Eva
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.PreliminaryEvaluation;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -20,7 +21,8 @@ class MiniProjectSubmissionTest {
 
     @Test
     void create_keepsTheDataAndStampsTheMoment() {
-        Instant before = Instant.now();
+        // The moment is stored with microseconds, so it is compared with the same precision.
+        Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         MiniProjectSubmission submission = create("https://github.com/ana/http-basics");
 
@@ -98,7 +100,7 @@ class MiniProjectSubmissionTest {
 
     @Test
     void approve_withASufficientEvaluation_keepsItAndStampsTheMoment() {
-        Instant before = Instant.now();
+        Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         MiniProjectSubmission submission = delivered().approve(new PreliminaryEvaluation(85, 90, "Well tested."), 70);
 
@@ -147,6 +149,14 @@ class MiniProjectSubmissionTest {
         assertThat(submission.getEvaluationStatus()).isEqualTo(EvaluationStatus.ESCALATION_LIMIT_REACHED);
         assertThat(submission.getPreliminaryScore()).isEqualTo(40);
         assertThat(submission.getPreliminaryFeedback()).isNull();
+    }
+
+    @Test
+    void theMomentsAreKeptWithTheMicrosecondsPostgresStores() {
+        MiniProjectSubmission submission = delivered().escalate(null);
+
+        assertThat(submission.getSubmittedAt()).isEqualTo(submission.getSubmittedAt().truncatedTo(ChronoUnit.MICROS));
+        assertThat(submission.getEvaluatedAt()).isEqualTo(submission.getEvaluatedAt().truncatedTo(ChronoUnit.MICROS));
     }
 
     @Test

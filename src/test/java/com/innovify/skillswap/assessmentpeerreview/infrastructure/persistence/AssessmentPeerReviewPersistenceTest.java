@@ -442,10 +442,14 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
 
     @Test
     void submission_roundTripsTheMiniProjectTheStudentAndTheRepository() {
-        submissions.save(new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/repo"));
+        MiniProjectSubmission original = new MiniProjectSubmission(3, 7, 10, "http-basics",
+                "https://github.com/ana/repo");
+        submissions.save(original);
 
         MiniProjectSubmission loaded = submissions.findByMiniProjectId(3).orElseThrow();
 
+        // Exactly the same moment on every OS: the domain keeps the microseconds PostgreSQL stores.
+        assertThat(loaded.getSubmittedAt()).isEqualTo(original.getSubmittedAt());
         assertThat(loaded.getId()).isNotNull();
         assertThat(loaded.getMiniProjectId()).isEqualTo(3);
         assertThat(loaded.getStudentId()).isEqualTo(7);
@@ -487,9 +491,9 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         int id = submissions.save(new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/repo"))
                 .getId();
 
-        transactions.executeWithoutResult(status -> {
+        MiniProjectSubmission approved = transactions.execute(status -> {
             MiniProjectSubmission locked = submissions.findByIdForUpdate(id).orElseThrow();
-            submissions.save(locked.approve(new PreliminaryEvaluation(85, 90, "Solid tests and README."), 70));
+            return submissions.save(locked.approve(new PreliminaryEvaluation(85, 90, "Solid tests and README."), 70));
         });
         MiniProjectSubmission loaded = submissions.findById(id).orElseThrow();
 
@@ -497,7 +501,7 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         assertThat(loaded.getPreliminaryScore()).isEqualTo(85);
         assertThat(loaded.getPreliminaryConfidence()).isEqualTo(90);
         assertThat(loaded.getPreliminaryFeedback()).isEqualTo("Solid tests and README.");
-        assertThat(loaded.getEvaluatedAt()).isNotNull();
+        assertThat(loaded.getEvaluatedAt()).isEqualTo(approved.getEvaluatedAt());
         assertThat(queryString("SELECT evaluation_status FROM mini_project_submissions WHERE id = " + id))
                 .isEqualTo("Approved");
     }

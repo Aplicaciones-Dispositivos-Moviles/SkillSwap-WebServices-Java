@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 
 /**
@@ -114,7 +115,7 @@ public class MiniProjectSubmission {
         this.pathNodeId = pathNodeId;
         this.skillTag = skill;
         this.repositoryUrl = url;
-        this.submittedAt = Instant.now();
+        this.submittedAt = now();
         this.evaluationStatus = EvaluationStatus.PENDING;
     }
 
@@ -174,7 +175,15 @@ public class MiniProjectSubmission {
         this.preliminaryScore = evaluation == null ? null : evaluation.score();
         this.preliminaryConfidence = evaluation == null ? null : evaluation.confidence();
         this.preliminaryFeedback = evaluation == null || evaluation.feedback().isEmpty() ? null : evaluation.feedback();
-        this.evaluatedAt = Instant.now();
+        this.evaluatedAt = now();
+    }
+
+    /**
+     * PostgreSQL keeps microseconds and rounds the rest: truncated here, the moments read back are the same ones on
+     * every OS (the clock of Windows has 100 ns steps).
+     */
+    private static Instant now() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     private static boolean isHttpUrl(String url) {

@@ -58,10 +58,20 @@ class VerificationCaseTest {
                 .isInstanceOf(DomainException.class);
     }
 
-    @ParameterizedTest
-    @EnumSource(CaseType.class)
-    void constructor_keepsTheTypeOfTheCase(CaseType caseType) {
-        assertThat(new VerificationCase(10, STUDENT_ID, 5, "http-basics", caseType).getCaseType()).isEqualTo(caseType);
+    @Test
+    void constructor_withAnAttempt_opensAQuizCaseWithoutSubmission() {
+        VerificationCase verificationCase = newCase();
+
+        assertThat(verificationCase.getCaseType()).isEqualTo(CaseType.QUIZ);
+        assertThat(verificationCase.getAttemptId()).isEqualTo(10);
+        assertThat(verificationCase.getSubmissionId()).isNull();
+        assertThat(verificationCase.getEvidenceUrl()).isNull();
+    }
+
+    @Test
+    void constructor_withAnAttemptAndAMiniProjectType_throwsDomainException() {
+        assertThatThrownBy(() -> new VerificationCase(10, STUDENT_ID, 5, "http-basics", CaseType.MINI_PROJECT))
+                .isInstanceOf(DomainException.class).hasMessageContaining("quiz");
     }
 
     @Test
@@ -435,5 +445,87 @@ class VerificationCaseTest {
                 .resolve(ReviewDecision.APPROVED, "Meets the rubric.");
 
         assertThat(verificationCase.overturnedVerifierUserId()).isNull();
+    }
+
+    // ---------- Mini-project cases ----------
+
+    private static final String REPOSITORY = "https://github.com/ana/http-basics";
+
+    private static VerificationCase miniProjectCase() {
+        return VerificationCase.forMiniProject(3, STUDENT_ID, 5, " http-basics ", REPOSITORY, null);
+    }
+
+    @Test
+    void forMiniProject_opensAPendingCaseOfTheDeliveryWithTheRepositoryAsEvidence() {
+        Instant before = Instant.now();
+
+        VerificationCase verificationCase = miniProjectCase();
+
+        assertThat(verificationCase.getCaseType()).isEqualTo(CaseType.MINI_PROJECT);
+        assertThat(verificationCase.getSubmissionId()).isEqualTo(3);
+        assertThat(verificationCase.getAttemptId()).isNull();
+        assertThat(verificationCase.getStudentId()).isEqualTo(STUDENT_ID);
+        assertThat(verificationCase.getPathNodeId()).isEqualTo(5);
+        assertThat(verificationCase.getSkillTag()).isEqualTo("http-basics");
+        assertThat(verificationCase.getEvidenceUrl()).isEqualTo(REPOSITORY);
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.getVerifierUserId()).isNull();
+        assertThat(verificationCase.getOpenedAt()).isBetween(before, Instant.now());
+    }
+
+    @Test
+    void forMiniProject_withTheDeadlineOfThePlan_dueFromTheOpening() {
+        VerificationCase verificationCase = VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics",
+                REPOSITORY, ReviewDeadline.hours(48));
+
+        assertThat(verificationCase.getReviewDeadline()).isEqualTo(ReviewDeadline.hours(48));
+        assertThat(verificationCase.getReviewDueAt())
+                .isEqualTo(verificationCase.getOpenedAt().plus(Duration.ofHours(48)));
+    }
+
+    @Test
+    void forMiniProject_stripsTheLink() {
+        assertThat(VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics", "  " + REPOSITORY + " ", null)
+                .getEvidenceUrl()).isEqualTo(REPOSITORY);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0,1,1,skill", "1,0,1,skill", "1,1,0,skill", "1,1,1,' '"})
+    void forMiniProject_withInvalidData_throwsDomainException(int submissionId, int studentId, int pathNodeId,
+                                                              String skillTag) {
+        assertThatThrownBy(() -> VerificationCase.forMiniProject(submissionId, studentId, pathNodeId, skillTag,
+                REPOSITORY, null)).isInstanceOf(DomainException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "not a url", "ftp://files.example.com/work", "javascript:alert(1)", "https://"})
+    void forMiniProject_withAnInvalidLink_throwsDomainException(String url) {
+        assertThatThrownBy(() -> VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics", url, null))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void forMiniProject_withoutALinkOrWithATooLongOne_throwsDomainException() {
+        String tooLong = "https://example.com/" + "a".repeat(VerificationCase.MAX_EVIDENCE_URL_LENGTH);
+
+        assertThatThrownBy(() -> VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics", null, null))
+                .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics", tooLong, null))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void miniProjectCase_followsTheSameLifecycleAsAQuizCase() {
+        VerificationCase verificationCase = miniProjectCase().assignVerifier(VERIFIER_ID)
+                .resolve(ReviewDecision.REJECTED, "The README is missing.");
+
+        assertThat(verificationCase.canBeAppealed()).isTrue();
+
+        verificationCase.appeal();
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.getAppealCount()).isEqualTo(1);
+        assertThat(verificationCase.getSubmissionId()).isEqualTo(3);
+        assertThat(verificationCase.getEvidenceUrl()).isEqualTo(REPOSITORY);
     }
 }

@@ -4,7 +4,10 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Asses
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import java.util.List;
 
-/** A verification case with the attempt that opened it and the questions that were failed. */
+/**
+ * A verification case with the attempt that opened it and the questions that were failed. A case opened by a
+ * mini-project delivery has no attempt (null) and no failed questions.
+ */
 public record VerificationCaseDetail(VerificationCase verificationCase, AssessmentAttempt attempt,
                                      List<FailedQuestion> failedQuestions) {
 }

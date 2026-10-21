@@ -44,6 +44,11 @@ public class VerificationCaseQueryServiceImpl implements VerificationCaseQuerySe
             return Optional.empty();
         }
 
+        // A case opened by a mini-project delivery has no attempt and no questions to show.
+        if (verificationCase.get().getAttemptId() == null) {
+            return Optional.of(new VerificationCaseDetail(verificationCase.get(), null, List.of()));
+        }
+
         Optional<AssessmentAttempt> attempt = attemptRepository.findById(verificationCase.get().getAttemptId());
         if (attempt.isEmpty()) {
             return Optional.empty();

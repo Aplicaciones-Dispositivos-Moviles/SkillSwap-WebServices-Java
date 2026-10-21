@@ -7,7 +7,8 @@ import java.time.Instant;
  * A verification case. The verifier who rejected it before an appeal is deliberately not part of it.
  *
  * @param id             the case
- * @param attemptId      the attempt that opened it
+ * @param attemptId      the attempt that opened it; null when a mini-project delivery opened it
+ * @param submissionId   the mini-project delivery that opened it; null when an attempt opened it
  * @param studentId      the student under review
  * @param verifierUserId the assigned verifier; null while it is pending
  * @param pathNodeId     the node the student wants to demonstrate
@@ -24,7 +25,7 @@ import java.time.Instant;
  * @param assignedAt     when it was assigned (UTC)
  * @param resolvedAt     when it was resolved (UTC)
  */
-public record VerificationCaseResource(int id, int attemptId, int studentId, Integer verifierUserId,
+public record VerificationCaseResource(int id, Integer attemptId, Integer submissionId, int studentId, Integer verifierUserId,
                                        int pathNodeId, String skillTag,
                                        @Schema(allowableValues = {"Quiz", "MiniProject"}) String caseType,
                                        String status, String decision, String rubricNotes, String evidenceUrl,

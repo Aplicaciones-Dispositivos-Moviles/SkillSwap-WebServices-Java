@@ -14,6 +14,9 @@ public interface LearningPathContextFacade {
     /** The mini-project with the data needed to receive its delivery, or empty when it does not exist. */
     Optional<MiniProjectView> getMiniProject(int miniProjectId);
 
+    /** The statement and the rubric a delivery of the mini-project is evaluated with, or empty when it does not exist. */
+    Optional<MiniProjectRubricView> getMiniProjectRubric(int miniProjectId);
+
     /** Completes the node, unlocking the ones that depended on it. A persistence failure is reported as FAILED. */
     NodeCompletionOutcome completeNode(int pathNodeId);
 

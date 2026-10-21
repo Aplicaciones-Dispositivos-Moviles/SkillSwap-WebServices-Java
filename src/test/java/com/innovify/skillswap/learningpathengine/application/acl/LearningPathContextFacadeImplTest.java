@@ -306,4 +306,29 @@ class LearningPathContextFacadeImplTest {
 
         assertThat(facade.getMiniProject(1)).isEmpty();
     }
+
+    // ---------- getMiniProjectRubric ----------
+
+    @Test
+    void getMiniProjectRubric_returnsTheStatementTheRubricAndThePassingScore() {
+        MiniProject miniProject = addMiniProject(availableNode(addPath(7)));
+
+        MiniProjectRubricView view = facade.getMiniProjectRubric(miniProject.getId()).orElseThrow();
+
+        assertThat(view.miniProjectId()).isEqualTo(miniProject.getId());
+        assertThat(view.skillTag()).isEqualTo(miniProject.getSkillTag());
+        assertThat(view.title()).isEqualTo("Build a REST API");
+        assertThat(view.statement()).isEqualTo("Build a small REST API that manages tasks.");
+        assertThat(view.passingScore()).isEqualTo(MiniProject.PASSING_SCORE);
+        assertThat(view.rubric()).extracting(RubricCriterionView::name)
+                .containsExactlyElementsOf(miniProject.getRubric().stream().map(c -> c.getName()).toList());
+        assertThat(view.rubric()).extracting(RubricCriterionView::weight)
+                .containsExactlyElementsOf(miniProject.getRubric().stream().map(c -> c.getWeight()).toList());
+        assertThat(view.rubric()).allSatisfy(criterion -> assertThat(criterion.description()).isNotBlank());
+    }
+
+    @Test
+    void getMiniProjectRubric_forAnUnknownMiniProject_returnsEmpty() {
+        assertThat(facade.getMiniProjectRubric(999)).isEmpty();
+    }
 }

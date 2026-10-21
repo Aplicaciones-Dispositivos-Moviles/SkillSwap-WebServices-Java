@@ -228,7 +228,8 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
     @Test
     void case_storesTheTypeAsQuizOrMiniProject() throws Exception {
         int quiz = addCase(1, 1, 10).getId();
-        int miniProject = cases.save(new VerificationCase(2, 1, 11, "http-basics", CaseType.MINI_PROJECT)).getId();
+        int miniProject = cases.save(VerificationCase.forMiniProject(2, 1, 11, "http-basics",
+                "https://github.com/ana/http-basics", null)).getId();
 
         assertThat(queryString("SELECT case_type FROM verification_cases WHERE id = " + quiz)).isEqualTo("Quiz");
         assertThat(queryString("SELECT case_type FROM verification_cases WHERE id = " + miniProject))
@@ -457,5 +458,48 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         assertThatThrownBy(() -> submissions.save(
                 new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/other")))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    // ---------- Origin of a case: attempt or delivery ----------
+
+    @Test
+    void miniProjectCase_roundTripsTheSubmissionTheRepositoryAndHasNoAttempt() throws Exception {
+        int id = cases.save(VerificationCase.forMiniProject(8, 1, 11, "http-basics",
+                "https://github.com/ana/http-basics", ReviewDeadline.hours(48))).getId();
+
+        VerificationCase loaded = loadCase(id);
+
+        assertThat(loaded.getSubmissionId()).isEqualTo(8);
+        assertThat(loaded.getAttemptId()).isNull();
+        assertThat(loaded.getCaseType()).isEqualTo(CaseType.MINI_PROJECT);
+        assertThat(loaded.getEvidenceUrl()).isEqualTo("https://github.com/ana/http-basics");
+        assertThat(loaded.getReviewDeadline()).isEqualTo(ReviewDeadline.hours(48));
+        assertThat(queryString("SELECT attempt_id FROM verification_cases WHERE id = " + id)).isNull();
+        assertThat(cases.findOpenByStudentAndNode(1, 11)).isPresent();
+    }
+
+    @Test
+    void quizCase_hasNoSubmission() {
+        VerificationCase loaded = loadCase(addCase(1, 1, 10).getId());
+
+        assertThat(loaded.getAttemptId()).isEqualTo(1);
+        assertThat(loaded.getSubmissionId()).isNull();
+    }
+
+    @Test
+    void twoCasesOfTheSameSubmission_areRejectedByTheDatabase() {
+        cases.save(VerificationCase.forMiniProject(8, 1, 11, "http-basics", "https://github.com/ana/one", null));
+
+        assertThatThrownBy(() -> cases.save(VerificationCase.forMiniProject(8, 2, 13, "http-basics",
+                "https://github.com/bob/one", null))).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void case_withBothOriginsOrNone_isRejectedByTheDatabase() {
+        String insert = "INSERT INTO verification_cases (attempt_id, submission_id, student_id, path_node_id, "
+                + "skill_tag, case_type, status, opened_at) VALUES (%s, 'http-basics', 'Quiz', 'Pending', now())";
+
+        assertThatThrownBy(() -> execute(insert.formatted("1, 1, 1, 10"))).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> execute(insert.formatted("NULL, NULL, 1, 10"))).isInstanceOf(SQLException.class);
     }
 }

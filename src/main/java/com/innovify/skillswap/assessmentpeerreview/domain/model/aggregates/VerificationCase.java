@@ -17,8 +17,9 @@ import java.time.Instant;
 import java.util.Locale;
 
 /**
- * Opened when an attempt is not approved, with the type of the work under review (a quiz or a mini-project). It
- * is assigned to an enabled verifier, who resolves it with a decision and the notes of the rubric. A student can
+ * Opened when a quiz attempt is not approved, or when a mini-project is delivered, with the type of the work under
+ * review. A quiz case belongs to the attempt that opened it and a mini-project case to the delivery, never to both
+ * (the mini-project case also carries the link to the repository as its evidence). It is assigned to an enabled verifier, who resolves it with a decision and the notes of the rubric. A student can
  * add evidence while it is open. A rejected case can be appealed once: it reopens and goes to a different
  * verifier, whose decision is final.
  *
@@ -40,8 +41,13 @@ public class VerificationCase {
     @Column(name = "id")
     private Integer id;
 
-    @Column(name = "attempt_id", nullable = false)
-    private int attemptId;
+    /** The attempt that opened a quiz case; null for a mini-project case. Exactly one of the two origins is set. */
+    @Column(name = "attempt_id")
+    private Integer attemptId;
+
+    /** The delivery that opened a mini-project case; null for a quiz case. */
+    @Column(name = "submission_id")
+    private Integer submissionId;
 
     @Column(name = "student_id", nullable = false)
     private int studentId;
@@ -118,24 +124,61 @@ public class VerificationCase {
     }
 
     /**
-     * Opens a case without a review deadline, as the cases opened before the plans set one.
+     * Opens a quiz case without a review deadline, as the cases opened before the plans set one.
      *
-     * @throws DomainException when an id is not valid, the skill is empty or the type is missing
+     * @throws DomainException when an id is not valid, the skill is empty or the type is not a quiz
      */
     public VerificationCase(int attemptId, int studentId, int pathNodeId, String skillTag, CaseType caseType) {
         this(attemptId, studentId, pathNodeId, skillTag, caseType, null);
     }
 
     /**
-     * Opens a case whose review is due by the deadline of the current plan of the student.
+     * Opens a quiz case, opened by a failed attempt, whose review is due by the deadline of the current plan of the
+     * student.
      *
      * @param reviewDeadline the deadline of the plan, or null for none
-     * @throws DomainException when an id is not valid, the skill is empty or the type is missing
+     * @throws DomainException when an id is not valid, the skill is empty or the type is missing or is not a quiz
      */
     public VerificationCase(int attemptId, int studentId, int pathNodeId, String skillTag, CaseType caseType,
                             ReviewDeadline reviewDeadline) {
-        if (attemptId <= 0) {
-            throw new DomainException("The case must belong to a valid attempt.");
+        this(attemptId, null, studentId, pathNodeId, skillTag, caseType, null, reviewDeadline);
+    }
+
+    /**
+     * Opens the case of a delivered mini-project. The link to the repository is the evidence, so the verifier sees
+     * it from the start.
+     *
+     * @param submissionId   the delivery that opened the case
+     * @param repositoryUrl  the link to the repository (an http or https URL)
+     * @param reviewDeadline the deadline of the current plan of the student, or null for none
+     * @throws DomainException when an id is not valid, the skill is empty or the link is not a valid http(s) URL
+     */
+    public static VerificationCase forMiniProject(int submissionId, int studentId, int pathNodeId, String skillTag,
+                                                  String repositoryUrl, ReviewDeadline reviewDeadline) {
+        return new VerificationCase(null, submissionId, studentId, pathNodeId, skillTag, CaseType.MINI_PROJECT,
+                validEvidenceUrl(repositoryUrl), reviewDeadline);
+    }
+
+    private VerificationCase(Integer attemptId, Integer submissionId, int studentId, int pathNodeId, String skillTag,
+                             CaseType caseType, String evidenceUrl, ReviewDeadline reviewDeadline) {
+        if (caseType == null) {
+            throw new DomainException("The case type is required.");
+        }
+        if (attemptId != null) {
+            if (attemptId <= 0) {
+                throw new DomainException("The case must belong to a valid attempt.");
+            }
+            if (caseType != CaseType.QUIZ) {
+                throw new DomainException("A case opened by an attempt must be a quiz.");
+            }
+        }
+        if (submissionId != null) {
+            if (submissionId <= 0) {
+                throw new DomainException("The case must belong to a valid delivery.");
+            }
+            if (caseType != CaseType.MINI_PROJECT) {
+                throw new DomainException("A case opened by a delivery must be a mini-project.");
+            }
         }
         if (studentId <= 0) {
             throw new DomainException("The case must belong to a valid student.");
@@ -146,15 +189,14 @@ public class VerificationCase {
         if (skillTag == null || skillTag.isBlank()) {
             throw new DomainException("The skill tag cannot be empty.");
         }
-        if (caseType == null) {
-            throw new DomainException("The case type is required.");
-        }
 
         this.attemptId = attemptId;
+        this.submissionId = submissionId;
         this.studentId = studentId;
         this.pathNodeId = pathNodeId;
         this.skillTag = skillTag.strip();
         this.caseType = caseType;
+        this.evidenceUrl = evidenceUrl;
         this.status = CaseStatus.PENDING;
         this.openedAt = Instant.now();
         this.reviewDueAt = reviewDeadline == null ? null : reviewDeadline.dueFrom(openedAt);
@@ -168,8 +210,14 @@ public class VerificationCase {
         return id;
     }
 
-    public int getAttemptId() {
+    /** The attempt that opened a quiz case; null for a mini-project case. */
+    public Integer getAttemptId() {
         return attemptId;
+    }
+
+    /** The delivery that opened a mini-project case; null for a quiz case. */
+    public Integer getSubmissionId() {
+        return submissionId;
     }
 
     public int getStudentId() {
@@ -379,6 +427,12 @@ public class VerificationCase {
             throw new DomainException("A resolved case does not accept evidence.");
         }
 
+        this.evidenceUrl = validEvidenceUrl(evidenceUrl);
+        return this;
+    }
+
+    /** The link without spaces, when it is a valid http(s) URL of at most 500 characters. */
+    private static String validEvidenceUrl(String evidenceUrl) {
         String url = evidenceUrl == null ? "" : evidenceUrl.strip();
         if (url.isEmpty()) {
             throw new DomainException("The evidence link cannot be empty.");
@@ -389,9 +443,7 @@ public class VerificationCase {
         if (!isHttpUrl(url)) {
             throw new DomainException("The evidence link must be a valid http or https URL.");
         }
-
-        this.evidenceUrl = url;
-        return this;
+        return url;
     }
 
     /**

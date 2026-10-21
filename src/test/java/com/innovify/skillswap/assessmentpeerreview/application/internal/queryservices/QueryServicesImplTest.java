@@ -18,6 +18,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerificationCasesByVerifierQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetVerifierProfileByUserIdQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -158,6 +159,20 @@ class QueryServicesImplTest {
                 caseService().handle(new GetVerificationCaseDetailQuery(verificationCase.getId()));
 
         assertThat(detail).isPresent();
+        assertThat(detail.get().failedQuestions()).isEmpty();
+    }
+
+    @Test
+    void caseQuery_detail_ofAMiniProjectCase_hasNoAttemptAndNoFailedQuestions() {
+        VerificationCase verificationCase = cases.save(VerificationCase.forMiniProject(7, 1, 10, "http-basics",
+                "https://github.com/ana/http-basics", ReviewDeadline.businessDays(5)));
+
+        Optional<VerificationCaseDetail> detail =
+                caseService().handle(new GetVerificationCaseDetailQuery(verificationCase.getId()));
+
+        assertThat(detail).isPresent();
+        assertThat(detail.get().verificationCase()).isSameAs(verificationCase);
+        assertThat(detail.get().attempt()).isNull();
         assertThat(detail.get().failedQuestions()).isEmpty();
     }
 

@@ -47,8 +47,9 @@ public class MiniProjectSubmissionsController {
         var command = new SubmitMiniProjectCommand(miniProjectId, actor.getId(),
                 resource == null ? null : resource.repositoryUrl());
         var result = commandService.handle(command);
-        return AssessmentPeerReviewActionResultAssembler.toResponse(result, submission -> ResponseEntity
-                .created(URI.create("/api/v1/mini-projects/" + miniProjectId + "/submissions/" + submission.getId()))
-                .body(AssessmentPeerReviewResourceAssemblers.toResource(submission)));
+        return AssessmentPeerReviewActionResultAssembler.toResponse(result, outcome -> ResponseEntity
+                .created(URI.create("/api/v1/mini-projects/" + miniProjectId + "/submissions/"
+                        + outcome.submission().getId()))
+                .body(AssessmentPeerReviewResourceAssemblers.toResource(outcome.submission())));
     }
 }

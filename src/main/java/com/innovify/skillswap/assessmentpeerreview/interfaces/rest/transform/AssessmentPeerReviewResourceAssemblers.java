@@ -2,6 +2,7 @@ package com.innovify.skillswap.assessmentpeerreview.interfaces.rest.transform;
 
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.EscalationLimitReached;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
+import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitMiniProjectOutcome;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.AssessmentAttemptDetail;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
@@ -25,9 +26,28 @@ public final class AssessmentPeerReviewResourceAssemblers {
     }
 
     public static MiniProjectSubmissionResource toResource(MiniProjectSubmission submission) {
+        return toResource(submission, null, null);
+    }
+
+    /** The delivery right after submitting it, with the case it opened or the limit that kept it from opening one. */
+    public static MiniProjectSubmissionResource toResource(SubmitMiniProjectOutcome outcome) {
+        return toResource(outcome.submission(), outcome.verificationCase(), outcome.escalationLimitReached());
+    }
+
+    private static MiniProjectSubmissionResource toResource(MiniProjectSubmission submission,
+                                                            VerificationCase verificationCase,
+                                                            EscalationLimitReached limitReached) {
         return new MiniProjectSubmissionResource(submission.getId(), submission.getMiniProjectId(),
                 submission.getPathNodeId(), submission.getSkillTag(), submission.getRepositoryUrl(),
-                submission.getSubmittedAt());
+                submission.getSubmittedAt(),
+                verificationCase == null ? null : verificationCase.getId(),
+                verificationCase == null ? null : verificationCase.getStatus().value(),
+                toResource(limitReached));
+    }
+
+    private static PlanLimitReachedResource toResource(EscalationLimitReached limitReached) {
+        return limitReached == null ? null : new PlanLimitReachedResource("MonthlyEscalations", limitReached.plan(),
+                limitReached.max(), limitReached.current(), limitReached.upgradeAvailable());
     }
 
     public static ReevaluationResource toResource(Reevaluation reevaluation) {
@@ -70,8 +90,7 @@ public final class AssessmentPeerReviewResourceAssemblers {
                 attempt.getCompletedAt(),
                 verificationCase == null ? null : verificationCase.getId(),
                 verificationCase == null ? null : verificationCase.getStatus().value(),
-                limitReached == null ? null : new PlanLimitReachedResource("MonthlyEscalations", limitReached.plan(),
-                        limitReached.max(), limitReached.current(), limitReached.upgradeAvailable()),
+                toResource(limitReached),
                 weakSubTopic);
     }
 
@@ -79,6 +98,7 @@ public final class AssessmentPeerReviewResourceAssemblers {
         return new VerificationCaseResource(
                 verificationCase.getId(),
                 verificationCase.getAttemptId(),
+                verificationCase.getSubmissionId(),
                 verificationCase.getStudentId(),
                 verificationCase.getVerifierUserId(),
                 verificationCase.getPathNodeId(),
@@ -98,7 +118,7 @@ public final class AssessmentPeerReviewResourceAssemblers {
     public static VerificationCaseDetailResource toResource(VerificationCaseDetail detail) {
         return new VerificationCaseDetailResource(
                 toResource(detail.verificationCase()),
-                toResource(detail.attempt(), detail.verificationCase()),
+                detail.attempt() == null ? null : toResource(detail.attempt(), detail.verificationCase()),
                 detail.failedQuestions().stream()
                         .map(question -> new FailedQuestionResource(question.position(), question.text(),
                                 question.answers(), question.selectedAnswer()))

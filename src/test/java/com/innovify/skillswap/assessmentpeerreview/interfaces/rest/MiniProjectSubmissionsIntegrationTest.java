@@ -3,12 +3,14 @@ package com.innovify.skillswap.assessmentpeerreview.interfaces.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.MiniProjectSubmissionRepository;
 import com.innovify.skillswap.iam.TestData;
 import com.innovify.skillswap.iam.application.internal.outboundservices.TokenGenerator;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
+import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
 import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
 import com.innovify.skillswap.iam.domain.repositories.UserRepository;
 import com.innovify.skillswap.learningpathengine.application.acl.BlueprintView;
@@ -19,6 +21,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.aggregates.MiniPro
 import com.innovify.skillswap.learningpathengine.domain.repositories.MiniProjectRepository;
 import com.innovify.skillswap.learningpathengine.domain.services.MiniProjectGenerationService;
 import com.innovify.skillswap.learningpathengine.domain.services.QuestionGenerationService;
+import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
 import com.innovify.skillswap.support.PostgresIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.nio.charset.StandardCharsets;
@@ -70,9 +73,16 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private MiniProjectSubmissionRepository submissions;
 
+    @Autowired
+    private DomainEventPublisher publisher;
+
     private MockMvc mockMvc;
     private String anaToken;
     private String bobToken;
+    private String carlaToken;
+    private User ana;
+    private User bob;
+    private User carla;
     private int nodeId;
 
     @BeforeEach
@@ -84,10 +94,13 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
         questions.returnQuestionCount(5);
         questions.requests().clear();
 
-        User ana = userRepository.save(TestData.newUser("ana", "ana@upc.edu.pe", UserRole.STUDENT));
-        User bob = userRepository.save(TestData.newUser("bob", "bob@upc.edu.pe", UserRole.STUDENT));
+        ana = userRepository.save(TestData.newUser("ana", "ana@upc.edu.pe", UserRole.STUDENT));
+        bob = userRepository.save(TestData.newUser("bob", "bob@upc.edu.pe", UserRole.STUDENT));
+        carla = userRepository.save(TestData.newUser("carla", "carla@upc.edu.pe", UserRole.STUDENT));
+        publisher.publish(new UserRegistered(bob.getId(), UserRole.STUDENT));
         anaToken = tokenGenerator.generateToken(ana);
         bobToken = tokenGenerator.generateToken(bob);
+        carlaToken = tokenGenerator.generateToken(carla);
 
         MvcResult path = call(post("/api/v1/learning-paths"), anaToken, "{\"goal\":\"" + GOAL + "\"}");
         assertThat(status(path)).as(body(path)).isEqualTo(201);
@@ -148,6 +161,48 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
         assertThat(status(attempt)).as(body(attempt)).isEqualTo(201);
     }
 
+    /** The student completes the skill on a path of their own and becomes a verifier of it. */
+    private void enroll(User student, String token) throws Exception {
+        MvcResult path = call(post("/api/v1/learning-paths"), token, "{\"goal\":\"" + GOAL + "\"}");
+        assertThat(status(path)).as(body(path)).isEqualTo(201);
+        List<Integer> nodeIds = read(path, "$.nodes[?(@.skillTag=='" + SKILL + "')].id");
+        MvcResult blueprint = call(post("/api/v1/path-nodes/" + nodeIds.get(0) + "/assessment-blueprint"), token, null);
+        assertThat(status(blueprint)).isEqualTo(201);
+        BlueprintView view = learningPath.getBlueprint(read(blueprint, "$.id")).orElseThrow();
+        String answers = view.questions().stream().map(q -> String.valueOf(q.correctAnswer()))
+                .collect(Collectors.joining(",", "[", "]"));
+        MvcResult attempt = call(post("/api/v1/assessment-attempts"), token,
+                "{\"blueprintId\":" + view.blueprintId() + ",\"selectedAnswers\":" + answers + "}");
+        assertThat(status(attempt)).as(body(attempt)).isEqualTo(201);
+        MvcResult profile = call(post("/api/v1/verifier-profiles"), token, "{\"skillTag\":\"" + SKILL + "\"}");
+        assertThat(status(profile)).as(body(profile)).isEqualTo(201);
+    }
+
+    private MvcResult getCase(String token, int caseId) throws Exception {
+        return call(get("/api/v1/verification-cases/" + caseId), token, null);
+    }
+
+    private MvcResult decide(String token, int caseId, String decision) throws Exception {
+        return call(patch("/api/v1/verification-cases/" + caseId + "/decision"), token,
+                "{\"decision\":\"" + decision + "\",\"rubricNotes\":\"Reviewed the repository.\"}");
+    }
+
+    private MvcResult appeal(String token, int caseId) throws Exception {
+        return call(post("/api/v1/verification-cases/" + caseId + "/appeal"), token, null);
+    }
+
+    private String nodeStatus() throws Exception {
+        MvcResult path = call(get("/api/v1/learning-paths/" + ana.getId()), anaToken, null);
+        List<String> statuses = read(path, "$.nodes[?(@.id==" + nodeId + ")].status");
+        return statuses.get(0);
+    }
+
+    private int balance(String token, User owner) throws Exception {
+        MvcResult wallet = call(get("/api/v1/wallets/" + owner.getId()), token, null);
+        assertThat(status(wallet)).as(body(wallet)).isEqualTo(200);
+        return read(wallet, "$.balance");
+    }
+
     // ---------- Tests ----------
 
     @Test
@@ -163,6 +218,109 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
         assertThat((String) read(result, "$.repositoryUrl")).isEqualTo(REPOSITORY);
         assertThat((String) read(result, "$.submittedAt")).isNotBlank();
         assertThat(submissions.findByMiniProjectId(miniProjectId)).isPresent();
+    }
+
+    // ---------- The verification case of the delivery ----------
+
+    @Test
+    void submit_opensAPendingCaseWhenThereIsNoVerifier() throws Exception {
+        int miniProjectId = generateMiniProject(false);
+
+        MvcResult result = submit(anaToken, miniProjectId, REPOSITORY);
+
+        assertThat(status(result)).as(body(result)).isEqualTo(201);
+        assertThat((String) read(result, "$.verificationCaseStatus")).isEqualTo("Pending");
+        assertThat((Object) read(result, "$.planLimitReached")).isNull();
+        int caseId = read(result, "$.verificationCaseId");
+
+        MvcResult detail = getCase(anaToken, caseId);
+        assertThat(status(detail)).as(body(detail)).isEqualTo(200);
+        assertThat((String) read(detail, "$.verificationCase.caseType")).isEqualTo("MiniProject");
+        assertThat((Object) read(detail, "$.verificationCase.attemptId")).isNull();
+        assertThat((int) read(detail, "$.verificationCase.submissionId"))
+                .isEqualTo(submissions.findByMiniProjectId(miniProjectId).orElseThrow().getId());
+        assertThat((String) read(detail, "$.verificationCase.evidenceUrl")).isEqualTo(REPOSITORY);
+        assertThat((Object) read(detail, "$.verificationCase.reviewDueAt")).isNotNull();
+        assertThat((Object) read(detail, "$.attempt")).isNull();
+        assertThat((List<Object>) read(detail, "$.failedQuestions")).isEmpty();
+    }
+
+    @Test
+    void submit_assignsTheCaseWhenAVerifierIsEnrolled() throws Exception {
+        enroll(bob, bobToken);
+        int miniProjectId = generateMiniProject(false);
+
+        MvcResult result = submit(anaToken, miniProjectId, REPOSITORY);
+
+        assertThat((String) read(result, "$.verificationCaseStatus")).isEqualTo("Assigned");
+        int caseId = read(result, "$.verificationCaseId");
+        MvcResult asVerifier = getCase(bobToken, caseId);
+        assertThat(status(asVerifier)).isEqualTo(200);
+        assertThat((int) read(asVerifier, "$.verificationCase.verifierUserId")).isEqualTo(bob.getId());
+        assertThat(status(getCase(carlaToken, caseId))).isEqualTo(403);
+    }
+
+    @Test
+    void submit_afterTheEscalationsOfTheMonth_savesTheDeliveryAndReportsTheLimit() throws Exception {
+        int anaId = ana.getId();
+        for (int i = 0; i < 3; i++) {
+            execute("INSERT INTO verification_cases (attempt_id, student_id, path_node_id, skill_tag, case_type, "
+                    + "status, opened_at, appeal_count) VALUES (" + (9000 + i) + ", " + anaId + ", " + (9000 + i)
+                    + ", 'sql-fundamentals', 'Quiz', 'Pending', now(), 0)");
+        }
+        int miniProjectId = generateMiniProject(false);
+
+        MvcResult result = submit(anaToken, miniProjectId, REPOSITORY);
+
+        assertThat(status(result)).as(body(result)).isEqualTo(201);
+        assertThat((Object) read(result, "$.verificationCaseId")).isNull();
+        assertThat((Object) read(result, "$.verificationCaseStatus")).isNull();
+        assertThat((String) read(result, "$.planLimitReached.limit")).isEqualTo("MonthlyEscalations");
+        assertThat((String) read(result, "$.planLimitReached.plan")).isEqualTo("Free");
+        assertThat((Integer) read(result, "$.planLimitReached.max")).isEqualTo(3);
+        assertThat((Integer) read(result, "$.planLimitReached.current")).isEqualTo(3);
+        assertThat((Boolean) read(result, "$.planLimitReached.upgradeAvailable")).isTrue();
+        assertThat(submissions.findByMiniProjectId(miniProjectId)).isPresent();
+        assertThat(queryString("SELECT count(*) FROM verification_cases")).isEqualTo("3");
+    }
+
+    @Test
+    void approvedByTheVerifier_completesTheNodeAndPaysTheVerifier40SkillCredits() throws Exception {
+        enroll(bob, bobToken);
+        int miniProjectId = generateMiniProject(false);
+        int caseId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.verificationCaseId");
+        assertThat(nodeStatus()).isNotEqualTo("Completed");
+
+        MvcResult resolved = decide(bobToken, caseId, "Approved");
+
+        assertThat(status(resolved)).as(body(resolved)).isEqualTo(200);
+        assertThat((String) read(resolved, "$.status")).isEqualTo("Resolved");
+        assertThat((String) read(resolved, "$.decision")).isEqualTo("Approved");
+        assertThat(nodeStatus()).isEqualTo("Completed");
+        assertThat(balance(bobToken, bob)).isEqualTo(40);
+    }
+
+    @Test
+    void rejectedByTheVerifier_theStudentAppealsOnce() throws Exception {
+        enroll(bob, bobToken);
+        enroll(carla, carlaToken);
+        int miniProjectId = generateMiniProject(false);
+        int caseId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.verificationCaseId");
+        assertThat(status(decide(bobToken, caseId, "Rejected"))).isEqualTo(200);
+        assertThat(nodeStatus()).isNotEqualTo("Completed");
+
+        MvcResult appealed = appeal(anaToken, caseId);
+
+        assertThat(status(appealed)).as(body(appealed)).isEqualTo(200);
+        assertThat((String) read(appealed, "$.status")).isEqualTo("Assigned");
+        assertThat((int) read(appealed, "$.verifierUserId")).isEqualTo(carla.getId());
+        assertThat((int) read(appealed, "$.appealCount")).isEqualTo(1);
+        assertThat(status(decide(carlaToken, caseId, "Rejected"))).isEqualTo(200);
+
+        MvcResult again = appeal(anaToken, caseId);
+        assertThat(status(again)).isEqualTo(409);
+        assertThat(title(again)).isEqualTo("AppealAlreadyUsed");
+        assertThat(nodeStatus()).isNotEqualTo("Completed");
     }
 
     @Test

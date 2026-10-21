@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * What the student and the assigned verifier read about a case: the case, the attempt and the questions that
- * were failed.
+ * were failed. A case opened by a mini-project delivery has no attempt (null) and no failed questions.
  */
 public record VerificationCaseDetailResource(VerificationCaseResource verificationCase,
                                              AssessmentAttemptResource attempt,

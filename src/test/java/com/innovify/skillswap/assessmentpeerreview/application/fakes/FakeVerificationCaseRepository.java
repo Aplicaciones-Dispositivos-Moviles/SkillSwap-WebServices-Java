@@ -84,6 +84,12 @@ public class FakeVerificationCaseRepository implements VerificationCaseRepositor
     }
 
     @Override
+    public Optional<VerificationCase> findBySubmissionId(int submissionId) {
+        return cases.stream().filter(c -> c.getSubmissionId() != null && c.getSubmissionId() == submissionId)
+                .findFirst();
+    }
+
+    @Override
     public Optional<VerificationCase> findOpenByStudentAndNode(int studentId, int pathNodeId) {
         return cases.stream()
                 .filter(c -> c.getStudentId() == studentId && c.getPathNodeId() == pathNodeId && c.isOpen())

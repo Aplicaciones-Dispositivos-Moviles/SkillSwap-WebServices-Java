@@ -26,6 +26,11 @@ public class MiniProjectSubmissionRepositoryAdapter implements MiniProjectSubmis
     }
 
     @Override
+    public Optional<MiniProjectSubmission> findByIdForUpdate(int id) {
+        return jpaRepository.findForUpdateById(id);
+    }
+
+    @Override
     public Optional<MiniProjectSubmission> findByMiniProjectId(int miniProjectId) {
         return jpaRepository.findByMiniProjectId(miniProjectId);
     }

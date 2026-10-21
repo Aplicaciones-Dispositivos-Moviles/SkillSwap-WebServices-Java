@@ -52,6 +52,11 @@ public class VerificationCaseRepositoryAdapter implements VerificationCaseReposi
     }
 
     @Override
+    public Optional<VerificationCase> findBySubmissionId(int submissionId) {
+        return jpaRepository.findBySubmissionId(submissionId);
+    }
+
+    @Override
     public Optional<VerificationCase> findOpenByStudentAndNode(int studentId, int pathNodeId) {
         return jpaRepository.findFirstByStudentIdAndPathNodeIdAndStatusNot(studentId, pathNodeId,
                 CaseStatus.RESOLVED);

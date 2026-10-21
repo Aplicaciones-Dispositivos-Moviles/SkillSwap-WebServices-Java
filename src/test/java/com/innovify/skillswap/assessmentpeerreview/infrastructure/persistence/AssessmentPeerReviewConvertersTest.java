@@ -5,10 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.EvaluationStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Score;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.CaseStatusConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.CaseTypeConverter;
+import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.EvaluationStatusConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.IntegerListConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.ReviewDecisionConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.ScoreConverter;
@@ -26,6 +28,7 @@ class AssessmentPeerReviewConvertersTest {
     private final CaseStatusConverter statuses = new CaseStatusConverter();
     private final CaseTypeConverter types = new CaseTypeConverter();
     private final ReviewDecisionConverter decisions = new ReviewDecisionConverter();
+    private final EvaluationStatusConverter evaluationStatuses = new EvaluationStatusConverter();
 
     @Test
     void integerList_isStoredAsAJsonArray() {
@@ -124,5 +127,24 @@ class AssessmentPeerReviewConvertersTest {
         assertThat(types.convertToEntityAttribute(null)).isNull();
         assertThat(decisions.convertToDatabaseColumn(null)).isNull();
         assertThat(decisions.convertToEntityAttribute(null)).isNull();
+        assertThat(evaluationStatuses.convertToDatabaseColumn(null)).isNull();
+        assertThat(evaluationStatuses.convertToEntityAttribute(null)).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(EvaluationStatus.class)
+    void evaluationStatus_roundTripsAsThePascalCaseText(EvaluationStatus status) {
+        String text = evaluationStatuses.convertToDatabaseColumn(status);
+
+        assertThat(text).isEqualTo(status.value());
+        assertThat(evaluationStatuses.convertToEntityAttribute(text)).isEqualTo(status);
+    }
+
+    @Test
+    void evaluationStatus_isStoredWithTheValuesOfTheMigration() {
+        assertThat(EvaluationStatus.values()).extracting(EvaluationStatus::value)
+                .containsExactly("Pending", "Approved", "Escalated", "EscalationLimitReached");
+        assertThatThrownBy(() -> evaluationStatuses.convertToEntityAttribute("Graded"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

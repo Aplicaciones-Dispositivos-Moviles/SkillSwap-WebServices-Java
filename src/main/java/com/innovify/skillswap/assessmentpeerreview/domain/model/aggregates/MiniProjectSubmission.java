@@ -1,5 +1,7 @@
 package com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates;
 
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.EvaluationStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.PreliminaryEvaluation;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,8 +17,12 @@ import java.util.Locale;
 /**
  * The delivery of a mini-project: the link to the repository of the student. A mini-project is delivered once. The
  * rules that depend on other contexts (the owner, the deadline, the node) are checked by the application layer; here
- * only the delivery itself is valid or not. The AI preliminary evaluation and the case that follow are not part of
- * this context's delivery: they react to the {@code MiniProjectSubmitted} event.
+ * only the delivery itself is valid or not.
+ *
+ * <p>The delivery is received as {@link EvaluationStatus#PENDING}. The preliminary evaluation of the AI reacts to the
+ * {@code MiniProjectSubmitted} event and settles it once (US19): approved, escalated to a verifier, or left without
+ * review because the plan had no escalations left. The score, confidence and feedback of the AI are kept with it;
+ * they are empty when the AI could not evaluate it.
  */
 @Entity
 @Table(name = "mini_project_submissions")
@@ -47,6 +53,25 @@ public class MiniProjectSubmission {
 
     @Column(name = "submitted_at", nullable = false)
     private Instant submittedAt;
+
+    /** Stored as "Pending", "Approved", "Escalated" or "EscalationLimitReached". */
+    @Column(name = "evaluation_status", nullable = false, length = 30)
+    private EvaluationStatus evaluationStatus;
+
+    /** The score the AI gave (0 to 100); null while pending or when the AI could not evaluate it. */
+    @Column(name = "preliminary_score")
+    private Integer preliminaryScore;
+
+    /** How sure the AI was of the score (0 to 100); null while pending or when the AI could not evaluate it. */
+    @Column(name = "preliminary_confidence")
+    private Integer preliminaryConfidence;
+
+    @Column(name = "preliminary_feedback", length = 1000)
+    private String preliminaryFeedback;
+
+    /** When the preliminary evaluation settled the delivery; null while it is pending. */
+    @Column(name = "evaluated_at")
+    private Instant evaluatedAt;
 
     /** Required by JPA. */
     protected MiniProjectSubmission() {
@@ -90,6 +115,66 @@ public class MiniProjectSubmission {
         this.skillTag = skill;
         this.repositoryUrl = url;
         this.submittedAt = Instant.now();
+        this.evaluationStatus = EvaluationStatus.PENDING;
+    }
+
+    /** Whether the preliminary evaluation has not settled the delivery yet. */
+    public boolean isAwaitingEvaluation() {
+        return evaluationStatus == EvaluationStatus.PENDING;
+    }
+
+    /**
+     * The AI approved the delivery (US19 escenario 2): its score reaches the minimum of the rubric with enough
+     * confidence, so no verifier reviews it.
+     *
+     * @throws DomainException when the delivery was already settled or the evaluation is not sufficient
+     */
+    public MiniProjectSubmission approve(PreliminaryEvaluation evaluation, int passingScore) {
+        requireAwaitingEvaluation();
+        if (evaluation == null || !evaluation.isSufficientFor(passingScore)) {
+            throw new DomainException("Only a sufficient preliminary evaluation approves a delivery.");
+        }
+        settle(EvaluationStatus.APPROVED, evaluation);
+        return this;
+    }
+
+    /**
+     * The delivery goes to a verifier (US19 escenario 3): the evaluation did not reach the minimum, its confidence was
+     * low, or the AI could not evaluate it (null).
+     *
+     * @throws DomainException when the delivery was already settled
+     */
+    public MiniProjectSubmission escalate(PreliminaryEvaluation evaluation) {
+        requireAwaitingEvaluation();
+        settle(EvaluationStatus.ESCALATED, evaluation);
+        return this;
+    }
+
+    /**
+     * The delivery needed a verifier but the plan of the student had no escalations left this month, so no case is
+     * opened for it.
+     *
+     * @param evaluation the evaluation of the AI, or null when it could not evaluate it
+     * @throws DomainException when the delivery was already settled
+     */
+    public MiniProjectSubmission keepWithoutReview(PreliminaryEvaluation evaluation) {
+        requireAwaitingEvaluation();
+        settle(EvaluationStatus.ESCALATION_LIMIT_REACHED, evaluation);
+        return this;
+    }
+
+    private void requireAwaitingEvaluation() {
+        if (!isAwaitingEvaluation()) {
+            throw new DomainException("The preliminary evaluation of the delivery was already recorded.");
+        }
+    }
+
+    private void settle(EvaluationStatus status, PreliminaryEvaluation evaluation) {
+        this.evaluationStatus = status;
+        this.preliminaryScore = evaluation == null ? null : evaluation.score();
+        this.preliminaryConfidence = evaluation == null ? null : evaluation.confidence();
+        this.preliminaryFeedback = evaluation == null || evaluation.feedback().isEmpty() ? null : evaluation.feedback();
+        this.evaluatedAt = Instant.now();
     }
 
     private static boolean isHttpUrl(String url) {
@@ -128,5 +213,29 @@ public class MiniProjectSubmission {
 
     public Instant getSubmittedAt() {
         return submittedAt;
+    }
+
+    public EvaluationStatus getEvaluationStatus() {
+        return evaluationStatus;
+    }
+
+    /** The score the AI gave (0 to 100); null while pending or when the AI could not evaluate it. */
+    public Integer getPreliminaryScore() {
+        return preliminaryScore;
+    }
+
+    /** How sure the AI was of its score (0 to 100); null while pending or when the AI could not evaluate it. */
+    public Integer getPreliminaryConfidence() {
+        return preliminaryConfidence;
+    }
+
+    /** The feedback of the AI for the student; null when there is none. */
+    public String getPreliminaryFeedback() {
+        return preliminaryFeedback;
+    }
+
+    /** When the preliminary evaluation settled the delivery; null while it is pending. */
+    public Instant getEvaluatedAt() {
+        return evaluatedAt;
     }
 }

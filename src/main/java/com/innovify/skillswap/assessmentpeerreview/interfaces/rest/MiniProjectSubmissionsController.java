@@ -33,10 +33,10 @@ public class MiniProjectSubmissionsController {
 
     /**
      * The student delivers the repository of the latest mini-project of an available node, before its deadline. A
-     * mini-project is delivered once. The delivery opens its verification case in the same transaction; when the student
-     * used all the monthly escalations of the plan it is saved anyway and the response reports the limit. 201; 400
-     * (the link), 403 (another student's mini-project), 404, or 409 (the node is not available, a newer mini-project
-     * exists, the deadline passed, the node has a case in progress, or it was already delivered).
+     * mini-project is delivered once. The delivery is answered at once with evaluationStatus Pending: the AI evaluates
+     * it against the rubric in the background and then approves it (the node is completed) or opens its verification
+     * case. 201; 400 (the link), 403 (another student's mini-project), 404, or 409 (the node is not available, a newer
+     * mini-project exists, the deadline passed, the node has a case in progress, or it was already delivered).
      */
     @PostMapping("/{miniProjectId:\\d+}/submissions")
     @PreAuthorize("hasRole('STUDENT')")
@@ -48,9 +48,8 @@ public class MiniProjectSubmissionsController {
         var command = new SubmitMiniProjectCommand(miniProjectId, actor.getId(),
                 resource == null ? null : resource.repositoryUrl());
         var result = commandService.handle(command);
-        return AssessmentPeerReviewActionResultAssembler.toResponse(result, outcome -> ResponseEntity
-                .created(URI.create("/api/v1/mini-projects/" + miniProjectId + "/submissions/"
-                        + outcome.submission().getId()))
-                .body(AssessmentPeerReviewResourceAssemblers.toResource(outcome)));
+        return AssessmentPeerReviewActionResultAssembler.toResponse(result, submission -> ResponseEntity
+                .created(URI.create("/api/v1/mini-projects/" + miniProjectId + "/submissions/" + submission.getId()))
+                .body(AssessmentPeerReviewResourceAssemblers.toResource(submission)));
     }
 }

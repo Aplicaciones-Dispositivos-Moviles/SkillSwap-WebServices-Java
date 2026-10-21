@@ -2,7 +2,6 @@ package com.innovify.skillswap.assessmentpeerreview.interfaces.rest.transform;
 
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.EscalationLimitReached;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
-import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitMiniProjectOutcome;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.AssessmentAttemptDetail;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
@@ -25,24 +24,24 @@ public final class AssessmentPeerReviewResourceAssemblers {
     private AssessmentPeerReviewResourceAssemblers() {
     }
 
+    /** The delivery right after submitting it: its preliminary evaluation is still Pending. */
     public static MiniProjectSubmissionResource toResource(MiniProjectSubmission submission) {
-        return toResource(submission, null, null);
+        return toResource(submission, null);
     }
 
-    /** The delivery right after submitting it, with the case it opened or the limit that kept it from opening one. */
-    public static MiniProjectSubmissionResource toResource(SubmitMiniProjectOutcome outcome) {
-        return toResource(outcome.submission(), outcome.verificationCase(), outcome.escalationLimitReached());
-    }
-
-    private static MiniProjectSubmissionResource toResource(MiniProjectSubmission submission,
-                                                            VerificationCase verificationCase,
-                                                            EscalationLimitReached limitReached) {
+    /** The delivery with its preliminary evaluation and the case it opened, if any. */
+    public static MiniProjectSubmissionResource toResource(MiniProjectSubmission submission,
+                                                           VerificationCase verificationCase) {
         return new MiniProjectSubmissionResource(submission.getId(), submission.getMiniProjectId(),
                 submission.getPathNodeId(), submission.getSkillTag(), submission.getRepositoryUrl(),
                 submission.getSubmittedAt(),
+                submission.getEvaluationStatus().value(),
+                submission.getPreliminaryScore(),
+                submission.getPreliminaryConfidence(),
+                submission.getPreliminaryFeedback(),
+                submission.getEvaluatedAt(),
                 verificationCase == null ? null : verificationCase.getId(),
-                verificationCase == null ? null : verificationCase.getStatus().value(),
-                toResource(limitReached));
+                verificationCase == null ? null : verificationCase.getStatus().value());
     }
 
     private static PlanLimitReachedResource toResource(EscalationLimitReached limitReached) {

@@ -10,6 +10,8 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Verif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.EvaluationStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.PreliminaryEvaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReevaluationSourceType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
@@ -28,6 +30,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.support.TransactionOperations;
 
 class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
 
@@ -47,6 +50,9 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
 
     @Autowired
     private MiniProjectSubmissionRepository submissions;
+
+    @Autowired
+    private TransactionOperations transactions;
 
     /** Saves a new case; the id is assigned to the instance that was saved. */
     private VerificationCase addCase(int attemptId, int studentId, int nodeId, String skill) {
@@ -458,6 +464,77 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         assertThatThrownBy(() -> submissions.save(
                 new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/other")))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void submission_isStoredAsPendingWithoutAnEvaluation() throws Exception {
+        int id = submissions.save(new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/repo"))
+                .getId();
+
+        MiniProjectSubmission loaded = submissions.findById(id).orElseThrow();
+
+        assertThat(loaded.getEvaluationStatus()).isEqualTo(EvaluationStatus.PENDING);
+        assertThat(loaded.getPreliminaryScore()).isNull();
+        assertThat(loaded.getPreliminaryConfidence()).isNull();
+        assertThat(loaded.getPreliminaryFeedback()).isNull();
+        assertThat(loaded.getEvaluatedAt()).isNull();
+        assertThat(queryString("SELECT evaluation_status FROM mini_project_submissions WHERE id = " + id))
+                .isEqualTo("Pending");
+    }
+
+    @Test
+    void submission_roundTripsItsPreliminaryEvaluation() throws Exception {
+        int id = submissions.save(new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/repo"))
+                .getId();
+
+        transactions.executeWithoutResult(status -> {
+            MiniProjectSubmission locked = submissions.findByIdForUpdate(id).orElseThrow();
+            submissions.save(locked.approve(new PreliminaryEvaluation(85, 90, "Solid tests and README."), 70));
+        });
+        MiniProjectSubmission loaded = submissions.findById(id).orElseThrow();
+
+        assertThat(loaded.getEvaluationStatus()).isEqualTo(EvaluationStatus.APPROVED);
+        assertThat(loaded.getPreliminaryScore()).isEqualTo(85);
+        assertThat(loaded.getPreliminaryConfidence()).isEqualTo(90);
+        assertThat(loaded.getPreliminaryFeedback()).isEqualTo("Solid tests and README.");
+        assertThat(loaded.getEvaluatedAt()).isNotNull();
+        assertThat(queryString("SELECT evaluation_status FROM mini_project_submissions WHERE id = " + id))
+                .isEqualTo("Approved");
+    }
+
+    @Test
+    void submission_escalatedWithoutAnEvaluation_keepsTheScoresEmpty() {
+        MiniProjectSubmission saved = submissions.save(
+                new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/repo"));
+        submissions.save(saved.escalate(null));
+
+        MiniProjectSubmission loaded = submissions.findById(saved.getId()).orElseThrow();
+
+        assertThat(loaded.getEvaluationStatus()).isEqualTo(EvaluationStatus.ESCALATED);
+        assertThat(loaded.getPreliminaryScore()).isNull();
+        assertThat(loaded.getEvaluatedAt()).isNotNull();
+    }
+
+    @Test
+    void submission_withAnUnknownStatusOrAScoreOutOfRange_isRejectedByTheDatabase() throws Exception {
+        int id = submissions.save(new MiniProjectSubmission(3, 7, 10, "http-basics", "https://github.com/ana/repo"))
+                .getId();
+
+        assertThatThrownBy(() -> execute("UPDATE mini_project_submissions SET evaluation_status = 'Graded' WHERE id = "
+                + id)).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> execute("UPDATE mini_project_submissions SET preliminary_score = 101 WHERE id = "
+                + id)).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> execute("UPDATE mini_project_submissions SET preliminary_confidence = -1 WHERE id = "
+                + id)).isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void miniProjectCase_isFoundByItsSubmission() {
+        int id = cases.save(VerificationCase.forMiniProject(8, 1, 11, "http-basics",
+                "https://github.com/ana/http-basics", null)).getId();
+
+        assertThat(cases.findBySubmissionId(8)).map(VerificationCase::getId).contains(id);
+        assertThat(cases.findBySubmissionId(9)).isEmpty();
     }
 
     // ---------- Origin of a case: attempt or delivery ----------

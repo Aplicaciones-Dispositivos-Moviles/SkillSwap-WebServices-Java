@@ -31,6 +31,9 @@ import org.springframework.context.annotation.Import;
         // Goals are interpreted by keywords only, so no test calls Gemini (GoalInterpretationIntegrationTest
         // enables it against a fake Gemini server).
         "gemini.goal-interpretation.enabled=false",
+        // The preliminary evaluation of a mini-project runs in the thread of the delivery, so a test can check its
+        // result right after delivering (the evaluator is the fake of QuestionGenerationTestConfig).
+        "mini-project-evaluation.asynchronous=false",
         "revenuecat.webhook-authorization=" + PostgresIntegrationTest.WEBHOOK_AUTHORIZATION,
         "billing.expiration-check-enabled=false",
         "moderation.assignment-retry-enabled=false",

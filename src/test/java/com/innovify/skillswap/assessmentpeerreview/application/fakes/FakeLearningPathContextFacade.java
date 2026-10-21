@@ -3,9 +3,11 @@ package com.innovify.skillswap.assessmentpeerreview.application.fakes;
 import com.innovify.skillswap.learningpathengine.application.acl.BlueprintQuestionView;
 import com.innovify.skillswap.learningpathengine.application.acl.BlueprintView;
 import com.innovify.skillswap.learningpathengine.application.acl.LearningPathContextFacade;
+import com.innovify.skillswap.learningpathengine.application.acl.MiniProjectRubricView;
 import com.innovify.skillswap.learningpathengine.application.acl.MiniProjectView;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionOutcome;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeReopenOutcome;
+import com.innovify.skillswap.learningpathengine.application.acl.RubricCriterionView;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,6 +20,13 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
 
     /** The correct answers of the blueprints built by {@link #addBlueprint()}. */
     public static final List<Integer> CORRECT = List.of(1, 2, 3, 0, 1);
+
+    /** The rubric of every mini-project added (weights 40, 30, 20 and 10); its passing score is 70. */
+    public static final List<RubricCriterionView> RUBRIC = List.of(
+            new RubricCriterionView("Functionality", "It does what the statement asks.", 40),
+            new RubricCriterionView("Code quality", "The code is organized and tested.", 30),
+            new RubricCriterionView("Documentation", "The README explains how to run it.", 20),
+            new RubricCriterionView("Version control", "The history is meaningful.", 10));
 
     private final Map<Integer, BlueprintView> blueprints = new HashMap<>();
     private final Map<Integer, MiniProjectView> miniProjects = new HashMap<>();
@@ -100,6 +109,16 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
     @Override
     public Optional<MiniProjectView> getMiniProject(int miniProjectId) {
         return Optional.ofNullable(miniProjects.get(miniProjectId));
+    }
+
+    @Override
+    public Optional<MiniProjectRubricView> getMiniProjectRubric(int miniProjectId) {
+        MiniProjectView view = miniProjects.get(miniProjectId);
+        if (view == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new MiniProjectRubricView(miniProjectId, view.skillTag(), "Mini-project " + miniProjectId,
+                "Build a small project that demonstrates " + view.skillTag() + ".", RUBRIC, 70));
     }
 
     @Override

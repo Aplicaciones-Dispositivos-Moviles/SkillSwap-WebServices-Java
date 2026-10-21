@@ -27,6 +27,9 @@ public interface VerificationCaseRepository {
     /** The cases assigned to the verifier, newest first. */
     List<VerificationCase> findByVerifierUserId(int verifierUserId);
 
+    /** The case opened by a mini-project delivery, if its preliminary evaluation sent it to a verifier. */
+    Optional<VerificationCase> findBySubmissionId(int submissionId);
+
     /** The unresolved case of the student for the node, if any. */
     Optional<VerificationCase> findOpenByStudentAndNode(int studentId, int pathNodeId);
 

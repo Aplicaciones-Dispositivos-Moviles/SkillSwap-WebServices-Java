@@ -95,6 +95,21 @@ public class LearningPathContextFacadeImpl implements LearningPathContextFacade 
     }
 
     @Override
+    public Optional<MiniProjectRubricView> getMiniProjectRubric(int miniProjectId) {
+        return miniProjectRepository.findById(miniProjectId)
+                .map(miniProject -> new MiniProjectRubricView(
+                        miniProject.getId(),
+                        miniProject.getSkillTag(),
+                        miniProject.getTitle(),
+                        miniProject.getStatement(),
+                        miniProject.getRubric().stream()
+                                .map(criterion -> new RubricCriterionView(criterion.getName(),
+                                        criterion.getDescription(), criterion.getWeight()))
+                                .toList(),
+                        miniProject.getPassingScore()));
+    }
+
+    @Override
     public NodeCompletionOutcome completeNode(int pathNodeId) {
         Result<LearningPath> result = learningPathCommandService.handle(new CompletePathNodeCommand(pathNodeId));
         if (result.isSuccess()) {

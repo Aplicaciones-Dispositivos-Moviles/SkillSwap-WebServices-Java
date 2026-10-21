@@ -2,9 +2,7 @@ package com.innovify.skillswap.assessmentpeerreview.interfaces.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.innovify.skillswap.assessmentpeerreview.application.commandservices.EscalationLimitReached;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
-import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitMiniProjectOutcome;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.AssessmentAttemptDetail;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.FailedQuestion;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
@@ -14,6 +12,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reeva
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.PreliminaryEvaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReevaluationSourceType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
@@ -190,30 +189,54 @@ class AssessmentPeerReviewResourceAssemblersTest {
     }
 
     @Test
-    void submission_withACase_carriesItsIdAndStatus() {
-        MiniProjectSubmissionResource resource = AssessmentPeerReviewResourceAssemblers.toResource(
-                new SubmitMiniProjectOutcome(submission(), miniProjectCase(), null));
+    void submission_rightAfterTheDelivery_isPendingWithoutScoresNorCase() {
+        MiniProjectSubmissionResource resource = AssessmentPeerReviewResourceAssemblers.toResource(submission());
 
         assertThat(resource.id()).isEqualTo(6);
         assertThat(resource.miniProjectId()).isEqualTo(4);
+        assertThat(resource.pathNodeId()).isEqualTo(10);
+        assertThat(resource.skillTag()).isEqualTo("http-basics");
         assertThat(resource.repositoryUrl()).isEqualTo("https://github.com/ana/http-basics");
-        assertThat(resource.verificationCaseId()).isEqualTo(12);
-        assertThat(resource.verificationCaseStatus()).isEqualTo("Pending");
-        assertThat(resource.planLimitReached()).isNull();
+        assertThat(resource.submittedAt()).isNotNull();
+        assertThat(resource.evaluationStatus()).isEqualTo("Pending");
+        assertThat(resource.preliminaryScore()).isNull();
+        assertThat(resource.preliminaryConfidence()).isNull();
+        assertThat(resource.preliminaryFeedback()).isNull();
+        assertThat(resource.evaluatedAt()).isNull();
+        assertThat(resource.verificationCaseId()).isNull();
+        assertThat(resource.verificationCaseStatus()).isNull();
     }
 
     @Test
-    void submission_withoutACaseBecauseOfThePlan_reportsTheLimit() {
-        MiniProjectSubmissionResource resource = AssessmentPeerReviewResourceAssemblers.toResource(
-                new SubmitMiniProjectOutcome(submission(), null, new EscalationLimitReached("Free", 3, 3)));
+    void submission_escalated_carriesTheEvaluationAndItsCase() {
+        MiniProjectSubmission escalated = submission()
+                .escalate(new PreliminaryEvaluation(55, 80, "Add tests."));
 
-        assertThat(resource.verificationCaseId()).isNull();
-        assertThat(resource.verificationCaseStatus()).isNull();
-        assertThat(resource.planLimitReached().limit()).isEqualTo("MonthlyEscalations");
-        assertThat(resource.planLimitReached().plan()).isEqualTo("Free");
-        assertThat(resource.planLimitReached().max()).isEqualTo(3);
-        assertThat(resource.planLimitReached().current()).isEqualTo(3);
-        assertThat(resource.planLimitReached().upgradeAvailable()).isTrue();
+        MiniProjectSubmissionResource resource = AssessmentPeerReviewResourceAssemblers.toResource(escalated,
+                miniProjectCase());
+
+        assertThat(resource.evaluationStatus()).isEqualTo("Escalated");
+        assertThat(resource.preliminaryScore()).isEqualTo(55);
+        assertThat(resource.preliminaryConfidence()).isEqualTo(80);
+        assertThat(resource.preliminaryFeedback()).isEqualTo("Add tests.");
+        assertThat(resource.evaluatedAt()).isNotNull();
+        assertThat(resource.verificationCaseId()).isEqualTo(12);
+        assertThat(resource.verificationCaseStatus()).isEqualTo("Pending");
+    }
+
+    @Test
+    void submission_approvedOrWithoutEscalationsLeft_hasNoCase() {
+        MiniProjectSubmissionResource approved = AssessmentPeerReviewResourceAssemblers.toResource(
+                submission().approve(new PreliminaryEvaluation(85, 90, ""), 70), null);
+        MiniProjectSubmissionResource limited = AssessmentPeerReviewResourceAssemblers.toResource(
+                submission().keepWithoutReview(null), null);
+
+        assertThat(approved.evaluationStatus()).isEqualTo("Approved");
+        assertThat(approved.preliminaryFeedback()).isNull();
+        assertThat(approved.verificationCaseId()).isNull();
+        assertThat(limited.evaluationStatus()).isEqualTo("EscalationLimitReached");
+        assertThat(limited.preliminaryScore()).isNull();
+        assertThat(limited.verificationCaseId()).isNull();
     }
 
     @Test

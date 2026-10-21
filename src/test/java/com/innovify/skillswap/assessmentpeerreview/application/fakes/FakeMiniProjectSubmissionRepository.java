@@ -12,11 +12,17 @@ import org.springframework.test.util.ReflectionTestUtils;
 public class FakeMiniProjectSubmissionRepository implements MiniProjectSubmissionRepository {
 
     private final List<MiniProjectSubmission> submissions = new ArrayList<>();
+    private final List<Integer> lockedSubmissions = new ArrayList<>();
     private int nextId = 1;
     private RuntimeException saveFailure;
 
     public List<MiniProjectSubmission> submissions() {
         return submissions;
+    }
+
+    /** The deliveries read with a lock, in order. */
+    public List<Integer> lockedSubmissions() {
+        return lockedSubmissions;
     }
 
     /** Makes every following save throw the given exception. */
@@ -41,6 +47,12 @@ public class FakeMiniProjectSubmissionRepository implements MiniProjectSubmissio
     @Override
     public Optional<MiniProjectSubmission> findById(int id) {
         return submissions.stream().filter(s -> Objects.equals(s.getId(), id)).findFirst();
+    }
+
+    @Override
+    public Optional<MiniProjectSubmission> findByIdForUpdate(int id) {
+        lockedSubmissions.add(id);
+        return findById(id);
     }
 
     @Override

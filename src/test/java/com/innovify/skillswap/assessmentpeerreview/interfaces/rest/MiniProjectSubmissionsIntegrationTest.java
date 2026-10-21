@@ -6,7 +6,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeMiniProjectEvaluationService;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.MiniProjectSubmission;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.EvaluationStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.MiniProjectSubmissionRepository;
+import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
+import com.innovify.skillswap.assessmentpeerreview.domain.services.MiniProjectEvaluationService;
 import com.innovify.skillswap.iam.TestData;
 import com.innovify.skillswap.iam.application.internal.outboundservices.TokenGenerator;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
@@ -76,6 +81,13 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private DomainEventPublisher publisher;
 
+    @Autowired
+    private VerificationCaseRepository cases;
+
+    @Autowired
+    private MiniProjectEvaluationService evaluationService;
+
+    private FakeMiniProjectEvaluationService ai;
     private MockMvc mockMvc;
     private String anaToken;
     private String bobToken;
@@ -89,6 +101,9 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
     void setUp() throws Exception {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         ((FakeMiniProjectGenerationService) miniProjectGeneration).reset();
+        // By default the AI gives 55 out of 70 with a confidence of 80: the delivery goes to a verifier.
+        ai = (FakeMiniProjectEvaluationService) evaluationService;
+        ai.reset();
         FakeQuestionGenerationService questions = (FakeQuestionGenerationService) questionGeneration;
         questions.failWith(null);
         questions.returnQuestionCount(5);
@@ -178,6 +193,23 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
         assertThat(status(profile)).as(body(profile)).isEqualTo(201);
     }
 
+    /** The delivery of the mini-project, as stored after its preliminary evaluation. */
+    private MiniProjectSubmission delivery(int miniProjectId) {
+        return submissions.findByMiniProjectId(miniProjectId).orElseThrow();
+    }
+
+    /** The case the preliminary evaluation opened for the delivery of the mini-project. */
+    private int caseOf(int miniProjectId) {
+        return cases.findBySubmissionId(delivery(miniProjectId).getId()).orElseThrow().getId();
+    }
+
+    /** Ana delivers the mini-project and the AI sends it to a verifier; returns the case. */
+    private int deliverToAVerifier(int miniProjectId) throws Exception {
+        MvcResult result = submit(anaToken, miniProjectId, REPOSITORY);
+        assertThat(status(result)).as(body(result)).isEqualTo(201);
+        return caseOf(miniProjectId);
+    }
+
     private MvcResult getCase(String token, int caseId) throws Exception {
         return call(get("/api/v1/verification-cases/" + caseId), token, null);
     }
@@ -206,33 +238,95 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
     // ---------- Tests ----------
 
     @Test
-    void submit_returns201WithTheDeliveryAndSavesIt() throws Exception {
+    void submit_returns201WithThePendingDeliveryAndSavesIt() throws Exception {
         int miniProjectId = generateMiniProject(false);
 
         MvcResult result = submit(anaToken, miniProjectId, REPOSITORY);
 
         assertThat(status(result)).as(body(result)).isEqualTo(201);
+        assertThat(result.getResponse().getHeader("Location"))
+                .isEqualTo("/api/v1/mini-projects/" + miniProjectId + "/submissions/" + delivery(miniProjectId).getId());
         assertThat((int) read(result, "$.miniProjectId")).isEqualTo(miniProjectId);
         assertThat((int) read(result, "$.pathNodeId")).isEqualTo(nodeId);
         assertThat((String) read(result, "$.skillTag")).isEqualTo(SKILL);
         assertThat((String) read(result, "$.repositoryUrl")).isEqualTo(REPOSITORY);
         assertThat((String) read(result, "$.submittedAt")).isNotBlank();
+        // The answer is given before the evaluation: the app reads its result with the delivery.
+        assertThat((String) read(result, "$.evaluationStatus")).isEqualTo("Pending");
+        assertThat((Object) read(result, "$.preliminaryScore")).isNull();
+        assertThat((Object) read(result, "$.verificationCaseId")).isNull();
         assertThat(submissions.findByMiniProjectId(miniProjectId)).isPresent();
     }
 
-    // ---------- The verification case of the delivery ----------
+    // ---------- The preliminary evaluation of the AI (US19 escenarios 2 y 3) ----------
 
     @Test
-    void submit_opensAPendingCaseWhenThereIsNoVerifier() throws Exception {
+    void submit_evaluatesTheRepositoryAgainstTheRubricOfTheMiniProject() throws Exception {
+        int miniProjectId = generateMiniProject(false);
+
+        submit(anaToken, miniProjectId, REPOSITORY);
+
+        assertThat(ai.requests()).hasSize(1);
+        assertThat(ai.requests().get(0).repositoryUrl()).isEqualTo(REPOSITORY);
+        assertThat(ai.requests().get(0).brief().skillTag()).isEqualTo(SKILL);
+        assertThat(ai.requests().get(0).brief().passingScore()).isEqualTo(MiniProject.PASSING_SCORE);
+        assertThat(ai.requests().get(0).brief().rubric()).hasSizeBetween(MiniProject.MIN_CRITERIA,
+                MiniProject.MAX_CRITERIA);
+    }
+
+    @Test
+    void approvedByTheAi_completesTheNodeWithoutACase() throws Exception {
+        enroll(bob, bobToken);
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
         int miniProjectId = generateMiniProject(false);
 
         MvcResult result = submit(anaToken, miniProjectId, REPOSITORY);
 
         assertThat(status(result)).as(body(result)).isEqualTo(201);
-        assertThat((String) read(result, "$.verificationCaseStatus")).isEqualTo("Pending");
-        assertThat((Object) read(result, "$.planLimitReached")).isNull();
-        int caseId = read(result, "$.verificationCaseId");
+        MiniProjectSubmission delivery = delivery(miniProjectId);
+        assertThat(delivery.getEvaluationStatus()).isEqualTo(EvaluationStatus.APPROVED);
+        assertThat(delivery.getPreliminaryScore()).isEqualTo(85);
+        assertThat(delivery.getPreliminaryConfidence()).isEqualTo(90);
+        assertThat(cases.findBySubmissionId(delivery.getId())).isEmpty();
+        assertThat(nodeStatus()).isEqualTo("Completed");
+        assertThat(queryString("SELECT count(*) FROM verification_cases")).isEqualTo("0");
+    }
 
+    @Test
+    void withALowConfidence_aVerifierReviewsItEvenWithAHighScore() throws Exception {
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.UNSURE);
+        int miniProjectId = generateMiniProject(false);
+
+        submit(anaToken, miniProjectId, REPOSITORY);
+
+        assertThat(delivery(miniProjectId).getEvaluationStatus()).isEqualTo(EvaluationStatus.ESCALATED);
+        assertThat(cases.findBySubmissionId(delivery(miniProjectId).getId())).isPresent();
+        assertThat(nodeStatus()).isNotEqualTo("Completed");
+    }
+
+    @Test
+    void whenTheAiFails_aVerifierReviewsIt() throws Exception {
+        ai.failWith(new IllegalStateException("Gemini is unavailable"));
+        int miniProjectId = generateMiniProject(false);
+
+        MvcResult result = submit(anaToken, miniProjectId, REPOSITORY);
+
+        assertThat(status(result)).as(body(result)).isEqualTo(201);
+        assertThat(delivery(miniProjectId).getEvaluationStatus()).isEqualTo(EvaluationStatus.ESCALATED);
+        assertThat(delivery(miniProjectId).getPreliminaryScore()).isNull();
+        assertThat(cases.findBySubmissionId(delivery(miniProjectId).getId())).isPresent();
+    }
+
+    // ---------- The verification case of the delivery ----------
+
+    @Test
+    void belowThePassingScore_opensAPendingCaseWhenThereIsNoVerifier() throws Exception {
+        int miniProjectId = generateMiniProject(false);
+
+        int caseId = deliverToAVerifier(miniProjectId);
+
+        assertThat(delivery(miniProjectId).getEvaluationStatus()).isEqualTo(EvaluationStatus.ESCALATED);
+        assertThat(delivery(miniProjectId).getPreliminaryScore()).isEqualTo(55);
         MvcResult detail = getCase(anaToken, caseId);
         assertThat(status(detail)).as(body(detail)).isEqualTo(200);
         assertThat((String) read(detail, "$.verificationCase.caseType")).isEqualTo("MiniProject");
@@ -246,49 +340,59 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void submit_assignsTheCaseWhenAVerifierIsEnrolled() throws Exception {
+    void belowThePassingScore_assignsTheCaseWhenAVerifierIsEnrolled() throws Exception {
         enroll(bob, bobToken);
         int miniProjectId = generateMiniProject(false);
 
-        MvcResult result = submit(anaToken, miniProjectId, REPOSITORY);
+        int caseId = deliverToAVerifier(miniProjectId);
 
-        assertThat((String) read(result, "$.verificationCaseStatus")).isEqualTo("Assigned");
-        int caseId = read(result, "$.verificationCaseId");
         MvcResult asVerifier = getCase(bobToken, caseId);
+        assertThat((String) read(asVerifier, "$.verificationCase.status")).isEqualTo("Assigned");
         assertThat(status(asVerifier)).isEqualTo(200);
         assertThat((int) read(asVerifier, "$.verificationCase.verifierUserId")).isEqualTo(bob.getId());
         assertThat(status(getCase(carlaToken, caseId))).isEqualTo(403);
     }
 
-    @Test
-    void submit_afterTheEscalationsOfTheMonth_savesTheDeliveryAndReportsTheLimit() throws Exception {
+    /** Ana used the three escalations of the month of the free plan, on other nodes. */
+    private void useTheEscalationsOfTheMonth() throws Exception {
         int anaId = ana.getId();
         for (int i = 0; i < 3; i++) {
             execute("INSERT INTO verification_cases (attempt_id, student_id, path_node_id, skill_tag, case_type, "
                     + "status, opened_at, appeal_count) VALUES (" + (9000 + i) + ", " + anaId + ", " + (9000 + i)
                     + ", 'sql-fundamentals', 'Quiz', 'Pending', now(), 0)");
         }
+    }
+
+    @Test
+    void belowThePassingScore_afterTheEscalationsOfTheMonth_keepsTheDeliveryWithoutACase() throws Exception {
+        useTheEscalationsOfTheMonth();
         int miniProjectId = generateMiniProject(false);
 
         MvcResult result = submit(anaToken, miniProjectId, REPOSITORY);
 
         assertThat(status(result)).as(body(result)).isEqualTo(201);
-        assertThat((Object) read(result, "$.verificationCaseId")).isNull();
-        assertThat((Object) read(result, "$.verificationCaseStatus")).isNull();
-        assertThat((String) read(result, "$.planLimitReached.limit")).isEqualTo("MonthlyEscalations");
-        assertThat((String) read(result, "$.planLimitReached.plan")).isEqualTo("Free");
-        assertThat((Integer) read(result, "$.planLimitReached.max")).isEqualTo(3);
-        assertThat((Integer) read(result, "$.planLimitReached.current")).isEqualTo(3);
-        assertThat((Boolean) read(result, "$.planLimitReached.upgradeAvailable")).isTrue();
-        assertThat(submissions.findByMiniProjectId(miniProjectId)).isPresent();
+        assertThat(delivery(miniProjectId).getEvaluationStatus()).isEqualTo(EvaluationStatus.ESCALATION_LIMIT_REACHED);
         assertThat(queryString("SELECT count(*) FROM verification_cases")).isEqualTo("3");
+        assertThat(nodeStatus()).isNotEqualTo("Completed");
+    }
+
+    @Test
+    void approvedByTheAi_afterTheEscalationsOfTheMonth_stillCompletesTheNode() throws Exception {
+        useTheEscalationsOfTheMonth();
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
+        int miniProjectId = generateMiniProject(false);
+
+        submit(anaToken, miniProjectId, REPOSITORY);
+
+        assertThat(delivery(miniProjectId).getEvaluationStatus()).isEqualTo(EvaluationStatus.APPROVED);
+        assertThat(nodeStatus()).isEqualTo("Completed");
     }
 
     @Test
     void approvedByTheVerifier_completesTheNodeAndPaysTheVerifier40SkillCredits() throws Exception {
         enroll(bob, bobToken);
         int miniProjectId = generateMiniProject(false);
-        int caseId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.verificationCaseId");
+        int caseId = deliverToAVerifier(miniProjectId);
         assertThat(nodeStatus()).isNotEqualTo("Completed");
 
         MvcResult resolved = decide(bobToken, caseId, "Approved");
@@ -305,7 +409,7 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
         enroll(bob, bobToken);
         enroll(carla, carlaToken);
         int miniProjectId = generateMiniProject(false);
-        int caseId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.verificationCaseId");
+        int caseId = deliverToAVerifier(miniProjectId);
         assertThat(status(decide(bobToken, caseId, "Rejected"))).isEqualTo(200);
         assertThat(nodeStatus()).isNotEqualTo("Completed");
 
@@ -408,6 +512,86 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
     @Test
     void submit_withoutToken_returns401() throws Exception {
         assertThat(status(submit(null, 1, REPOSITORY))).isEqualTo(401);
+    }
+
+    // ---------- Reading the delivery and its evaluation ----------
+
+    private MvcResult getDelivery(String token, int miniProjectId, int submissionId) throws Exception {
+        return call(get("/api/v1/mini-projects/" + miniProjectId + "/submissions/" + submissionId), token, null);
+    }
+
+    @Test
+    void getDelivery_sentToAVerifier_showsTheEvaluationAndTheCase() throws Exception {
+        int miniProjectId = generateMiniProject(false);
+        String location = submit(anaToken, miniProjectId, REPOSITORY).getResponse().getHeader("Location");
+
+        MvcResult result = call(get(location), anaToken, null);
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat((int) read(result, "$.id")).isEqualTo(delivery(miniProjectId).getId());
+        assertThat((String) read(result, "$.evaluationStatus")).isEqualTo("Escalated");
+        assertThat((int) read(result, "$.preliminaryScore")).isEqualTo(55);
+        assertThat((int) read(result, "$.preliminaryConfidence")).isEqualTo(80);
+        assertThat((String) read(result, "$.preliminaryFeedback"))
+                .isEqualTo(FakeMiniProjectEvaluationService.NOT_ENOUGH.feedback());
+        assertThat((String) read(result, "$.evaluatedAt")).isNotBlank();
+        assertThat((int) read(result, "$.verificationCaseId")).isEqualTo(caseOf(miniProjectId));
+        assertThat((String) read(result, "$.verificationCaseStatus")).isEqualTo("Pending");
+    }
+
+    @Test
+    void getDelivery_approvedByTheAi_hasNoCase() throws Exception {
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
+        int miniProjectId = generateMiniProject(false);
+        int submissionId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.id");
+
+        MvcResult result = getDelivery(anaToken, miniProjectId, submissionId);
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat((String) read(result, "$.evaluationStatus")).isEqualTo("Approved");
+        assertThat((int) read(result, "$.preliminaryScore")).isEqualTo(85);
+        assertThat((Object) read(result, "$.verificationCaseId")).isNull();
+    }
+
+    @Test
+    void getDelivery_withoutEscalationsLeft_reportsIt() throws Exception {
+        useTheEscalationsOfTheMonth();
+        int miniProjectId = generateMiniProject(false);
+        int submissionId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.id");
+
+        MvcResult result = getDelivery(anaToken, miniProjectId, submissionId);
+
+        assertThat((String) read(result, "$.evaluationStatus")).isEqualTo("EscalationLimitReached");
+        assertThat((Object) read(result, "$.verificationCaseId")).isNull();
+    }
+
+    @Test
+    void getDelivery_ofAnotherStudent_returns403() throws Exception {
+        int miniProjectId = generateMiniProject(false);
+        int submissionId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.id");
+
+        MvcResult result = getDelivery(bobToken, miniProjectId, submissionId);
+
+        assertThat(status(result)).isEqualTo(403);
+        assertThat(title(result)).isEqualTo("NotSubmissionOwner");
+    }
+
+    @Test
+    void getDelivery_unknownOrOfAnotherMiniProject_returns404() throws Exception {
+        int miniProjectId = generateMiniProject(false);
+        int submissionId = read(submit(anaToken, miniProjectId, REPOSITORY), "$.id");
+
+        MvcResult unknown = getDelivery(anaToken, miniProjectId, 9999);
+        MvcResult otherMiniProject = getDelivery(anaToken, miniProjectId + 1, submissionId);
+
+        assertThat(status(unknown)).isEqualTo(404);
+        assertThat(title(unknown)).isEqualTo("MiniProjectSubmissionNotFound");
+        assertThat(status(otherMiniProject)).isEqualTo(404);
+    }
+
+    @Test
+    void getDelivery_withoutToken_returns401() throws Exception {
+        assertThat(status(getDelivery(null, 1, 1))).isEqualTo(401);
     }
 
     @Test

@@ -113,6 +113,7 @@ public class AssessmentAttemptCommandServiceImpl implements AssessmentAttemptCom
             AssessmentAttempt graded = new AssessmentAttempt(blueprint.blueprintId(), command.studentId(),
                     command.selectedAnswers(), correctAnswers);
             String weakSubTopic = WeakSubTopicResolver.resolve(graded, blueprint.questions());
+            graded.recordAnalysis(blueprint.skillTag(), weakSubTopic);
 
             SubmitAssessmentAttemptOutcome outcome = transactions.execute(status -> {
                 AssessmentAttempt attempt = attemptRepository.save(graded);

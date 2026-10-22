@@ -116,4 +116,36 @@ class AssessmentAttemptTest {
         assertThatThrownBy(() -> attempt.incorrectQuestionIndexes(List.of(1, 2, 3)))
                 .isInstanceOf(DomainException.class);
     }
+
+    // ---------- Analysis kept for the metrics (T63) ----------
+
+    @Test
+    void recordAnalysis_keepsTheSkillAndTheWeakSubTopic() {
+        AssessmentAttempt attempt = attempt(List.of(1, 2, 3, 3, 3));
+
+        attempt.recordAnalysis("  sql-fundamentals ", " Indexes ");
+
+        assertThat(attempt.getSkillTag()).isEqualTo("sql-fundamentals");
+        assertThat(attempt.getWeakSubTopic()).isEqualTo("Indexes");
+    }
+
+    @Test
+    void recordAnalysis_withoutSubTopic_keepsNull() {
+        AssessmentAttempt attempt = attempt(CORRECT);
+
+        attempt.recordAnalysis("sql-fundamentals", "   ");
+
+        assertThat(attempt.getWeakSubTopic()).isNull();
+        assertThat(attempt(CORRECT).getSkillTag()).isNull();
+    }
+
+    @Test
+    void recordAnalysis_withInvalidData_throwsDomainException() {
+        AssessmentAttempt attempt = attempt(CORRECT);
+
+        assertThatThrownBy(() -> attempt.recordAnalysis(null, "Indexes")).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> attempt.recordAnalysis("  ", "Indexes")).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> attempt.recordAnalysis("a".repeat(101), null)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> attempt.recordAnalysis("sql", "a".repeat(101))).isInstanceOf(DomainException.class);
+    }
 }

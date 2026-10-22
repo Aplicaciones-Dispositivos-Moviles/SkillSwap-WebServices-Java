@@ -141,6 +141,24 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void attempt_keepsTheSkillAndTheWeakSubTopic() {
+        attempts.save(new AssessmentAttempt(5, 7, List.of(0, 0, 0, 1, 0), CORRECT)
+                .recordAnalysis("sql-fundamentals", "Indexes"));
+        attempts.save(new AssessmentAttempt(6, 7, CORRECT, CORRECT).recordAnalysis("sql-fundamentals", null));
+        attempts.save(new AssessmentAttempt(7, 7, CORRECT, CORRECT));
+
+        AssessmentAttempt failed = attempts.findByBlueprintId(5).orElseThrow();
+        assertThat(failed.getSkillTag()).isEqualTo("sql-fundamentals");
+        assertThat(failed.getWeakSubTopic()).isEqualTo("Indexes");
+        AssessmentAttempt passed = attempts.findByBlueprintId(6).orElseThrow();
+        assertThat(passed.getSkillTag()).isEqualTo("sql-fundamentals");
+        assertThat(passed.getWeakSubTopic()).isNull();
+        AssessmentAttempt old = attempts.findByBlueprintId(7).orElseThrow();
+        assertThat(old.getSkillTag()).isNull();
+        assertThat(old.getWeakSubTopic()).isNull();
+    }
+
+    @Test
     void attempt_findById_returnsTheSavedAttempt() {
         int id = attempts.save(new AssessmentAttempt(5, 7, CORRECT, CORRECT)).getId();
 

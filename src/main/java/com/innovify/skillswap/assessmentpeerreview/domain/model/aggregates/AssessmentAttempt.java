@@ -24,6 +24,8 @@ public class AssessmentAttempt {
 
     public static final int ANSWER_OPTION_COUNT = 4;
     public static final int PASSING_SCORE = 4;
+    public static final int MAX_SKILL_TAG_LENGTH = 100;
+    public static final int MAX_SUB_TOPIC_LENGTH = 100;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -49,6 +51,12 @@ public class AssessmentAttempt {
 
     @Column(name = "completed_at", nullable = false)
     private Instant completedAt;
+
+    @Column(name = "skill_tag", length = MAX_SKILL_TAG_LENGTH)
+    private String skillTag;
+
+    @Column(name = "weak_sub_topic", length = MAX_SUB_TOPIC_LENGTH)
+    private String weakSubTopic;
 
     /** Required by JPA. */
     protected AssessmentAttempt() {
@@ -117,6 +125,41 @@ public class AssessmentAttempt {
 
     public Instant getCompletedAt() {
         return completedAt;
+    }
+
+    /** The skill the attempt assessed; null in the attempts recorded before it was kept (and not found in a blueprint). */
+    public String getSkillTag() {
+        return skillTag;
+    }
+
+    /** The sub-topic where the student failed the most; null when there was no wrong answer with a sub-topic. */
+    public String getWeakSubTopic() {
+        return weakSubTopic;
+    }
+
+    /**
+     * Keeps what the attempt assessed, so the difficulty of the skills can be measured later.
+     *
+     * @param skillTag     the skill of the blueprint
+     * @param weakSubTopic the sub-topic where the student failed the most, or null / blank for none
+     * @throws DomainException when the skill is empty or too long, or the sub-topic is too long
+     */
+    public AssessmentAttempt recordAnalysis(String skillTag, String weakSubTopic) {
+        if (skillTag == null || skillTag.isBlank()) {
+            throw new DomainException("The skill of the attempt cannot be empty.");
+        }
+        String cleanedSkill = skillTag.strip();
+        if (cleanedSkill.length() > MAX_SKILL_TAG_LENGTH) {
+            throw new DomainException("The skill cannot exceed %d characters.".formatted(MAX_SKILL_TAG_LENGTH));
+        }
+        String cleanedSubTopic = weakSubTopic == null || weakSubTopic.isBlank() ? null : weakSubTopic.strip();
+        if (cleanedSubTopic != null && cleanedSubTopic.length() > MAX_SUB_TOPIC_LENGTH) {
+            throw new DomainException("The sub-topic cannot exceed %d characters.".formatted(MAX_SUB_TOPIC_LENGTH));
+        }
+
+        this.skillTag = cleanedSkill;
+        this.weakSubTopic = cleanedSubTopic;
+        return this;
     }
 
     /**

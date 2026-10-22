@@ -54,6 +54,7 @@ public class SecurityConfig {
                         .requestMatchers("/", "/swagger", "/health", "/api/v1/authentication/**",
                                 "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/subscriptions/webhooks/revenuecat").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/public/credentials/*").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenGenerator, userQueryService),
                         UsernamePasswordAuthenticationFilter.class);

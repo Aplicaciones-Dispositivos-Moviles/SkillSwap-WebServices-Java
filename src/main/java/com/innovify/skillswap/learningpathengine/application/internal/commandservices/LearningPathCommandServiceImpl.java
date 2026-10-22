@@ -32,6 +32,7 @@ import com.innovify.skillswap.learningpathengine.domain.repositories.AdvancedPat
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
 import com.innovify.skillswap.learningpathengine.domain.services.LearningPathBuilder;
 import com.innovify.skillswap.learningpathengine.domain.services.SkillGapAnalyzer;
+import com.innovify.skillswap.learningpathengine.domain.services.SkillTaxonomy;
 import com.innovify.skillswap.recognitionincentives.application.acl.RecognitionContextFacade;
 import com.innovify.skillswap.shared.application.Result;
 import com.innovify.skillswap.subscriptionbilling.application.acl.PlanLimitsView;
@@ -64,6 +65,11 @@ import org.springframework.transaction.support.TransactionOperations;
  * {@link CertificateSkillAffinityScorer}. A certificate validated by a verifier that covers a skill makes it count
  * as demonstrated (its node is completed); any other certificate that can be evidence is only linked to the node.
  *
+ * <p>When the command carries the {@code skillTag} the student chose among the options of the goal, the path is
+ * built from that skill and the text is not interpreted (so Gemini is not called); the skill must be in the catalog.
+ * The text is still the goal of the path. Everything else (limits of the plan, certificates, the advanced path) is
+ * the same.
+ *
  * <p>An advanced path, started with an advanced path unlock the student redeemed with SkillCredits, skips the limits
  * of the plan. The unlocks are granted by the event of the redemption and, as a safety net, synchronized with the
  * redemptions read from Recognition &amp; Incentives; they are changed under the same lock, so one unlock never
@@ -79,6 +85,7 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
     private final CertificateSkillAffinityScorer affinityScorer;
     private final SkillGapAnalyzer skillGapAnalyzer;
     private final LearningPathBuilder learningPathBuilder;
+    private final SkillTaxonomy skillTaxonomy;
     private final CredentialContextFacade credentialContextFacade;
     private final SubscriptionContextFacade subscriptionContextFacade;
     private final AdvancedPathUnlockRepository unlockRepository;
@@ -91,6 +98,7 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
                                           CertificateSkillAffinityScorer affinityScorer,
                                           SkillGapAnalyzer skillGapAnalyzer,
                                           LearningPathBuilder learningPathBuilder,
+                                          SkillTaxonomy skillTaxonomy,
                                           CredentialContextFacade credentialContextFacade,
                                           SubscriptionContextFacade subscriptionContextFacade,
                                           AdvancedPathUnlockRepository unlockRepository,
@@ -102,6 +110,7 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
         this.affinityScorer = affinityScorer;
         this.skillGapAnalyzer = skillGapAnalyzer;
         this.learningPathBuilder = learningPathBuilder;
+        this.skillTaxonomy = skillTaxonomy;
         this.credentialContextFacade = credentialContextFacade;
         this.subscriptionContextFacade = subscriptionContextFacade;
         this.unlockRepository = unlockRepository;
@@ -117,6 +126,12 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
             return failures.failure(LearningPathError.INVALID_GOAL);
         }
 
+        String chosenSkill = command.skillTag() == null || command.skillTag().isBlank()
+                ? null : command.skillTag().strip();
+        if (chosenSkill != null && !skillTaxonomy.contains(chosenSkill)) {
+            return failures.failure(LearningPathError.SKILL_NOT_IN_CATALOG);
+        }
+
         try {
             // Checked first so the app can offer the paid plan right away; checked again under the lock below. An
             // advanced path does not count toward the plan: it needs an unlock instead, checked under the lock.
@@ -127,7 +142,7 @@ public class LearningPathCommandServiceImpl implements LearningPathCommandServic
                 }
             }
 
-            List<String> skillTags = taxonomyMatcher.match(text);
+            List<String> skillTags = chosenSkill != null ? List.of(chosenSkill) : taxonomyMatcher.match(text);
             if (skillTags.isEmpty()) {
                 return failures.failure(LearningPathError.GOAL_NOT_INTERPRETABLE);
             }

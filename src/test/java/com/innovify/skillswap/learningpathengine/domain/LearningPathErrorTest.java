@@ -16,7 +16,7 @@ class LearningPathErrorTest {
     @Test
     void codes_matchTheNamesOfTheCSharpApi() {
         assertThat(Arrays.stream(LearningPathError.values()).map(ErrorCodes::of)).containsExactly(
-                "None", "InvalidGoal", "GoalNotInterpretable", "GoalAlreadyAchieved", "PlanLimitReached",
+                "None", "InvalidGoal", "GoalNotInterpretable", "SkillNotInCatalog", "GoalAlreadyAchieved", "PlanLimitReached",
                 "PathNotFound", "PathNotActive", "PathNotPaused", "PathPaused", "NotPathOwner", "NodeNotFound",
                 "NodeLocked", "NodeAlreadyCompleted", "NodeNotCompleted", "NodeCompletedByCertificate",
                 "CertificateNotFound", "NotCertificateOwner",

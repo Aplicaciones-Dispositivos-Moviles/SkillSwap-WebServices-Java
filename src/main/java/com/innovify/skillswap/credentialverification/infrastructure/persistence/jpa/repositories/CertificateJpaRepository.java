@@ -1,6 +1,7 @@
 package com.innovify.skillswap.credentialverification.infrastructure.persistence.jpa.repositories;
 
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,4 +18,6 @@ public interface CertificateJpaRepository extends JpaRepository<Certificate, Int
     boolean existsByOwnerIdNotAndVerificationCode(int ownerId, String verificationCode);
 
     boolean existsByOwnerIdNotAndFileHash(int ownerId, String fileHash);
+
+    List<Certificate> findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(Instant from, Instant to);
 }

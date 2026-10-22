@@ -36,6 +36,21 @@ class CertificatePersistenceTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void certificate_findCreatedBetween_returnsTheCertificatesOfThePeriod() throws Exception {
+        saveAssessed(1, "hash-1");
+        saveAssessed(2, "hash-2");
+        saveAssessed(3, "hash-3");
+        execute("UPDATE certificates SET created_at = '2026-10-01T00:00:00Z' WHERE owner_id = 1");
+        execute("UPDATE certificates SET created_at = '2026-10-31T23:59:59Z' WHERE owner_id = 2");
+        execute("UPDATE certificates SET created_at = '2026-11-01T00:00:00Z' WHERE owner_id = 3");
+
+        List<Certificate> found = repository.findCreatedBetween(Instant.parse("2026-10-01T00:00:00Z"),
+                Instant.parse("2026-11-01T00:00:00Z"));
+
+        assertThat(found).extracting(Certificate::getOwnerId).containsExactlyInAnyOrder(1, 2);
+    }
+
+    @Test
     void certificate_roundTripsEveryField() {
         Certificate saved = repository.save(assessed(7, "hash-a", "cert-001", "code-xyz", 60));
 

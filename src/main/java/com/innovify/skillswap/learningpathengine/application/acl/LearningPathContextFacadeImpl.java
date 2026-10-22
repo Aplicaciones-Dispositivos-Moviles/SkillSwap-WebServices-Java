@@ -13,7 +13,11 @@ import com.innovify.skillswap.learningpathengine.domain.repositories.AssessmentB
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
 import com.innovify.skillswap.learningpathengine.domain.repositories.MiniProjectRepository;
 import com.innovify.skillswap.shared.application.Result;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -148,5 +152,25 @@ public class LearningPathContextFacadeImpl implements LearningPathContextFacade 
     @Override
     public boolean hasCompletedSkill(int studentId, String skillTag) {
         return learningPathRepository.findCompletedSkillTagsByStudentId(studentId).contains(skillTag);
+    }
+
+    @Override
+    public List<SkillDemandView> getMostRequestedSkills(Instant from, Instant to, int limit) {
+        if (from == null || to == null || !from.isBefore(to) || limit < 1) {
+            return List.of();
+        }
+
+        Map<String, Integer> counts = new HashMap<>();
+        for (List<String> goalSkillTags : learningPathRepository.findGoalSkillTagsCreatedBetween(from, to)) {
+            // A path counts once for each skill of its goal, however many times the tag repeats.
+            for (String skillTag : new LinkedHashSet<>(goalSkillTags)) {
+                counts.merge(skillTag, 1, Integer::sum);
+            }
+        }
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+                .limit(limit)
+                .map(entry -> new SkillDemandView(entry.getKey(), entry.getValue()))
+                .toList();
     }
 }

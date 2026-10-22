@@ -59,6 +59,22 @@ class LearningPathPersistenceTest extends PostgresIntegrationTest {
     // ---------- Paths ----------
 
     @Test
+    void path_findGoalSkillTagsCreatedBetween_returnsTheGoalOfThePathsOfThePeriod() throws Exception {
+        paths.save(TestData.newUnsavedPath(7, "authentication-jwt"));
+        paths.save(TestData.newUnsavedPath(8, "http-basics", "sql-fundamentals"));
+        paths.save(TestData.newUnsavedPath(9, "networking-basics"));
+        execute("UPDATE learning_paths SET created_at = '2026-10-01T00:00:00Z' WHERE student_id = 7");
+        execute("UPDATE learning_paths SET created_at = '2026-10-20T00:00:00Z' WHERE student_id = 8");
+        execute("UPDATE learning_paths SET created_at = '2026-11-01T00:00:00Z' WHERE student_id = 9");
+
+        List<List<String>> found = paths.findGoalSkillTagsCreatedBetween(
+                java.time.Instant.parse("2026-10-01T00:00:00Z"), java.time.Instant.parse("2026-11-01T00:00:00Z"));
+
+        assertThat(found).containsExactlyInAnyOrder(List.of("authentication-jwt"),
+                List.of("http-basics", "sql-fundamentals"));
+    }
+
+    @Test
     void path_roundTripsTheGoalTheNodesAndTheirPrerequisites() {
         paths.save(TestData.newUnsavedPath(7, "authentication-jwt"));
 

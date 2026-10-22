@@ -3,6 +3,7 @@ package com.innovify.skillswap.learningpathengine.infrastructure.persistence.jpa
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -35,4 +36,6 @@ public interface LearningPathJpaRepository extends JpaRepository<LearningPath, I
             + "where p.studentId = :studentId and n.status = :status")
     List<String> findSkillTagsByStudentIdAndNodeStatus(@Param("studentId") int studentId,
                                                        @Param("status") NodeStatus status);
+
+    List<LearningPath> findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(Instant from, Instant to);
 }

@@ -1,6 +1,7 @@
 package com.innovify.skillswap.learningpathengine.domain.repositories;
 
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -40,4 +41,10 @@ public interface LearningPathRepository {
 
     /** The skills the student completed in any of their paths. */
     Collection<String> findCompletedSkillTagsByStudentId(int studentId);
+
+    /**
+     * The skills of the goal of each path created from {@code from} (inclusive) until {@code to} (exclusive), one
+     * list per path, advanced paths included.
+     */
+    List<List<String>> findGoalSkillTagsCreatedBetween(Instant from, Instant to);
 }

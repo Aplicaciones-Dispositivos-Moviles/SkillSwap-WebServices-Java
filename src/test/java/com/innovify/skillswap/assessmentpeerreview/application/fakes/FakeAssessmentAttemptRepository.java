@@ -2,6 +2,7 @@ package com.innovify.skillswap.assessmentpeerreview.application.fakes;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -45,5 +46,12 @@ public class FakeAssessmentAttemptRepository implements AssessmentAttemptReposit
     @Override
     public Optional<AssessmentAttempt> findByBlueprintId(int blueprintId) {
         return attempts.stream().filter(a -> a.getBlueprintId() == blueprintId).findFirst();
+    }
+
+    @Override
+    public List<AssessmentAttempt> findCompletedBetween(Instant from, Instant to) {
+        return attempts.stream()
+                .filter(a -> !a.getCompletedAt().isBefore(from) && a.getCompletedAt().isBefore(to))
+                .toList();
     }
 }

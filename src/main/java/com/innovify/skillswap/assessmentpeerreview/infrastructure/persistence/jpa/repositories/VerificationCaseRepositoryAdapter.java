@@ -96,4 +96,13 @@ public class VerificationCaseRepositoryAdapter implements VerificationCaseReposi
         }
         return counts;
     }
+
+    @Override
+    public Map<Integer, Double> averageResolutionSecondsByVerifier() {
+        Map<Integer, Double> averages = new HashMap<>();
+        for (Object[] row : jpaRepository.averageResolutionSecondsByVerifier()) {
+            averages.put(((Number) row[0]).intValue(), ((Number) row[1]).doubleValue());
+        }
+        return averages;
+    }
 }

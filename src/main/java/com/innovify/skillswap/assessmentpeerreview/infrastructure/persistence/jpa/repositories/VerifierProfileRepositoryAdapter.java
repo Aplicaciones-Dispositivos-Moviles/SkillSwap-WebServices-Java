@@ -41,4 +41,9 @@ public class VerifierProfileRepositoryAdapter implements VerifierProfileReposito
                 .filter(profile -> !profile.isSuspended())
                 .toList();
     }
+
+    @Override
+    public List<VerifierProfile> findAll() {
+        return jpaRepository.findAll();
+    }
 }

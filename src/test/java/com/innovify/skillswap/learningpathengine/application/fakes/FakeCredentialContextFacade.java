@@ -2,6 +2,7 @@ package com.innovify.skillswap.learningpathengine.application.fakes;
 
 import com.innovify.skillswap.credentialverification.application.acl.CertificateEvidence;
 import com.innovify.skillswap.credentialverification.application.acl.CertificateSummary;
+import com.innovify.skillswap.credentialverification.application.acl.CertificationDemandView;
 import com.innovify.skillswap.credentialverification.application.acl.CredentialContextFacade;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -50,6 +51,12 @@ public class FakeCredentialContextFacade implements CredentialContextFacade {
 
     public void failWith(RuntimeException exception) {
         this.exceptionToThrow = exception;
+    }
+
+    @Override
+    public List<CertificationDemandView> getMostFrequentCertifications(java.time.Instant from, java.time.Instant to,
+                                                                        int limit) {
+        return List.of();
     }
 
     @Override

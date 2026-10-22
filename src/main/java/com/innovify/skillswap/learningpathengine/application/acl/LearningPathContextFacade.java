@@ -1,5 +1,7 @@
 package com.innovify.skillswap.learningpathengine.application.acl;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -28,4 +30,11 @@ public interface LearningPathContextFacade {
 
     /** Whether the student has a completed node for the skill in any of their paths. */
     boolean hasCompletedSkill(int studentId, String skillTag);
+
+    /**
+     * The skills most asked for: for each skill of the goal of the paths created from {@code from} (inclusive) until
+     * {@code to} (exclusive), how many paths asked for it. The most requested first, ties by tag. Empty for an empty
+     * period or a limit under 1.
+     */
+    List<SkillDemandView> getMostRequestedSkills(Instant from, Instant to, int limit);
 }

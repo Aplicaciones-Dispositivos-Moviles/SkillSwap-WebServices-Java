@@ -6,6 +6,7 @@ import com.innovify.skillswap.credentialverification.application.acl.Certificate
 import com.innovify.skillswap.credentialverification.application.acl.CertificateReviewOutcome;
 import com.innovify.skillswap.credentialverification.application.acl.CertificateReviewView;
 import com.innovify.skillswap.credentialverification.application.acl.CertificateSummary;
+import com.innovify.skillswap.credentialverification.application.acl.CertificationDemandView;
 import com.innovify.skillswap.credentialverification.application.acl.CredentialContextFacade;
 import com.innovify.skillswap.reputation.application.acl.ReputationContextFacade;
 import java.util.ArrayList;
@@ -91,6 +92,12 @@ public final class FakeModerationFacades {
 
         public void answer(CertificateReviewOutcome outcome) {
             this.outcome = outcome;
+        }
+
+        @Override
+        public List<CertificationDemandView> getMostFrequentCertifications(java.time.Instant from, java.time.Instant to,
+                                                                            int limit) {
+            return List.of();
         }
 
         @Override

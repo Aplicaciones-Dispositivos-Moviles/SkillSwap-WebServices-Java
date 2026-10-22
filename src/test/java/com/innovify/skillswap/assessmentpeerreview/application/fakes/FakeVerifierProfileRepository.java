@@ -57,4 +57,9 @@ public class FakeVerifierProfileRepository implements VerifierProfileRepository 
     public List<VerifierProfile> findEnabled() {
         return profiles.stream().filter(p -> p.isVerified() && !p.isSuspended()).toList();
     }
+
+    @Override
+    public List<VerifierProfile> findAll() {
+        return List.copyOf(profiles);
+    }
 }

@@ -4,6 +4,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.aggregates.Learnin
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathStatus;
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -65,5 +66,12 @@ public class LearningPathRepositoryAdapter implements LearningPathRepository {
     @Override
     public Collection<String> findCompletedSkillTagsByStudentId(int studentId) {
         return jpaRepository.findSkillTagsByStudentIdAndNodeStatus(studentId, NodeStatus.COMPLETED);
+    }
+
+    @Override
+    public List<List<String>> findGoalSkillTagsCreatedBetween(Instant from, Instant to) {
+        return jpaRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to).stream()
+                .map(path -> path.getCareerGoal().mappedSkillTags())
+                .toList();
     }
 }

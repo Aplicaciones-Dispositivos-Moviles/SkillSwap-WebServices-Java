@@ -3,6 +3,7 @@ package com.innovify.skillswap.assessmentpeerreview.application.fakes;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -135,5 +136,21 @@ public class FakeVerificationCaseRepository implements VerificationCaseRepositor
             }
         }
         return counts;
+    }
+
+    @Override
+    public Map<Integer, Double> averageResolutionSecondsByVerifier() {
+        Map<Integer, java.util.List<Double>> seconds = new HashMap<>();
+        for (VerificationCase c : cases) {
+            if (c.getStatus() == CaseStatus.RESOLVED && c.getVerifierUserId() != null && c.getAssignedAt() != null
+                    && c.getResolvedAt() != null) {
+                seconds.computeIfAbsent(c.getVerifierUserId(), id -> new ArrayList<>())
+                        .add((double) Duration.between(c.getAssignedAt(), c.getResolvedAt()).toSeconds());
+            }
+        }
+        Map<Integer, Double> averages = new HashMap<>();
+        seconds.forEach((id, values) -> averages.put(id, values.stream().mapToDouble(Double::doubleValue)
+                .average().orElse(0)));
+        return averages;
     }
 }

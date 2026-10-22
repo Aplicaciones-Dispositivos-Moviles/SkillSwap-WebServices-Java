@@ -1,5 +1,6 @@
 package com.innovify.skillswap.credentialverification.application.acl;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,4 +35,12 @@ public interface CredentialContextFacade {
      * failure is reported.
      */
     CertificateReviewOutcome resolveSuspiciousCertificate(int certificateId, boolean authentic, String reason);
+
+    /**
+     * The certifications most uploaded: the courses of the certificates created from {@code from} (inclusive) until
+     * {@code to} (exclusive), grouped by name ignoring letter case and extra spaces. The rejected certificates and
+     * the ones without a course name are left out. The most frequent first, ties by name. Empty for an empty period or
+     * a limit under 1.
+     */
+    List<CertificationDemandView> getMostFrequentCertifications(Instant from, Instant to, int limit);
 }

@@ -1,6 +1,7 @@
 package com.innovify.skillswap.credentialverification.domain.repositories;
 
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,4 +30,7 @@ public interface CertificateRepository {
 
     /** Whether a different user already uploaded a file with this hash. */
     boolean existsByFileHashExcludingOwner(int ownerId, String fileHash);
+
+    /** The certificates created from {@code from} (inclusive) until {@code to} (exclusive), whatever their status. */
+    List<Certificate> findCreatedBetween(Instant from, Instant to);
 }

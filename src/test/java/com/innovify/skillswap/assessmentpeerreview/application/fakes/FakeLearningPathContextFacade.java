@@ -8,6 +8,7 @@ import com.innovify.skillswap.learningpathengine.application.acl.MiniProjectView
 import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionOutcome;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeReopenOutcome;
 import com.innovify.skillswap.learningpathengine.application.acl.RubricCriterionView;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -145,5 +146,11 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
     @Override
     public boolean hasCompletedSkill(int studentId, String skillTag) {
         return completedSkills.contains(studentId + ":" + skillTag);
+    }
+
+    @Override
+    public List<com.innovify.skillswap.learningpathengine.application.acl.SkillDemandView> getMostRequestedSkills(
+            Instant from, Instant to, int limit) {
+        return List.of();
     }
 }

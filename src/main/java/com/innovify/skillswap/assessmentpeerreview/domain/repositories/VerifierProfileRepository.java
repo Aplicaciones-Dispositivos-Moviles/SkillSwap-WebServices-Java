@@ -17,4 +17,7 @@ public interface VerifierProfileRepository {
 
     /** Every still-enabled (not revoked and not suspended) profile, whatever its skills. */
     List<VerifierProfile> findEnabled();
+
+    /** Every profile, whatever its state (revoked and suspended ones included). */
+    List<VerifierProfile> findAll();
 }

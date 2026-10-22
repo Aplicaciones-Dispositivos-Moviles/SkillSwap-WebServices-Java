@@ -1,7 +1,9 @@
 package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.repositories;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.MiniProjectSubmission;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.EvaluationStatus;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -17,4 +19,6 @@ public interface MiniProjectSubmissionJpaRepository extends JpaRepository<MiniPr
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from MiniProjectSubmission s where s.id = :id")
     Optional<MiniProjectSubmission> findForUpdateById(@Param("id") int id);
+
+    List<MiniProjectSubmission> findByEvaluationStatusOrderBySubmittedAtAscIdAsc(EvaluationStatus status);
 }

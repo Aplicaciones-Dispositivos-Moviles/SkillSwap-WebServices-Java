@@ -2,6 +2,7 @@ package com.innovify.skillswap.reputation.infrastructure.config;
 
 import com.innovify.skillswap.assessmentpeerreview.application.acl.AssessmentMetricsContextFacade;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.AssessmentAttemptPassed;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectApprovedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseDeadlineMissed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.application.acl.VerifierProfileContextFacade;
@@ -14,6 +15,7 @@ import com.innovify.skillswap.reputation.application.acl.ReputationContextFacade
 import com.innovify.skillswap.reputation.application.commandservices.ReputationCommandService;
 import com.innovify.skillswap.reputation.application.eventhandlers.RecordAutomaticApprovalEventHandler;
 import com.innovify.skillswap.reputation.application.eventhandlers.RecordCaseResolutionEventHandler;
+import com.innovify.skillswap.reputation.application.eventhandlers.RecordMiniProjectApprovalEventHandler;
 import com.innovify.skillswap.reputation.application.eventhandlers.RecordMissedDeadlineEventHandler;
 import com.innovify.skillswap.reputation.application.internal.commandservices.ReputationCommandServiceImpl;
 import com.innovify.skillswap.reputation.application.internal.queryservices.PlatformMetricsQueryServiceImpl;
@@ -105,6 +107,12 @@ public class ReputationConfig {
     public DomainEventHandler<AssessmentAttemptPassed> recordAutomaticApprovalEventHandler(
             ReputationCommandService commandService) {
         return new RecordAutomaticApprovalEventHandler(commandService);
+    }
+
+    @Bean
+    public DomainEventHandler<MiniProjectApprovedByAi> recordMiniProjectApprovalEventHandler(
+            ReputationCommandService commandService) {
+        return new RecordMiniProjectApprovalEventHandler(commandService);
     }
 
     @Bean

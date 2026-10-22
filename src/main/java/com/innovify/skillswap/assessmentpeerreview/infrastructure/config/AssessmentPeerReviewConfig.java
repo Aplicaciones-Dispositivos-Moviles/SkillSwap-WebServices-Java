@@ -3,12 +3,15 @@ package com.innovify.skillswap.assessmentpeerreview.infrastructure.config;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.MiniProjectSubmissionCommandService;
 import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.EvaluateMiniProjectEventHandler;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectSubmitted;
+import com.innovify.skillswap.assessmentpeerreview.domain.repositories.MiniProjectSubmissionRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.MiniProjectEvaluationService;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.VerifierMatcher;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.ai.GeminiMiniProjectEvaluator;
+import com.innovify.skillswap.assessmentpeerreview.infrastructure.startup.PendingEvaluationRecovery;
 import com.innovify.skillswap.learningpathengine.infrastructure.ai.GeminiClient;
 import com.innovify.skillswap.shared.domain.events.DomainEventHandler;
+import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
 import java.time.Duration;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -63,6 +66,13 @@ public class AssessmentPeerReviewConfig {
             MiniProjectSubmissionCommandService commandService, MiniProjectEvaluationSettings settings) {
         Executor executor = settings.asynchronous() ? newEvaluationExecutor() : Runnable::run;
         return new EvaluateMiniProjectEventHandler(commandService, executor);
+    }
+
+    /** Retries the evaluations that a restart interrupted, once the application is ready. */
+    @Bean
+    public PendingEvaluationRecovery pendingEvaluationRecovery(MiniProjectSubmissionRepository submissions,
+                                                               DomainEventPublisher eventPublisher) {
+        return new PendingEvaluationRecovery(submissions, eventPublisher);
     }
 
     private static ExecutorService newEvaluationExecutor() {

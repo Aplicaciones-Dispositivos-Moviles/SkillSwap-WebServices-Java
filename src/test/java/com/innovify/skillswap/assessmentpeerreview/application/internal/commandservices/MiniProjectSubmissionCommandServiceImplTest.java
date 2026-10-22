@@ -20,6 +20,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Verif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.EvaluateMiniProjectSubmissionCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.SubmitMiniProjectCommand;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectApprovedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectSubmitted;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
@@ -33,6 +34,7 @@ import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionO
 import com.innovify.skillswap.shared.application.Result;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
@@ -577,5 +579,54 @@ class MiniProjectSubmissionCommandServiceImplTest {
         assertThat(result.isFailure()).isTrue();
         assertThat(result.error()).isEqualTo(AssessmentPeerReviewError.DATABASE_ERROR);
         assertThat(delivered.isAwaitingEvaluation()).isTrue();
+    }
+
+    // ---------- Announcing the approval of the AI to the other contexts ----------
+
+    private List<MiniProjectApprovedByAi> approvals() {
+        return events.published().stream().filter(MiniProjectApprovedByAi.class::isInstance)
+                .map(MiniProjectApprovedByAi.class::cast).toList();
+    }
+
+    @Test
+    void evaluate_sufficient_announcesTheApprovalOnceTheNodeIsCompleted() {
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
+
+        Result<MiniProjectEvaluationOutcome> result = deliverAndEvaluate();
+
+        MiniProjectSubmission submission = result.value().submission();
+        assertThat(result.value().nodeCompleted()).isTrue();
+        assertThat(approvals()).containsExactly(new MiniProjectApprovedByAi(submission.getId(), STUDENT_ID, NODE_ID,
+                "http-basics"));
+    }
+
+    @Test
+    void evaluate_sufficient_withTheNodeAlreadyCompleted_announcesNothing() {
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
+        learningPath.setNextOutcome(NodeCompletionOutcome.ALREADY_COMPLETED);
+
+        Result<MiniProjectEvaluationOutcome> result = deliverAndEvaluate();
+
+        assertThat(result.value().submission().getEvaluationStatus()).isEqualTo(EvaluationStatus.APPROVED);
+        assertThat(result.value().nodeCompleted()).isFalse();
+        assertThat(approvals()).isEmpty();
+    }
+
+    @Test
+    void evaluate_whenAVerifierMustReviewIt_announcesNothing() {
+        Result<MiniProjectEvaluationOutcome> result = deliverAndEvaluate();
+
+        assertThat(result.value().nodeCompleted()).isFalse();
+        assertThat(approvals()).isEmpty();
+    }
+
+    @Test
+    void evaluate_whenTheNodeCannotBeCompleted_announcesNothing() {
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
+        learningPath.setNextOutcome(NodeCompletionOutcome.NODE_LOCKED);
+
+        deliverAndEvaluate();
+
+        assertThat(approvals()).isEmpty();
     }
 }

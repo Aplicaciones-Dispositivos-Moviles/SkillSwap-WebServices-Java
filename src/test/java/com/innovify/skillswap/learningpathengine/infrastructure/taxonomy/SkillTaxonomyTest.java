@@ -3,6 +3,7 @@ package com.innovify.skillswap.learningpathengine.infrastructure.taxonomy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.innovify.skillswap.learningpathengine.application.internal.outboundservices.SkillCandidate;
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -192,5 +193,55 @@ class SkillTaxonomyTest {
 
         assertThat(first).isEqualTo(second);
         assertThat(first).containsExactly("rest-api-design", "authentication-jwt");
+    }
+
+    // ---------- Matcher: ranking by affinity ----------
+
+    @Test
+    void rank_findsTheSameSkillsAsMatch() {
+        String goal = "quiero aprender Spring Boot con Java";
+
+        assertThat(MATCHER.rank(goal)).extracting(SkillCandidate::tag)
+                .containsExactlyInAnyOrderElementsOf(MATCHER.match(goal));
+    }
+
+    @Test
+    void rank_putsFirstTheSkillWhoseKeywordsCoverMoreOfTheGoal() {
+        // 6 words: "autenticacion" and "jwt" belong to authentication-jwt, only "rest" to rest-api-design.
+        List<SkillCandidate> ranked = MATCHER.rank("quiero aprender autenticación JWT y REST");
+
+        assertThat(ranked).containsExactly(new SkillCandidate("authentication-jwt", 0.67),
+                new SkillCandidate("rest-api-design", 0.58));
+    }
+
+    @Test
+    void rank_keepsTheCatalogOrderWhenTheAffinityIsTheSame() {
+        List<SkillCandidate> ranked = MATCHER.rank("JWT y REST");
+
+        assertThat(ranked).extracting(SkillCandidate::tag).containsExactly("rest-api-design", "authentication-jwt");
+        assertThat(ranked.get(0).affinity()).isEqualTo(ranked.get(1).affinity());
+    }
+
+    @Test
+    void rank_givesAtLeastHalfToAnySkillFoundAndAtMostOne() {
+        assertThat(MATCHER.rank("quiero aprender JWT y REST con Docker y SQL"))
+                .allSatisfy(candidate -> assertThat(candidate.affinity()).isBetween(0.5, 1.0));
+        assertThat(MATCHER.rank("JWT")).containsExactly(new SkillCandidate("authentication-jwt", 1.0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"quiero cocinar pasteles", "", "   "})
+    void rank_ofATextWithoutSkills_isEmpty(String text) {
+        assertThat(MATCHER.rank(text)).isEmpty();
+    }
+
+    @Test
+    void rank_withNull_returnsNothing() {
+        assertThat(MATCHER.rank(null)).isEmpty();
+    }
+
+    @Test
+    void rank_doesNotChangeWhatMatchReturns() {
+        assertThat(MATCHER.match("JWT y REST")).containsExactly("rest-api-design", "authentication-jwt");
     }
 }

@@ -3,14 +3,17 @@ package com.innovify.skillswap.learningpathengine.interfaces.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.innovify.skillswap.learningpathengine.TestData;
+import com.innovify.skillswap.learningpathengine.application.queryservices.SkillOption;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.AssessmentBlueprint;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.AssessmentBlueprintResource;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.DeclareGoalResource;
+import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.GetSkillOptionsResource;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.LearningPathResource;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.transform.AssessmentBlueprintResourceFromEntityAssembler;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.transform.DeclareGoalCommandFromResourceAssembler;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.transform.LearningPathResourceFromEntityAssembler;
+import com.innovify.skillswap.learningpathengine.interfaces.rest.transform.SkillOptionResourceFromOptionAssembler;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -30,6 +33,43 @@ class LearningPathResourceAssemblersTest {
         assertThat(DeclareGoalCommandFromResourceAssembler
                 .toCommandFromResource(new DeclareGoalResource(null), 1).rawText()).isEmpty();
         assertThat(DeclareGoalCommandFromResourceAssembler.toCommandFromResource(null, 1).rawText()).isEmpty();
+    }
+
+    @Test
+    void command_carriesTheChosenSkillAndAdvancedFlag() {
+        var command = DeclareGoalCommandFromResourceAssembler.toCommandFromResource(
+                new DeclareGoalResource("quiero aprender SQL", true, "sql-fundamentals"), 42);
+
+        assertThat(command.advanced()).isTrue();
+        assertThat(command.skillTag()).isEqualTo("sql-fundamentals");
+        assertThat(DeclareGoalCommandFromResourceAssembler
+                .toCommandFromResource(new DeclareGoalResource("x"), 1).skillTag()).isNull();
+        assertThat(DeclareGoalCommandFromResourceAssembler.toCommandFromResource(null, 1).skillTag()).isNull();
+    }
+
+    @Test
+    void skillOptionsQuery_usesTheAuthenticatedStudentAndAnEmptyTextWhenMissing() {
+        var query = SkillOptionResourceFromOptionAssembler
+                .toQueryFromResource(new GetSkillOptionsResource("quiero aprender SQL"), 42);
+
+        assertThat(query.studentId()).isEqualTo(42);
+        assertThat(query.goal()).isEqualTo("quiero aprender SQL");
+        assertThat(SkillOptionResourceFromOptionAssembler.toQueryFromResource(new GetSkillOptionsResource(null), 1)
+                .goal()).isEmpty();
+        assertThat(SkillOptionResourceFromOptionAssembler.toQueryFromResource(null, 1).goal()).isEmpty();
+    }
+
+    @Test
+    void skillOption_isMappedField() {
+        var resource = SkillOptionResourceFromOptionAssembler.toResourceFromOption(
+                new SkillOption("sql-fundamentals", "SQL fundamentals", null, 3, 3, 0.75));
+
+        assertThat(resource.skillTag()).isEqualTo("sql-fundamentals");
+        assertThat(resource.skillName()).isEqualTo("SQL fundamentals");
+        assertThat(resource.description()).isNull();
+        assertThat(resource.nodeCount()).isEqualTo(3);
+        assertThat(resource.estimatedWeeks()).isEqualTo(3);
+        assertThat(resource.affinity()).isEqualTo(0.75);
     }
 
     @Test

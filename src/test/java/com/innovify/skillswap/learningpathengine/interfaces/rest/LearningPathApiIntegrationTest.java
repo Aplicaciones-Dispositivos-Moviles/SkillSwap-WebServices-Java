@@ -107,6 +107,22 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
         return result;
     }
 
+    private MvcResult skillOptions(String token, String json) throws Exception {
+        MockHttpServletRequestBuilder request = post(PATHS + "/skill-options")
+                .contentType(MediaType.APPLICATION_JSON).content(json);
+        if (token != null) {
+            request.header("Authorization", "Bearer " + token);
+        }
+        return mockMvc.perform(request).andReturn();
+    }
+
+    private MvcResult declareSkill(String token, String goal, String skillTag) throws Exception {
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("goal", goal);
+        payload.put("skillTag", skillTag);
+        return declareJson(token, Json.write(payload));
+    }
+
     private MvcResult getPath(String token, int studentId) throws Exception {
         MockHttpServletRequestBuilder request = get(PATHS + "/" + studentId);
         if (token != null) {
@@ -339,6 +355,83 @@ class LearningPathApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult other = mockMvc.perform(get(PATHS).param("studentId", String.valueOf(ana.getId()))
                 .header("Authorization", "Bearer " + bobToken)).andReturn();
         assertThat(status(other)).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("Offer the skills that fit a goal, the best fit first, without creating a path")
+    void skillOptions_returnsTheSkillsOrderedByAffinity() throws Exception {
+        MvcResult result = skillOptions(anaToken, Json.write(Map.of("goal", REST_AND_JWT)));
+
+        assertThat(status(result)).isEqualTo(200);
+        List<String> tags = read(result, "$[*].skillTag");
+        List<Double> affinities = read(result, "$[*].affinity");
+        assertThat(tags).isNotEmpty().hasSizeLessThanOrEqualTo(5).contains("rest-api-design");
+        assertThat(affinities).isSortedAccordingTo(java.util.Comparator.reverseOrder())
+                .allSatisfy(affinity -> assertThat(affinity).isBetween(0.3, 1.0));
+        assertThat(this.<String>read(result, "$[0].skillName")).isNotBlank();
+        assertThat(this.<Integer>read(result, "$[0].nodeCount")).isPositive();
+        assertThat(this.<Integer>read(result, "$[0].estimatedWeeks")).isPositive();
+        assertThat(status(mockMvc.perform(get(PATHS + "?studentId=" + ana.getId())
+                .header("Authorization", "Bearer " + anaToken)).andReturn())).isEqualTo(200);
+        assertThat(this.<List<Object>>read(mockMvc.perform(get(PATHS + "?studentId=" + ana.getId())
+                .header("Authorization", "Bearer " + anaToken)).andReturn(), "$")).isEmpty();
+    }
+
+    @Test
+    void skillOptions_withAGoalThatMatchesNoSkill_returns422() throws Exception {
+        MvcResult result = skillOptions(anaToken, Json.write(Map.of("goal", "quiero cocinar pasteles")));
+
+        assertThat(status(result)).isEqualTo(422);
+        assertThat(title(result)).isEqualTo("GoalNotInterpretable");
+    }
+
+    @DisplayName("Reject a blank, missing or too long goal when asking for the options")
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"goal\":\"\"}", "{\"goal\":\"   \"}", "{}"})
+    void skillOptions_withAnInvalidGoal_returns400(String json) throws Exception {
+        MvcResult result = skillOptions(anaToken, json);
+
+        assertThat(status(result)).isEqualTo(400);
+        assertThat(title(result)).isEqualTo("InvalidGoal");
+    }
+
+    @Test
+    void skillOptions_withAGoalOver500Characters_returns400() throws Exception {
+        MvcResult result = skillOptions(anaToken, Json.write(Map.of("goal", "a".repeat(501))));
+
+        assertThat(status(result)).isEqualTo(400);
+        assertThat(title(result)).isEqualTo("InvalidGoal");
+    }
+
+    @Test
+    void skillOptions_withoutToken_returns401() throws Exception {
+        assertThat(status(skillOptions(null, Json.write(Map.of("goal", REST_AND_JWT))))).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("Declare a goal for the skill the student chose, without interpreting the text")
+    void declare_withASkillTag_buildsThePathForThatSkill() throws Exception {
+        MvcResult result = declareSkill(anaToken, "quiero cocinar pasteles", "rest-api-design");
+
+        assertThat(status(result)).isEqualTo(201);
+        assertThat(this.<List<String>>read(result, "$.goalSkillTags")).containsExactly("rest-api-design");
+        assertThat(skills(result)).contains("rest-api-design");
+    }
+
+    @Test
+    void declare_withASkillTagNotInTheCatalog_returns422() throws Exception {
+        MvcResult result = declareSkill(anaToken, REST_AND_JWT, "not-a-skill");
+
+        assertThat(status(result)).isEqualTo(422);
+        assertThat(title(result)).isEqualTo("SkillNotInCatalog");
+    }
+
+    @Test
+    void declare_withABlankSkillTag_interpretsTheText() throws Exception {
+        MvcResult result = declareSkill(anaToken, REST_AND_JWT, "  ");
+
+        assertThat(status(result)).isEqualTo(201);
+        assertThat(skills(result)).contains("rest-api-design", "authentication-jwt");
     }
 
     @Test

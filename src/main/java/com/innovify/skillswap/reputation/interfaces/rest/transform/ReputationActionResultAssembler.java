@@ -13,9 +13,9 @@ public final class ReputationActionResultAssembler {
 
     public static HttpStatus toStatusFromError(ReputationError error) {
         return switch (error) {
-            case NONE -> HttpStatus.BAD_REQUEST;
+            case NONE, INVALID_PERIOD, INVALID_LIMIT, INVALID_ORDER -> HttpStatus.BAD_REQUEST;
             case REPUTATION_NOT_FOUND -> HttpStatus.NOT_FOUND;
-            case NOT_REPUTATION_OWNER -> HttpStatus.FORBIDDEN;
+            case NOT_REPUTATION_OWNER, NOT_SENIOR_VERIFIER -> HttpStatus.FORBIDDEN;
             case OPERATION_CANCELLED -> HttpStatus.CONFLICT;
             case DATABASE_ERROR, INTERNAL_SERVER_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
         };

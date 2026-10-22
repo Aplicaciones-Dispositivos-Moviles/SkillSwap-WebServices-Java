@@ -118,6 +118,43 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         assertThat(loadCase(pending).getVerifierUserId()).isNull();
     }
 
+    @Test
+    void profile_findAll_includesTheSuspendedAndRevokedOnes() {
+        profiles.save(new VerifierProfile(2, "http-basics"));
+        profiles.save(new VerifierProfile(3, "http-basics").suspend(9, "Low reliability", java.time.Instant.now()));
+        profiles.save(new VerifierProfile(4, "http-basics").revoke());
+
+        assertThat(profiles.findAll()).extracting(VerifierProfile::getVerifierUserId)
+                .containsExactlyInAnyOrder(2, 3, 4);
+    }
+
+    @Test
+    void case_averageResolutionSecondsByVerifier_averagesTheResolvedCases() throws Exception {
+        int first = addCase(1, 1, 10).getId();
+        int second = addCase(2, 2, 11).getId();
+        int open = addCase(3, 3, 12).getId();
+        int other = addCase(4, 4, 13).getId();
+        changeCase(first, c -> c.assignVerifier(8).resolve(
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision.APPROVED, "ok"));
+        changeCase(second, c -> c.assignVerifier(8).resolve(
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision.APPROVED, "ok"));
+        changeCase(open, c -> c.assignVerifier(8));
+        changeCase(other, c -> c.assignVerifier(9).resolve(
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision.APPROVED, "ok"));
+        execute("UPDATE verification_cases SET assigned_at = now() - interval '5 hours', "
+                + "resolved_at = now() - interval '3 hours' WHERE id = " + first);
+        execute("UPDATE verification_cases SET assigned_at = now() - interval '6 hours', "
+                + "resolved_at = now() - interval '2 hours' WHERE id = " + second);
+        execute("UPDATE verification_cases SET assigned_at = now() - interval '1 hours', "
+                + "resolved_at = now() - interval '30 minutes' WHERE id = " + other);
+
+        var averages = cases.averageResolutionSecondsByVerifier();
+
+        assertThat(averages).containsOnlyKeys(8, 9);
+        assertThat(averages.get(8)).isEqualTo(3 * 3600.0);
+        assertThat(averages.get(9)).isEqualTo(1800.0);
+    }
+
     private void changeProfile(int userId, Consumer<VerifierProfile> change) {
         VerifierProfile profile = profiles.findByUserId(userId).orElseThrow();
         change.accept(profile);
@@ -138,6 +175,39 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         assertThat(attempt.getScore()).isEqualTo(new Score(4, 5));
         assertThat(attempt.isPassed()).isTrue();
         assertThat(attempt.getCompletedAt()).isNotNull();
+    }
+
+    @Test
+    void attempt_keepsTheSkillAndTheWeakSubTopic() {
+        attempts.save(new AssessmentAttempt(5, 7, List.of(0, 0, 0, 1, 0), CORRECT)
+                .recordAnalysis("sql-fundamentals", "Indexes"));
+        attempts.save(new AssessmentAttempt(6, 7, CORRECT, CORRECT).recordAnalysis("sql-fundamentals", null));
+        attempts.save(new AssessmentAttempt(7, 7, CORRECT, CORRECT));
+
+        AssessmentAttempt failed = attempts.findByBlueprintId(5).orElseThrow();
+        assertThat(failed.getSkillTag()).isEqualTo("sql-fundamentals");
+        assertThat(failed.getWeakSubTopic()).isEqualTo("Indexes");
+        AssessmentAttempt passed = attempts.findByBlueprintId(6).orElseThrow();
+        assertThat(passed.getSkillTag()).isEqualTo("sql-fundamentals");
+        assertThat(passed.getWeakSubTopic()).isNull();
+        AssessmentAttempt old = attempts.findByBlueprintId(7).orElseThrow();
+        assertThat(old.getSkillTag()).isNull();
+        assertThat(old.getWeakSubTopic()).isNull();
+    }
+
+    @Test
+    void attempt_findCompletedBetween_returnsTheAttemptsOfThePeriod() throws Exception {
+        attempts.save(new AssessmentAttempt(5, 7, CORRECT, CORRECT));
+        attempts.save(new AssessmentAttempt(6, 7, CORRECT, CORRECT));
+        attempts.save(new AssessmentAttempt(7, 7, CORRECT, CORRECT));
+        execute("UPDATE assessment_attempts SET completed_at = '2026-10-01T00:00:00Z' WHERE blueprint_id = 5");
+        execute("UPDATE assessment_attempts SET completed_at = '2026-10-31T23:59:59Z' WHERE blueprint_id = 6");
+        execute("UPDATE assessment_attempts SET completed_at = '2026-11-01T00:00:00Z' WHERE blueprint_id = 7");
+
+        List<AssessmentAttempt> found = attempts.findCompletedBetween(java.time.Instant.parse("2026-10-01T00:00:00Z"),
+                java.time.Instant.parse("2026-11-01T00:00:00Z"));
+
+        assertThat(found).extracting(AssessmentAttempt::getBlueprintId).containsExactlyInAnyOrder(5, 6);
     }
 
     @Test

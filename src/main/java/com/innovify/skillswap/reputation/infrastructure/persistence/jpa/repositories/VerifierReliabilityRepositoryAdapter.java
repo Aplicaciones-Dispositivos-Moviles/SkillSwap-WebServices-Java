@@ -34,4 +34,9 @@ public class VerifierReliabilityRepositoryAdapter implements VerifierReliability
         }
         return jpaRepository.findByVerifierUserIdIn(verifierUserIds);
     }
+
+    @Override
+    public List<VerifierReliability> findAll() {
+        return jpaRepository.findAll();
+    }
 }

@@ -7,6 +7,11 @@ import com.innovify.skillswap.credentialverification.domain.model.aggregates.Cer
 import com.innovify.skillswap.credentialverification.domain.model.commands.ResolveCertificateDisputeCommand;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.VerificationStatus;
 import com.innovify.skillswap.credentialverification.domain.repositories.CertificateRepository;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -110,5 +115,31 @@ public class CredentialContextFacadeImpl implements CredentialContextFacade {
         } catch (RuntimeException exception) {
             return null;
         }
+    }
+
+    @Override
+    public List<CertificationDemandView> getMostFrequentCertifications(Instant from, Instant to, int limit) {
+        if (from == null || to == null || !from.isBefore(to) || limit < 1) {
+            return List.of();
+        }
+
+        // Key: the name without letter case and extra spaces. Value: how it was first written, and how many.
+        Map<String, String> displayNames = new HashMap<>();
+        Map<String, Integer> counts = new HashMap<>();
+        certificateRepository.findCreatedBetween(from, to).stream()
+                .filter(certificate -> certificate.getStatus() != VerificationStatus.REJECTED)
+                .filter(certificate -> certificate.getCourseName() != null && !certificate.getCourseName().isBlank())
+                .sorted(Comparator.comparing(Certificate::getId))
+                .forEach(certificate -> {
+                    String display = certificate.getCourseName().strip().replaceAll("\\s+", " ");
+                    String key = display.toLowerCase(Locale.ROOT);
+                    displayNames.putIfAbsent(key, display);
+                    counts.merge(key, 1, Integer::sum);
+                });
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+                .limit(limit)
+                .map(entry -> new CertificationDemandView(displayNames.get(entry.getKey()), entry.getValue()))
+                .toList();
     }
 }

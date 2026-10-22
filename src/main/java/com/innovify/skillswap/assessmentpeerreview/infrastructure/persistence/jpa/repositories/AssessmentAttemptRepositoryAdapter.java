@@ -2,6 +2,8 @@ package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.j
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -28,5 +30,10 @@ public class AssessmentAttemptRepositoryAdapter implements AssessmentAttemptRepo
     @Override
     public Optional<AssessmentAttempt> findByBlueprintId(int blueprintId) {
         return jpaRepository.findByBlueprintId(blueprintId);
+    }
+
+    @Override
+    public List<AssessmentAttempt> findCompletedBetween(Instant from, Instant to) {
+        return jpaRepository.findByCompletedAtGreaterThanEqualAndCompletedAtLessThan(from, to);
     }
 }

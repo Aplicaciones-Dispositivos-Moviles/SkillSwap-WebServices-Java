@@ -5,6 +5,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathStatus;
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -108,6 +109,14 @@ public class FakeLearningPathRepository implements LearningPathRepository {
                 .filter(n -> n.getStatus() == NodeStatus.COMPLETED)
                 .map(PathNode::getSkillTag)
                 .distinct()
+                .toList();
+    }
+
+    @Override
+    public List<List<String>> findGoalSkillTagsCreatedBetween(Instant from, Instant to) {
+        return paths.stream()
+                .filter(p -> !p.getCreatedAt().isBefore(from) && p.getCreatedAt().isBefore(to))
+                .map(p -> p.getCareerGoal().mappedSkillTags())
                 .toList();
     }
 }

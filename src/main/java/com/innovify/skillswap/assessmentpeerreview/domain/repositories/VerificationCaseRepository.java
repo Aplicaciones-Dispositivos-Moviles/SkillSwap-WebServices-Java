@@ -50,4 +50,10 @@ public interface VerificationCaseRepository {
 
     /** The number of unresolved cases of each verifier; verifiers without any are not in the map. */
     Map<Integer, Integer> countOpenByVerifierUserIds(Collection<Integer> verifierUserIds);
+
+    /**
+     * The average seconds between the assignment and the resolution of the resolved cases of each verifier;
+     * verifiers who resolved none are not in the map.
+     */
+    Map<Integer, Double> averageResolutionSecondsByVerifier();
 }

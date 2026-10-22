@@ -53,4 +53,9 @@ public class FakeVerifierReliabilityRepository implements VerifierReliabilityRep
     public List<VerifierReliability> findByVerifierUserIds(Collection<Integer> verifierUserIds) {
         return items.stream().filter(r -> verifierUserIds.contains(r.getVerifierUserId())).toList();
     }
+
+    @Override
+    public List<VerifierReliability> findAll() {
+        return List.copyOf(items);
+    }
 }

@@ -2,6 +2,7 @@ package com.innovify.skillswap.credentialverification.application.fakes;
 
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.repositories.CertificateRepository;
+import java.time.Instant;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.*;
@@ -79,5 +80,12 @@ public class FakeCertificateRepository implements CertificateRepository {
     public boolean existsByFileHashExcludingOwner(int ownerId, String fileHash) {
         return certificates.stream()
                 .anyMatch(c -> c.getOwnerId() != ownerId && c.getFileHash().equals(fileHash));
+    }
+
+    @Override
+    public List<Certificate> findCreatedBetween(Instant from, Instant to) {
+        return certificates.stream()
+                .filter(c -> !c.getCreatedAt().isBefore(from) && c.getCreatedAt().isBefore(to))
+                .toList();
     }
 }

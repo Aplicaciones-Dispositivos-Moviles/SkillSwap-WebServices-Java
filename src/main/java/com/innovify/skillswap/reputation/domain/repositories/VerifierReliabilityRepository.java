@@ -15,4 +15,7 @@ public interface VerifierReliabilityRepository {
 
     /** The reliabilities recorded for those verifiers; the ones without any are left out. */
     List<VerifierReliability> findByVerifierUserIds(Collection<Integer> verifierUserIds);
+
+    /** Every reliability recorded, in no particular order. */
+    List<VerifierReliability> findAll();
 }

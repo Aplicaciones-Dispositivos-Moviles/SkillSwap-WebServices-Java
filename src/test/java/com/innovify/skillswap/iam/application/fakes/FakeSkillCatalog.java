@@ -2,6 +2,7 @@ package com.innovify.skillswap.iam.application.fakes;
 
 import com.innovify.skillswap.learningpathengine.application.acl.SkillCatalogContextFacade;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -29,5 +30,12 @@ public class FakeSkillCatalog implements SkillCatalogContextFacade {
             }
         });
         return tags;
+    }
+
+    @Override
+    public Map<String, String> getSkillNames(Collection<String> skillTags) {
+        Map<String, String> names = new LinkedHashMap<>();
+        skillTags.forEach(tag -> names.put(tag, tag));
+        return names;
     }
 }

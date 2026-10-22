@@ -2,6 +2,7 @@ package com.innovify.skillswap.learningpathengine.application.acl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.innovify.skillswap.learningpathengine.infrastructure.taxonomy.JsonSkillTaxonomy;
 import com.innovify.skillswap.learningpathengine.infrastructure.taxonomy.KeywordSkillTaxonomyMatcher;
 import com.innovify.skillswap.learningpathengine.infrastructure.taxonomy.SkillCatalog;
 import org.junit.jupiter.api.Test;
@@ -10,7 +11,8 @@ import org.junit.jupiter.api.Test;
 class SkillCatalogContextFacadeImplTest {
 
     private final SkillCatalogContextFacadeImpl facade = new SkillCatalogContextFacadeImpl(
-            new KeywordSkillTaxonomyMatcher(SkillCatalog.loadEmbedded()));
+            new KeywordSkillTaxonomyMatcher(SkillCatalog.loadEmbedded()),
+            new JsonSkillTaxonomy(SkillCatalog.loadEmbedded()));
 
     @Test
     void matchSkillTags_relatesInterestTopicsToCatalogSkills() {
@@ -28,5 +30,14 @@ class SkillCatalogContextFacadeImplTest {
     @Test
     void matchSkillTags_neverRepeatsATag() {
         assertThat(facade.matchSkillTags("java, Java y programación en java")).doesNotHaveDuplicates();
+    }
+
+    @Test
+    void getSkillNames_givesTheDisplayNameOfEachSkillAndTheTagWhenUnknown() {
+        var names = facade.getSkillNames(java.util.List.of("rest-api-design", "not-a-skill"));
+
+        assertThat(names).containsEntry("rest-api-design", "REST API design").containsEntry("not-a-skill", "not-a-skill");
+        assertThat(facade.getSkillNames(java.util.List.of())).isEmpty();
+        assertThat(facade.getSkillNames(null)).isEmpty();
     }
 }

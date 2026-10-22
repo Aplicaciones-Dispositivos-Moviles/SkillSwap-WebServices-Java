@@ -106,6 +106,28 @@ class AssessmentAttemptCommandServiceImplTest {
     }
 
     @Test
+    void submit_savesTheSkillAndTheWeakSubTopicOfTheAttempt() {
+        learningPath.addBlueprintWithSubTopics(List.of("Joins", "Indexes", "Indexes", "Joins", "Indexes"));
+
+        submit(FAILING);
+
+        var saved = attempts.attempts().get(0);
+        assertThat(saved.getSkillTag()).isNotBlank();
+        assertThat(saved.getWeakSubTopic()).isEqualTo("Indexes");
+    }
+
+    @Test
+    void submit_withEveryAnswerCorrect_savesTheSkillWithoutSubTopic() {
+        learningPath.addBlueprintWithSubTopics(List.of("Joins", "Indexes", "Indexes", "Joins", "Keys"));
+
+        submit(PASSING);
+
+        var saved = attempts.attempts().get(0);
+        assertThat(saved.getSkillTag()).isNotBlank();
+        assertThat(saved.getWeakSubTopic()).isNull();
+    }
+
+    @Test
     void submit_withAPassingAttemptAndOneError_reportsTheSubTopicOfTheError() {
         learningPath.addBlueprintWithSubTopics(List.of("Joins", "Indexes", "Indexes", "Joins", "Keys"));
 

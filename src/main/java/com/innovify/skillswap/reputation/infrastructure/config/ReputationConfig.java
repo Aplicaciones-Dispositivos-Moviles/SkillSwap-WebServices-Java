@@ -1,9 +1,14 @@
 package com.innovify.skillswap.reputation.infrastructure.config;
 
+import com.innovify.skillswap.assessmentpeerreview.application.acl.AssessmentMetricsContextFacade;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.AssessmentAttemptPassed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseDeadlineMissed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.application.acl.VerifierProfileContextFacade;
+import com.innovify.skillswap.credentialverification.application.acl.CredentialContextFacade;
+import com.innovify.skillswap.iam.application.acl.IamContextFacade;
+import com.innovify.skillswap.learningpathengine.application.acl.LearningPathContextFacade;
+import com.innovify.skillswap.learningpathengine.application.acl.SkillCatalogContextFacade;
 import com.innovify.skillswap.reputation.application.acl.ReputationContextFacade;
 import com.innovify.skillswap.reputation.application.acl.ReputationContextFacadeImpl;
 import com.innovify.skillswap.reputation.application.commandservices.ReputationCommandService;
@@ -11,8 +16,10 @@ import com.innovify.skillswap.reputation.application.eventhandlers.RecordAutomat
 import com.innovify.skillswap.reputation.application.eventhandlers.RecordCaseResolutionEventHandler;
 import com.innovify.skillswap.reputation.application.eventhandlers.RecordMissedDeadlineEventHandler;
 import com.innovify.skillswap.reputation.application.internal.commandservices.ReputationCommandServiceImpl;
+import com.innovify.skillswap.reputation.application.internal.queryservices.PlatformMetricsQueryServiceImpl;
 import com.innovify.skillswap.reputation.application.internal.queryservices.StudentEmployabilityQueryServiceImpl;
 import com.innovify.skillswap.reputation.application.internal.queryservices.VerifierReliabilityQueryServiceImpl;
+import com.innovify.skillswap.reputation.application.queryservices.PlatformMetricsQueryService;
 import com.innovify.skillswap.reputation.application.queryservices.StudentEmployabilityQueryService;
 import com.innovify.skillswap.reputation.application.queryservices.VerifierReliabilityQueryService;
 import com.innovify.skillswap.reputation.domain.repositories.StudentEmployabilityScoreRepository;
@@ -22,6 +29,7 @@ import com.innovify.skillswap.reputation.domain.services.DefaultVerifierReliabil
 import com.innovify.skillswap.reputation.domain.services.EmployabilityScoreCalculator;
 import com.innovify.skillswap.reputation.domain.services.VerifierReliabilityCalculator;
 import com.innovify.skillswap.shared.domain.events.DomainEventHandler;
+import java.time.Clock;
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -73,6 +81,19 @@ public class ReputationConfig {
     public VerifierReliabilityQueryService verifierReliabilityQueryService(
             VerifierReliabilityRepository repository) {
         return new VerifierReliabilityQueryServiceImpl(repository);
+    }
+
+    @Bean
+    public PlatformMetricsQueryService platformMetricsQueryService(
+            VerifierReliabilityRepository reliabilityRepository,
+            LearningPathContextFacade learningPathFacade,
+            SkillCatalogContextFacade skillCatalogFacade,
+            CredentialContextFacade credentialFacade,
+            AssessmentMetricsContextFacade assessmentFacade,
+            IamContextFacade iamFacade,
+            MessageSource messageSource) {
+        return new PlatformMetricsQueryServiceImpl(reliabilityRepository, learningPathFacade, skillCatalogFacade,
+                credentialFacade, assessmentFacade, iamFacade, messageSource, Clock.systemUTC());
     }
 
     @Bean

@@ -19,11 +19,13 @@ import com.innovify.skillswap.learningpathengine.domain.model.entities.Question;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultLearningPathBuilder;
 import com.innovify.skillswap.learningpathengine.domain.services.DefaultSkillGapAnalyzer;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionOperations;
 
 class LearningPathContextFacadeImplTest {
@@ -330,5 +332,50 @@ class LearningPathContextFacadeImplTest {
     @Test
     void getMiniProjectRubric_forAnUnknownMiniProject_returnsEmpty() {
         assertThat(facade.getMiniProjectRubric(999)).isEmpty();
+    }
+
+    // ---------- getMostRequestedSkills ----------
+
+    private LearningPath pathCreatedAt(int studentId, Instant createdAt, String... goalTags) {
+        LearningPath path = paths.save(TestData.newUnsavedPath(studentId, goalTags));
+        ReflectionTestUtils.setField(path, "createdAt", createdAt);
+        return path;
+    }
+
+    @Test
+    void getMostRequestedSkills_countsThePathsOfThePeriodBySkillOfTheGoal() {
+        Instant from = Instant.parse("2026-10-01T00:00:00Z");
+        Instant to = Instant.parse("2026-11-01T00:00:00Z");
+        pathCreatedAt(1, Instant.parse("2026-10-05T10:00:00Z"), "http-basics");
+        pathCreatedAt(2, Instant.parse("2026-10-06T10:00:00Z"), "http-basics", "sql-fundamentals");
+        pathCreatedAt(3, Instant.parse("2026-10-07T10:00:00Z"), "sql-fundamentals");
+        pathCreatedAt(4, Instant.parse("2026-10-08T10:00:00Z"), "authentication-jwt");
+        pathCreatedAt(5, from, "authentication-jwt");
+        pathCreatedAt(6, Instant.parse("2026-09-30T23:59:59Z"), "networking-basics");
+        pathCreatedAt(7, to, "networking-basics");
+
+        var result = facade.getMostRequestedSkills(from, to, 10);
+
+        assertThat(result).extracting(SkillDemandView::skillTag, SkillDemandView::pathCount)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("authentication-jwt", 2),
+                        org.assertj.core.groups.Tuple.tuple("http-basics", 2),
+                        org.assertj.core.groups.Tuple.tuple("sql-fundamentals", 2));
+    }
+
+    @Test
+    void getMostRequestedSkills_respectsTheLimitAndAnEmptyPeriod() {
+        Instant from = Instant.parse("2026-10-01T00:00:00Z");
+        Instant to = Instant.parse("2026-11-01T00:00:00Z");
+        pathCreatedAt(1, Instant.parse("2026-10-05T10:00:00Z"), "http-basics");
+        pathCreatedAt(2, Instant.parse("2026-10-06T10:00:00Z"), "http-basics");
+        pathCreatedAt(3, Instant.parse("2026-10-07T10:00:00Z"), "sql-fundamentals");
+
+        assertThat(facade.getMostRequestedSkills(from, to, 1)).extracting(SkillDemandView::skillTag)
+                .containsExactly("http-basics");
+        assertThat(facade.getMostRequestedSkills(from, to, 0)).isEmpty();
+        assertThat(facade.getMostRequestedSkills(to, from, 10)).isEmpty();
+        assertThat(facade.getMostRequestedSkills(null, to, 10)).isEmpty();
+        assertThat(facade.getMostRequestedSkills(Instant.parse("2025-01-01T00:00:00Z"),
+                Instant.parse("2025-02-01T00:00:00Z"), 10)).isEmpty();
     }
 }

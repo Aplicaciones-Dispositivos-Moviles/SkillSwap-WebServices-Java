@@ -12,11 +12,13 @@ import com.innovify.skillswap.credentialverification.domain.services.DefaultCert
 import com.innovify.skillswap.credentialverification.domain.services.HolderNameMatcher;
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.model.valueobjects.RiskAssessment;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -131,5 +133,67 @@ class CredentialContextFacadeImplTest {
     @Test
     void getEvidenceCertificates_withoutCertificates_isEmpty() {
         assertThat(facade.getEvidenceCertificates(7)).isEmpty();
+    }
+
+    // ---------- getMostFrequentCertifications ----------
+
+    private Certificate uploaded(int ownerId, String hash, String courseName, String createdAt) {
+        Certificate certificate = new Certificate(ownerId, hash, "certificates/" + ownerId + "/" + hash + ".pdf")
+                .applyExtractedData("Ana Perez", "Coursera", courseName, LocalDate.of(2025, 3, 10), 40,
+                        "cert-" + hash, "code-" + hash, "https://example.com/verify/" + hash, null, "full text");
+        ReflectionTestUtils.setField(certificate, "createdAt", Instant.parse(createdAt));
+        return repository.save(certificate);
+    }
+
+    @Test
+    void getMostFrequentCertifications_groupsTheCoursesIgnoringCaseAndSpaces() {
+        Instant from = Instant.parse("2026-10-01T00:00:00Z");
+        Instant to = Instant.parse("2026-11-01T00:00:00Z");
+        uploaded(1, "h1", "Backend with Spring", "2026-10-02T10:00:00Z");
+        uploaded(2, "h2", "  backend   WITH spring ", "2026-10-03T10:00:00Z");
+        uploaded(3, "h3", "SQL basics", "2026-10-04T10:00:00Z");
+        uploaded(4, "h4", "Docker", "2026-10-05T10:00:00Z");
+        uploaded(5, "h5", "Docker", "2026-10-06T10:00:00Z");
+        uploaded(6, "h6", "Docker", "2026-09-30T23:59:59Z");
+        uploaded(7, "h7", "Docker", "2026-11-01T00:00:00Z");
+
+        List<CertificationDemandView> result = facade.getMostFrequentCertifications(from, to, 10);
+
+        assertThat(result).extracting(CertificationDemandView::courseName, CertificationDemandView::count)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("Backend with Spring", 2),
+                        org.assertj.core.groups.Tuple.tuple("Docker", 2),
+                        org.assertj.core.groups.Tuple.tuple("SQL basics", 1));
+    }
+
+    @Test
+    void getMostFrequentCertifications_leavesOutTheRejectedAndTheOnesWithoutCourseName() {
+        Instant from = Instant.parse("2026-10-01T00:00:00Z");
+        Instant to = Instant.parse("2026-11-01T00:00:00Z");
+        uploaded(1, "h1", "Docker", "2026-10-02T10:00:00Z");
+        uploaded(2, "h2", "Docker", "2026-10-03T10:00:00Z")
+                .assessRisk(new RiskAssessment(60)).resolveDispute(false);
+        Certificate unnamed = new Certificate(3, "h3", "certificates/3/h3.pdf");
+        ReflectionTestUtils.setField(unnamed, "createdAt", Instant.parse("2026-10-04T10:00:00Z"));
+        repository.save(unnamed);
+
+        List<CertificationDemandView> result = facade.getMostFrequentCertifications(from, to, 10);
+
+        assertThat(result).extracting(CertificationDemandView::courseName, CertificationDemandView::count)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("Docker", 1));
+    }
+
+    @Test
+    void getMostFrequentCertifications_respectsTheLimitAndAnEmptyPeriod() {
+        Instant from = Instant.parse("2026-10-01T00:00:00Z");
+        Instant to = Instant.parse("2026-11-01T00:00:00Z");
+        uploaded(1, "h1", "Docker", "2026-10-02T10:00:00Z");
+        uploaded(2, "h2", "Docker", "2026-10-03T10:00:00Z");
+        uploaded(3, "h3", "SQL basics", "2026-10-04T10:00:00Z");
+
+        assertThat(facade.getMostFrequentCertifications(from, to, 1)).extracting(CertificationDemandView::courseName)
+                .containsExactly("Docker");
+        assertThat(facade.getMostFrequentCertifications(from, to, 0)).isEmpty();
+        assertThat(facade.getMostFrequentCertifications(to, from, 10)).isEmpty();
+        assertThat(facade.getMostFrequentCertifications(null, to, 10)).isEmpty();
     }
 }

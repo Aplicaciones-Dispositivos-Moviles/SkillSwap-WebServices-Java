@@ -49,4 +49,10 @@ public interface VerificationCaseJpaRepository extends JpaRepository<Verificatio
     @Query(value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(:namespace, :studentId)) AS locked",
             nativeQuery = true)
     Integer lockStudent(@Param("namespace") int namespace, @Param("studentId") int studentId);
+
+    @Query(value = "SELECT verifier_user_id, AVG(EXTRACT(EPOCH FROM (resolved_at - assigned_at))) "
+            + "FROM verification_cases WHERE status = 'Resolved' AND verifier_user_id IS NOT NULL "
+            + "AND assigned_at IS NOT NULL AND resolved_at IS NOT NULL GROUP BY verifier_user_id",
+            nativeQuery = true)
+    List<Object[]> averageResolutionSecondsByVerifier();
 }

@@ -2,6 +2,7 @@ package com.innovify.skillswap.credentialverification.infrastructure.persistence
 
 import com.innovify.skillswap.credentialverification.domain.model.aggregates.Certificate;
 import com.innovify.skillswap.credentialverification.domain.repositories.CertificateRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -49,5 +50,10 @@ public class CertificateRepositoryAdapter implements CertificateRepository {
     @Override
     public boolean existsByFileHashExcludingOwner(int ownerId, String fileHash) {
         return jpaRepository.existsByOwnerIdNotAndFileHash(ownerId, fileHash);
+    }
+
+    @Override
+    public List<Certificate> findCreatedBetween(Instant from, Instant to) {
+        return jpaRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to);
     }
 }

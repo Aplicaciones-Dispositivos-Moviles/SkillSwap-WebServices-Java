@@ -15,6 +15,7 @@ class ReputationActionResultAssemblerTest {
     @ParameterizedTest
     @CsvSource({
             "NONE,400", "REPUTATION_NOT_FOUND,404", "NOT_REPUTATION_OWNER,403", "OPERATION_CANCELLED,409",
+            "NOT_SENIOR_VERIFIER,403", "INVALID_PERIOD,400", "INVALID_LIMIT,400", "INVALID_ORDER,400",
             "DATABASE_ERROR,500", "INTERNAL_SERVER_ERROR,500"
     })
     void everyErrorMapsToItsStatus(ReputationError error, int status) {

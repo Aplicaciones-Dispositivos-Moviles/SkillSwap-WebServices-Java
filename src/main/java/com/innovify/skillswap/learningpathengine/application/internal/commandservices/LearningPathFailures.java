@@ -9,24 +9,24 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.DataAccessException;
 
 /** Builds the localized failures of the learning path command services. */
-final class LearningPathFailures {
+public final class LearningPathFailures {
 
     private final MessageSource messageSource;
 
-    LearningPathFailures(MessageSource messageSource) {
+    public LearningPathFailures(MessageSource messageSource) {
         this.messageSource = messageSource;
     }
 
-    <T> Result<T> failure(LearningPathError error) {
+    public <T> Result<T> failure(LearningPathError error) {
         return Result.failure(error, message(error));
     }
 
-    <T> Result<T> failure(LearningPathError error, Map<String, Object> details) {
+    public <T> Result<T> failure(LearningPathError error, Map<String, Object> details) {
         return Result.failure(error, message(error), details);
     }
 
     /** Persistence failures are database errors; anything else is unexpected. */
-    static LearningPathError toError(RuntimeException exception) {
+    public static LearningPathError toError(RuntimeException exception) {
         return exception instanceof DataAccessException
                 ? LearningPathError.DATABASE_ERROR
                 : LearningPathError.INTERNAL_SERVER_ERROR;

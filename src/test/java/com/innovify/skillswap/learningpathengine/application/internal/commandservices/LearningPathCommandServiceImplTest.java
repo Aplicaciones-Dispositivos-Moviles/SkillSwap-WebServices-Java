@@ -73,7 +73,7 @@ class LearningPathCommandServiceImplTest {
         LocaleContextHolder.setLocale(Locale.US);
         service = new LearningPathCommandServiceImpl(paths, FakeSkillTaxonomyMatcher.sample(),
                 FakeCertificateSkillAffinityScorer.sample(),
-                new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY),
+                new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY), TestData.TAXONOMY,
                 credentials, plans, unlocks, redemptions, counting, messages);
     }
 
@@ -428,6 +428,90 @@ class LearningPathCommandServiceImplTest {
         completeWholePath("I want to learn HTTP");
 
         assertFailure(declare("I want to learn HTTP again"), LearningPathError.GOAL_ALREADY_ACHIEVED);
+        assertThat(paths.paths()).hasSize(1);
+    }
+
+    // ---------- Declare goal: skill chosen among the options ----------
+
+    private Result<LearningPath> declareSkill(String text, String skillTag) {
+        return service.handle(new DeclareGoalCommand(1, text, false, skillTag));
+    }
+
+    @Test
+    void declare_withAChosenSkill_buildsThePathFromThatSkillAndKeepsTheText() {
+        // The text alone would be interpreted as jwt; the chosen skill wins and the matcher is not consulted.
+        Result<LearningPath> result = declareSkill(REST_AND_JWT, "sql-fundamentals");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getCareerGoal().mappedSkillTags()).containsExactly("sql-fundamentals");
+        assertThat(result.value().getCareerGoal().rawText()).isEqualTo(REST_AND_JWT);
+        assertThat(result.value().getNodes()).extracting(PathNode::getSkillTag).containsExactly("sql-fundamentals");
+    }
+
+    @Test
+    void declare_withAChosenSkill_addsItsPrerequisitesLikeAnyGoal() {
+        Result<LearningPath> result = declareSkill("anything the student wrote", "rest-api-design");
+
+        assertThat(result.value().getNodes()).extracting(PathNode::getSkillTag)
+                .containsExactlyInAnyOrder("networking-basics", "programming-fundamentals", "http-basics",
+                        "rest-api-design");
+    }
+
+    @Test
+    void declare_withAChosenSkillAndATextThatMatchesNothing_stillWorks() {
+        assertThat(declareSkill("quiero cocinar pasteles", "sql-fundamentals").isSuccess()).isTrue();
+    }
+
+    @Test
+    void declare_withAChosenSkillOutsideTheCatalog_returnsSkillNotInCatalog() {
+        assertFailure(declareSkill(REST_AND_JWT, "quantum-api-design"), LearningPathError.SKILL_NOT_IN_CATALOG);
+        assertThat(paths.paths()).isEmpty();
+    }
+
+    @Test
+    void declare_withAChosenSkillOutsideTheCatalog_doesNotFallBackToTheText() {
+        // The text matches rest/jwt, but a wrong skill is an error, never silently replaced.
+        assertFailure(declareSkill("I want to learn REST", "Rest-Api-Design"), LearningPathError.SKILL_NOT_IN_CATALOG);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void declare_withABlankSkill_isInterpretedFromTheText(String skillTag) {
+        Result<LearningPath> result = declareSkill("I want to learn SQL", skillTag);
+
+        assertThat(result.value().getCareerGoal().mappedSkillTags()).containsExactly("sql-fundamentals");
+    }
+
+    @Test
+    void declare_withoutASkill_isInterpretedFromTheText() {
+        Result<LearningPath> result = declareSkill("I want to learn SQL", null);
+
+        assertThat(result.value().getCareerGoal().mappedSkillTags()).containsExactly("sql-fundamentals");
+    }
+
+    @Test
+    void declare_withAChosenSkillSurroundedBySpaces_usesTheStrippedTag() {
+        assertThat(declareSkill(REST_AND_JWT, "  sql-fundamentals ").value().getCareerGoal().mappedSkillTags())
+                .containsExactly("sql-fundamentals");
+    }
+
+    @Test
+    void declare_withAChosenSkillAndAnEmptyGoal_returnsInvalidGoal() {
+        assertFailure(declareSkill("   ", "sql-fundamentals"), LearningPathError.INVALID_GOAL);
+    }
+
+    @Test
+    void declare_withAChosenSkillAlreadyDemonstrated_returnsGoalAlreadyAchieved() {
+        completeWholePath("I want to learn SQL");
+
+        assertFailure(declareSkill("whatever", "sql-fundamentals"), LearningPathError.GOAL_ALREADY_ACHIEVED);
+    }
+
+    @Test
+    void declare_withAChosenSkill_stillAppliesThePlanLimits() {
+        assertThat(declareSkill(REST_AND_JWT, "sql-fundamentals").isSuccess()).isTrue();
+
+        assertFailure(declareSkill(REST_AND_JWT, "http-basics"), LearningPathError.PLAN_LIMIT_REACHED);
         assertThat(paths.paths()).hasSize(1);
     }
 

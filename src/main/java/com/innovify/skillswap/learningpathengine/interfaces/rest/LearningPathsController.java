@@ -3,6 +3,7 @@ package com.innovify.skillswap.learningpathengine.interfaces.rest;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
 import com.innovify.skillswap.learningpathengine.application.commandservices.LearningPathCommandService;
 import com.innovify.skillswap.learningpathengine.application.queryservices.LearningPathQueryService;
+import com.innovify.skillswap.learningpathengine.application.queryservices.SkillOptionsQueryService;
 import com.innovify.skillswap.learningpathengine.domain.model.LearningPathError;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.LearningPath;
 import com.innovify.skillswap.learningpathengine.domain.model.commands.PauseLearningPathCommand;
@@ -11,10 +12,13 @@ import com.innovify.skillswap.learningpathengine.domain.model.commands.ResumeLea
 import com.innovify.skillswap.learningpathengine.domain.model.queries.GetLearningPathsByStudentIdQuery;
 import com.innovify.skillswap.learningpathengine.domain.services.SkillTaxonomy;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.DeclareGoalResource;
+import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.GetSkillOptionsResource;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.LearningPathResource;
+import com.innovify.skillswap.learningpathengine.interfaces.rest.resources.SkillOptionResource;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.transform.DeclareGoalCommandFromResourceAssembler;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.transform.LearningPathActionResultAssembler;
 import com.innovify.skillswap.learningpathengine.interfaces.rest.transform.LearningPathResourceFromEntityAssembler;
+import com.innovify.skillswap.learningpathengine.interfaces.rest.transform.SkillOptionResourceFromOptionAssembler;
 import com.innovify.skillswap.shared.domain.errors.ErrorCodes;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -46,13 +50,16 @@ public class LearningPathsController {
 
     private final LearningPathCommandService commandService;
     private final LearningPathQueryService queryService;
+    private final SkillOptionsQueryService skillOptionsQueryService;
     private final SkillTaxonomy skillTaxonomy;
     private final MessageSource messageSource;
 
     public LearningPathsController(LearningPathCommandService commandService, LearningPathQueryService queryService,
+                                   SkillOptionsQueryService skillOptionsQueryService,
                                    SkillTaxonomy skillTaxonomy, MessageSource messageSource) {
         this.commandService = commandService;
         this.queryService = queryService;
+        this.skillOptionsQueryService = skillOptionsQueryService;
         this.skillTaxonomy = skillTaxonomy;
         this.messageSource = messageSource;
     }
@@ -65,8 +72,10 @@ public class LearningPathsController {
      * the authenticated user, and the plan must allow another active path and another path in total (free: 1
      * active and 3 in total; monthly: 3 active and no total cap). With {@code advanced: true} the path is the
      * advanced path redeemed with SkillCredits: it skips those limits and spends an available advanced path unlock.
-     * 201 with the path; 400 (empty or longer than 500 characters), 409 (PlanLimitReached,
-     * AdvancedPathUnlockRequired, or every skill was already demonstrated) or 422 (the goal matches no skill).
+     * With {@code skillTag} (one of the skill options) the path is built for that skill and the text is not
+     * interpreted again. 201 with the path; 400 (empty or longer than 500 characters), 409 (PlanLimitReached,
+     * AdvancedPathUnlockRequired, or every skill was already demonstrated) or 422 (the goal matches no skill, or
+     * the skillTag is not in the catalog: SkillNotInCatalog).
      */
     @PostMapping
     @PreAuthorize("hasRole('STUDENT')")
@@ -79,6 +88,25 @@ public class LearningPathsController {
         return LearningPathActionResultAssembler.toResponse(result,
                 path -> ResponseEntity.created(URI.create("/api/v1/learning-paths/" + path.getStudentId()))
                         .body(toResource(path)));
+    }
+
+    /**
+     * The skills of the catalog that fit a goal, the best fit first (at most 5), so the student chooses one before
+     * declaring the goal. Nothing is created. 200 with the list; 400 (InvalidGoal: empty or longer than 500
+     * characters), 409 (GoalAlreadyAchieved) or 422 (GoalNotInterpretable).
+     */
+    @PostMapping("/skill-options")
+    @PreAuthorize("hasRole('STUDENT')")
+    @ApiResponse(responseCode = "200",
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = SkillOptionResource.class))))
+    public ResponseEntity<?> getSkillOptions(@RequestBody GetSkillOptionsResource resource,
+                                             @AuthenticationPrincipal User actor) {
+        var query = SkillOptionResourceFromOptionAssembler.toQueryFromResource(resource, actor.getId());
+        var result = skillOptionsQueryService.handle(query);
+        return LearningPathActionResultAssembler.toResponse(result,
+                options -> ResponseEntity.ok(options.stream()
+                        .map(SkillOptionResourceFromOptionAssembler::toResourceFromOption)
+                        .toList()));
     }
 
     /**

@@ -11,6 +11,7 @@ public final class DeclareGoalCommandFromResourceAssembler {
     /** The student is always the authenticated user, never a value from the request body. */
     public static DeclareGoalCommand toCommandFromResource(DeclareGoalResource resource, int studentId) {
         return new DeclareGoalCommand(studentId, resource == null || resource.goal() == null ? "" : resource.goal(),
-                resource != null && Boolean.TRUE.equals(resource.advanced()));
+                resource != null && Boolean.TRUE.equals(resource.advanced()),
+                resource == null ? null : resource.skillTag());
     }
 }

@@ -62,7 +62,7 @@ class LearningPathCertificateCommandsTest {
         LocaleContextHolder.setLocale(Locale.US);
         service = new LearningPathCommandServiceImpl(paths, FakeSkillTaxonomyMatcher.sample(),
                 FakeCertificateSkillAffinityScorer.sample(),
-                new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY),
+                new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY), TestData.TAXONOMY,
                 credentials, new FakeSubscriptionContextFacade(), new FakeAdvancedPathUnlockRepository(),
                 new FakeRecognitionContextFacade(), TransactionOperations.withoutTransaction(), messages);
     }

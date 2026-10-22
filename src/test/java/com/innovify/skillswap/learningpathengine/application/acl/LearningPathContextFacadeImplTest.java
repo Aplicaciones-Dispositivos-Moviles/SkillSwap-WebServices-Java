@@ -41,7 +41,7 @@ class LearningPathContextFacadeImplTest {
 
         var commandService = new LearningPathCommandServiceImpl(paths, FakeSkillTaxonomyMatcher.sample(),
                 FakeCertificateSkillAffinityScorer.sample(),
-                new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY),
+                new DefaultSkillGapAnalyzer(TestData.TAXONOMY), new DefaultLearningPathBuilder(TestData.TAXONOMY), TestData.TAXONOMY,
                 new FakeCredentialContextFacade(), new FakeSubscriptionContextFacade(),
                 new com.innovify.skillswap.learningpathengine.application.fakes.FakeAdvancedPathUnlockRepository(),
                 new com.innovify.skillswap.learningpathengine.application.fakes.FakeRecognitionContextFacade(),

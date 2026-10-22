@@ -14,7 +14,11 @@ import java.util.List;
  * @param rating         the average rating
  * @param reviewCount    how many cases they resolved
  * @param createdAt      when the profile was created (UTC)
+ * @param suspended      true while a Verificador senior keeps them suspended: they receive no new cases
+ * @param suspendedAt    when they were suspended (UTC); null when they are not suspended
+ * @param suspensionReason the justification of the senior; null when they are not suspended
  */
 public record VerifierProfileResource(int id, int verifierUserId, List<String> skillTags, boolean available,
-                                      boolean verified, double rating, int reviewCount, Instant createdAt) {
+                                      boolean verified, double rating, int reviewCount, Instant createdAt,
+                                      boolean suspended, Instant suspendedAt, String suspensionReason) {
 }

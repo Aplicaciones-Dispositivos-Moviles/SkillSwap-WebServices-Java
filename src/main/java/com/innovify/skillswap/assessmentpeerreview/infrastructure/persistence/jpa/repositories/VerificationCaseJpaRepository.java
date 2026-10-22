@@ -27,6 +27,11 @@ public interface VerificationCaseJpaRepository extends JpaRepository<Verificatio
     List<Integer> findIdsByStatusAndReviewDueAtNotAfter(@Param("status") CaseStatus status,
                                                         @Param("now") Instant now);
 
+    @Query("select c.id from VerificationCase c where c.status = :status and c.verifierUserId = :verifierUserId "
+            + "order by c.id")
+    List<Integer> findIdsByStatusAndVerifierUserId(@Param("status") CaseStatus status,
+                                                   @Param("verifierUserId") int verifierUserId);
+
     /** At most one: the database has a unique index on submission_id (V14). */
     Optional<VerificationCase> findBySubmissionId(Integer submissionId);
 

@@ -139,6 +139,9 @@ public final class AssessmentPeerReviewResourceAssemblers {
                 profile.isVerified(),
                 profile.getRating(),
                 profile.getReviewCount(),
-                profile.getCreatedAt());
+                profile.getCreatedAt(),
+                profile.isSuspended(),
+                profile.getSuspendedAt(),
+                profile.getSuspensionReason());
     }
 }

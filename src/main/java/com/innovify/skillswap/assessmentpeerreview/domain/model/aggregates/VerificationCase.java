@@ -418,6 +418,31 @@ public class VerificationCase {
     }
 
     /**
+     * Takes the case back from a verifier who was suspended: it waits again for a verifier. It is not a missed
+     * deadline, so nothing is counted against the verifier, and the new verifier gets the whole deadline from now.
+     *
+     * @throws DomainException when the case is not assigned
+     */
+    public VerificationCase releaseFromSuspendedVerifier(Instant now) {
+        if (status != CaseStatus.ASSIGNED) {
+            throw new DomainException("Only an assigned case can be taken back from its verifier.");
+        }
+        if (now == null) {
+            throw new DomainException("The moment of the release is required.");
+        }
+
+        ReviewDeadline deadline = getReviewDeadline();
+        if (deadline != null) {
+            this.reviewDueAt = deadline.dueFrom(now);
+        }
+        this.verifierUserId = null;
+        this.assignedAt = null;
+        this.deadlineMissedAt = null;
+        this.status = CaseStatus.PENDING;
+        return this;
+    }
+
+    /**
      * Attaches the link to the student's repository or portfolio. A new link replaces the previous one.
      *
      * @throws DomainException when the case is resolved or the link is not a valid http(s) URL

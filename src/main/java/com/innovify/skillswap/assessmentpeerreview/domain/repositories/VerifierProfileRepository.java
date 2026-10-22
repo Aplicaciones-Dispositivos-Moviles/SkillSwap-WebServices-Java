@@ -12,9 +12,9 @@ public interface VerifierProfileRepository {
 
     Optional<VerifierProfile> findByUserId(int userId);
 
-    /** The still-enabled (not revoked) profiles that can review the skill. */
+    /** The still-enabled (not revoked and not suspended) profiles that can review the skill. */
     List<VerifierProfile> findEnabledBySkillTag(String skillTag);
 
-    /** Every still-enabled (not revoked) profile, whatever its skills. */
+    /** Every still-enabled (not revoked and not suspended) profile, whatever its skills. */
     List<VerifierProfile> findEnabled();
 }

@@ -36,7 +36,9 @@ public class VerifierProfileContextFacadeImpl implements VerifierProfileContextF
 
     @Override
     public boolean isEnabledVerifier(int userId) {
-        return profileRepository.findByUserId(userId).map(VerifierProfile::isVerified).orElse(false);
+        return profileRepository.findByUserId(userId)
+                .map(profile -> profile.isVerified() && !profile.isSuspended())
+                .orElse(false);
     }
 
     @Override

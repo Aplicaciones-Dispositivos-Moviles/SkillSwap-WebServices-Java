@@ -74,6 +74,50 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
         cases.save(verificationCase);
     }
 
+    @Test
+    void profile_aSuspendedProfile_keepsTheSuspensionAndIsNotEnabled() {
+        profiles.save(new VerifierProfile(3, "http-basics"));
+        profiles.save(new VerifierProfile(4, "http-basics"));
+        java.time.Instant now = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+
+        changeProfile(3, profile -> profile.suspend(9, "Low reliability", now));
+
+        VerifierProfile loaded = profiles.findByUserId(3).orElseThrow();
+        assertThat(loaded.isSuspended()).isTrue();
+        assertThat(loaded.getSuspendedBy()).isEqualTo(9);
+        assertThat(loaded.getSuspensionReason()).isEqualTo("Low reliability");
+        assertThat(loaded.getSuspendedAt()).isEqualTo(now);
+        assertThat(profiles.findEnabledBySkillTag("http-basics")).extracting(VerifierProfile::getVerifierUserId)
+                .containsExactly(4);
+        assertThat(profiles.findEnabled()).extracting(VerifierProfile::getVerifierUserId).containsExactly(4);
+
+        changeProfile(3, VerifierProfile::reinstate);
+
+        VerifierProfile reinstated = profiles.findByUserId(3).orElseThrow();
+        assertThat(reinstated.isSuspended()).isFalse();
+        assertThat(reinstated.getSuspensionReason()).isNull();
+        assertThat(profiles.findEnabledBySkillTag("http-basics")).hasSize(2);
+    }
+
+    @Test
+    void case_findAssignedIdsByVerifierUserId_returnsOnlyTheUnresolvedAssignedCases() {
+        int assignedA = addCase(1, 1, 10).getId();
+        int assignedB = addCase(2, 2, 11).getId();
+        int pending = addCase(3, 3, 12).getId();
+        int other = addCase(4, 4, 13).getId();
+        changeCase(assignedA, c -> c.assignVerifier(8));
+        changeCase(assignedB, c -> c.assignVerifier(8));
+        changeCase(other, c -> c.assignVerifier(9));
+
+        assertThat(cases.findAssignedIdsByVerifierUserId(8)).containsExactly(assignedA, assignedB);
+
+        changeCase(assignedA, c -> c.releaseFromSuspendedVerifier(java.time.Instant.now()));
+
+        assertThat(cases.findAssignedIdsByVerifierUserId(8)).containsExactly(assignedB);
+        assertThat(loadCase(assignedA).getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(loadCase(pending).getVerifierUserId()).isNull();
+    }
+
     private void changeProfile(int userId, Consumer<VerifierProfile> change) {
         VerifierProfile profile = profiles.findByUserId(userId).orElseThrow();
         change.accept(profile);

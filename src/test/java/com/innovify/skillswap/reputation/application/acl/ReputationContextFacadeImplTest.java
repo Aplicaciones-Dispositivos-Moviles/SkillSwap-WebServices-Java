@@ -39,4 +39,15 @@ class ReputationContextFacadeImplTest {
         assertThat(facade.findSeniorVerifiers(List.of(2, 3, 4, 9))).containsExactly(2);
         assertThat(facade.findSeniorVerifiers(List.of())).isEmpty();
     }
+
+    @Test
+    void reliabilityOf_isTheScoreOfTheVerifierOrEmptyWithoutRecord() {
+        store(2, 100, 0);
+        store(3, 10, 5);
+
+        assertThat(facade.reliabilityOf(2)).hasValue(100);
+        assertThat(facade.reliabilityOf(3)).isPresent();
+        assertThat(facade.reliabilityOf(3).getAsInt()).isLessThan(100);
+        assertThat(facade.reliabilityOf(9)).isEmpty();
+    }
 }

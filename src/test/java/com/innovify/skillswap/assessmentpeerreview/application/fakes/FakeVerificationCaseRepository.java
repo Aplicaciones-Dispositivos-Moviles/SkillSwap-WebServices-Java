@@ -76,6 +76,15 @@ public class FakeVerificationCaseRepository implements VerificationCaseRepositor
     }
 
     @Override
+    public List<Integer> findAssignedIdsByVerifierUserId(int verifierUserId) {
+        return cases.stream()
+                .filter(c -> c.getStatus() == CaseStatus.ASSIGNED && c.isAssignedTo(verifierUserId))
+                .map(VerificationCase::getId)
+                .sorted()
+                .toList();
+    }
+
+    @Override
     public List<VerificationCase> findByVerifierUserId(int verifierUserId) {
         return cases.stream()
                 .filter(c -> c.isAssignedTo(verifierUserId))

@@ -55,6 +55,6 @@ public class FakeVerifierProfileRepository implements VerifierProfileRepository 
 
     @Override
     public List<VerifierProfile> findEnabled() {
-        return profiles.stream().filter(VerifierProfile::isVerified).toList();
+        return profiles.stream().filter(p -> p.isVerified() && !p.isSuspended()).toList();
     }
 }

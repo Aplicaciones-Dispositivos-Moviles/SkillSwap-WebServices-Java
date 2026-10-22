@@ -154,6 +154,23 @@ class AssessmentPeerReviewResourceAssemblersTest {
         assertThat(resource.verified()).isTrue();
         assertThat(resource.reviewCount()).isEqualTo(1);
         assertThat(resource.createdAt()).isNotNull();
+        assertThat(resource.suspended()).isFalse();
+        assertThat(resource.suspendedAt()).isNull();
+        assertThat(resource.suspensionReason()).isNull();
+    }
+
+    @Test
+    void verifierProfile_aSuspendedOneExposesTheSuspensionButNotWhoDidIt() {
+        VerifierProfile profile = new VerifierProfile(2, "http-basics");
+        ReflectionTestUtils.setField(profile, "id", 4);
+        java.time.Instant now = java.time.Instant.parse("2026-10-21T10:00:00Z");
+        profile.suspend(9, "Low reliability", now);
+
+        VerifierProfileResource resource = AssessmentPeerReviewResourceAssemblers.toResource(profile);
+
+        assertThat(resource.suspended()).isTrue();
+        assertThat(resource.suspendedAt()).isEqualTo(now);
+        assertThat(resource.suspensionReason()).isEqualTo("Low reliability");
     }
 
     @Test

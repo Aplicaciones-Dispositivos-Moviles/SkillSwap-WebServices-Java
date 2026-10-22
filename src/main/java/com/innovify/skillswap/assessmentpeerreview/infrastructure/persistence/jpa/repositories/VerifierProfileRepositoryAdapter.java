@@ -37,6 +37,8 @@ public class VerifierProfileRepositoryAdapter implements VerifierProfileReposito
 
     @Override
     public List<VerifierProfile> findEnabled() {
-        return jpaRepository.findByVerifiedTrue();
+        return jpaRepository.findByVerifiedTrue().stream()
+                .filter(profile -> !profile.isSuspended())
+                .toList();
     }
 }

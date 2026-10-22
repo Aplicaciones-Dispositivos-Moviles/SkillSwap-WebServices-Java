@@ -3,6 +3,7 @@ package com.innovify.skillswap.assessmentpeerreview.application.fakes;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.MiniProjectSubmission;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.MiniProjectSubmissionRepository;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -58,5 +59,13 @@ public class FakeMiniProjectSubmissionRepository implements MiniProjectSubmissio
     @Override
     public Optional<MiniProjectSubmission> findByMiniProjectId(int miniProjectId) {
         return submissions.stream().filter(s -> s.getMiniProjectId() == miniProjectId).findFirst();
+    }
+
+    @Override
+    public List<MiniProjectSubmission> findAwaitingEvaluation() {
+        return submissions.stream().filter(MiniProjectSubmission::isAwaitingEvaluation)
+                .sorted(Comparator.comparing(MiniProjectSubmission::getSubmittedAt)
+                        .thenComparing(MiniProjectSubmission::getId))
+                .toList();
     }
 }

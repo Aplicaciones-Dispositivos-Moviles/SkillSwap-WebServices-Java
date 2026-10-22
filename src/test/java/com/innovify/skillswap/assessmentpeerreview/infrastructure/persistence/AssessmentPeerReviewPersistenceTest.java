@@ -555,6 +555,23 @@ class AssessmentPeerReviewPersistenceTest extends PostgresIntegrationTest {
     // ---------- Mini-project submissions ----------
 
     @Test
+    void miniProjectSubmission_pendingOnesAreFoundOldestFirstAndSettledOnesAreNot() throws Exception {
+        MiniProjectSubmission newest = submissions.save(new MiniProjectSubmission(5, 7, 10, "http-basics",
+                "https://github.com/ana/five"));
+        MiniProjectSubmission oldest = submissions.save(new MiniProjectSubmission(6, 7, 11, "http-basics",
+                "https://github.com/ana/six"));
+        MiniProjectSubmission settled = submissions.save(new MiniProjectSubmission(7, 7, 12, "http-basics",
+                "https://github.com/ana/seven"));
+        execute("UPDATE mini_project_submissions SET submitted_at = now() - interval '2 hours' WHERE id = "
+                + oldest.getId());
+        execute("UPDATE mini_project_submissions SET evaluation_status = 'Escalated' WHERE id = "
+                + settled.getId());
+
+        assertThat(submissions.findAwaitingEvaluation()).extracting(MiniProjectSubmission::getId)
+                .containsExactly(oldest.getId(), newest.getId());
+    }
+
+    @Test
     void submission_roundTripsTheMiniProjectTheStudentAndTheRepository() {
         MiniProjectSubmission original = new MiniProjectSubmission(3, 7, 10, "http-basics",
                 "https://github.com/ana/repo");

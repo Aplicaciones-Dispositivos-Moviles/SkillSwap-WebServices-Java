@@ -1,7 +1,9 @@
 package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.repositories;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.MiniProjectSubmission;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.EvaluationStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.MiniProjectSubmissionRepository;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -33,5 +35,10 @@ public class MiniProjectSubmissionRepositoryAdapter implements MiniProjectSubmis
     @Override
     public Optional<MiniProjectSubmission> findByMiniProjectId(int miniProjectId) {
         return jpaRepository.findByMiniProjectId(miniProjectId);
+    }
+
+    @Override
+    public List<MiniProjectSubmission> findAwaitingEvaluation() {
+        return jpaRepository.findByEvaluationStatusOrderBySubmittedAtAscIdAsc(EvaluationStatus.PENDING);
     }
 }

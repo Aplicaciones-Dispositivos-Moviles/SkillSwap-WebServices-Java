@@ -12,6 +12,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Eva
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.MiniProjectSubmissionRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerificationCaseRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.MiniProjectEvaluationService;
+import com.innovify.skillswap.assessmentpeerreview.infrastructure.startup.PendingEvaluationRecovery;
 import com.innovify.skillswap.iam.TestData;
 import com.innovify.skillswap.iam.application.internal.outboundservices.TokenGenerator;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
@@ -20,6 +21,7 @@ import com.innovify.skillswap.iam.domain.model.valueobjects.UserRole;
 import com.innovify.skillswap.iam.domain.repositories.UserRepository;
 import com.innovify.skillswap.learningpathengine.application.acl.BlueprintView;
 import com.innovify.skillswap.learningpathengine.application.acl.LearningPathContextFacade;
+import com.innovify.skillswap.learningpathengine.application.acl.MiniProjectView;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeMiniProjectGenerationService;
 import com.innovify.skillswap.learningpathengine.application.fakes.FakeQuestionGenerationService;
 import com.innovify.skillswap.learningpathengine.domain.model.aggregates.MiniProject;
@@ -86,6 +88,9 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     private MiniProjectEvaluationService evaluationService;
+
+    @Autowired
+    private PendingEvaluationRecovery recovery;
 
     private FakeMiniProjectEvaluationService ai;
     private MockMvc mockMvc;
@@ -313,6 +318,28 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
 
         assertThat(queryString("SELECT count(*) FROM student_employability_scores WHERE student_id = "
                 + ana.getId())).isEqualTo("0");
+    }
+
+    @Test
+    void aDeliveryLeftPendingByARestart_isEvaluatedWhenTheApplicationRecovers() throws Exception {
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
+        int miniProjectId = generateMiniProject(false);
+        // The delivery was saved but the evaluation never ran: the application stopped in between.
+        MiniProjectView miniProject = learningPath.getMiniProject(miniProjectId).orElseThrow();
+        submissions.save(new MiniProjectSubmission(miniProjectId, miniProject.studentId(),
+                miniProject.pathNodeId(), miniProject.skillTag(), REPOSITORY));
+        assertThat(delivery(miniProjectId).getEvaluationStatus()).isEqualTo(EvaluationStatus.PENDING);
+        assertThat(nodeStatus()).isNotEqualTo("Completed");
+
+        assertThat(recovery.recover()).isEqualTo(1);
+
+        assertThat(delivery(miniProjectId).getEvaluationStatus()).isEqualTo(EvaluationStatus.APPROVED);
+        assertThat(nodeStatus()).isEqualTo("Completed");
+        assertThat(queryString("SELECT verified_skills_count FROM student_employability_scores "
+                + "WHERE student_id = " + ana.getId())).isEqualTo("1");
+
+        // Nothing is pending any more, so a second restart does nothing.
+        assertThat(recovery.recover()).isZero();
     }
 
     @Test

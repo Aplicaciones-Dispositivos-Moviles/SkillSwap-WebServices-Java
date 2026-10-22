@@ -293,6 +293,29 @@ class MiniProjectSubmissionsIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void approvedByTheAi_countsTheSkillInTheEmployabilityOfTheStudentOnce() throws Exception {
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
+        int miniProjectId = generateMiniProject(false);
+
+        submit(anaToken, miniProjectId, REPOSITORY);
+
+        assertThat(nodeStatus()).isEqualTo("Completed");
+        assertThat(queryString("SELECT verified_skills_count FROM student_employability_scores "
+                + "WHERE student_id = " + ana.getId())).isEqualTo("1");
+    }
+
+    @Test
+    void reviewedByAVerifier_doesNotCountInTheEmployabilityUntilTheyApprove() throws Exception {
+        enroll(bob, bobToken);
+        int miniProjectId = generateMiniProject(false);
+
+        deliverToAVerifier(miniProjectId);
+
+        assertThat(queryString("SELECT count(*) FROM student_employability_scores WHERE student_id = "
+                + ana.getId())).isEqualTo("0");
+    }
+
+    @Test
     void withALowConfidence_aVerifierReviewsItEvenWithAHighScore() throws Exception {
         ai.returnEvaluation(FakeMiniProjectEvaluationService.UNSURE);
         int miniProjectId = generateMiniProject(false);

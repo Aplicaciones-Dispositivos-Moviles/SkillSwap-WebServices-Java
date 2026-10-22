@@ -2,6 +2,7 @@ package com.innovify.skillswap.reputation.application.eventhandlers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectApprovedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.reputation.application.commandservices.ReputationCommandService;
 import com.innovify.skillswap.reputation.domain.model.ReputationError;
@@ -93,6 +94,25 @@ class ReputationEventHandlersTest {
                 new VerificationCaseDeadlineMissed(10, 2, 1, java.time.Instant.now(), null));
 
         assertThat(service.missedDeadlines).hasSize(1);
+    }
+
+    @Test
+    void miniProjectApproved_becomesAnAutomaticApprovalOfTheStudent() {
+        new RecordMiniProjectApprovalEventHandler(service).handle(
+                new MiniProjectApprovedByAi(3, 1, 5, "http-basics"));
+
+        assertThat(service.approvals).containsExactly(new RecordAutomaticApprovalCommand(1));
+        assertThat(service.resolutions).isEmpty();
+    }
+
+    @Test
+    void miniProjectApproved_whenTheServiceFails_doesNotThrow() {
+        service.fail = true;
+
+        new RecordMiniProjectApprovalEventHandler(service).handle(
+                new MiniProjectApprovedByAi(3, 1, 5, "http-basics"));
+
+        assertThat(service.approvals).hasSize(1);
     }
 
     private static final class RecordingReputationCommandService implements ReputationCommandService {

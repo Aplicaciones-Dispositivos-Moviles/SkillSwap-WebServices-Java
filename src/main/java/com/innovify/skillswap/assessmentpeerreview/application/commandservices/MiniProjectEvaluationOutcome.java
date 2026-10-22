@@ -10,7 +10,14 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Verif
  * @param verificationCase       the case opened for a verifier; null when the AI approved the delivery or the monthly
  *                               escalations of the plan were used up
  * @param escalationLimitReached why a delivery that needed a verifier opened no case; null otherwise
+ * @param nodeCompleted          whether this approval is what completed the node; false when the node was already
+ *                               completed (for example by the quiz) and for the deliveries a verifier reviews
  */
 public record MiniProjectEvaluationOutcome(MiniProjectSubmission submission, VerificationCase verificationCase,
-                                           EscalationLimitReached escalationLimitReached) {
+                                           EscalationLimitReached escalationLimitReached, boolean nodeCompleted) {
+
+    public MiniProjectEvaluationOutcome(MiniProjectSubmission submission, VerificationCase verificationCase,
+                                        EscalationLimitReached escalationLimitReached) {
+        this(submission, verificationCase, escalationLimitReached, false);
+    }
 }

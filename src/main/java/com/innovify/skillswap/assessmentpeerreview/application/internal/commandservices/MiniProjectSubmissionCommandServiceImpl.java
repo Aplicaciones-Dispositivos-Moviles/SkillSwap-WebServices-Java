@@ -10,6 +10,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.MiniP
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.EvaluateMiniProjectSubmissionCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.SubmitMiniProjectCommand;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectApprovedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectSubmitted;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.MiniProjectBrief;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.PreliminaryEvaluation;
@@ -174,6 +175,9 @@ public class MiniProjectSubmissionCommandServiceImpl implements MiniProjectSubmi
             log.info("Preliminary evaluation of the delivery {}: {} (score {}, confidence {})", submission.getId(),
                     outcome.submission().getEvaluationStatus().value(), outcome.submission().getPreliminaryScore(),
                     outcome.submission().getPreliminaryConfidence());
+            if (outcome.nodeCompleted()) {
+                announceApproval(outcome.submission());
+            }
             return Result.success(outcome);
         } catch (AlreadyEvaluatedException exception) {
             return failures.failure(AssessmentPeerReviewError.MINI_PROJECT_ALREADY_EVALUATED);
@@ -183,6 +187,20 @@ public class MiniProjectSubmissionCommandServiceImpl implements MiniProjectSubmi
             log.error("Could not record the preliminary evaluation of the delivery {}", command.submissionId(),
                     exception);
             return failures.failure(AssessmentPeerReviewFailures.toError(exception));
+        }
+    }
+
+    /**
+     * Tells the other contexts (Reputation) that the AI approved the delivery. The evaluation is already committed, so
+     * a failure here is logged and never turns the evaluation into an error. If the application stops right after the
+     * commit and before this line, the approval is not announced; the window is tiny and the node stays completed.
+     */
+    private void announceApproval(MiniProjectSubmission approved) {
+        try {
+            eventPublisher.publish(new MiniProjectApprovedByAi(approved.getId(), approved.getStudentId(),
+                    approved.getPathNodeId(), approved.getSkillTag()));
+        } catch (RuntimeException exception) {
+            log.error("Could not announce the approval of the delivery {}", approved.getId(), exception);
         }
     }
 
@@ -228,7 +246,8 @@ public class MiniProjectSubmissionCommandServiceImpl implements MiniProjectSubmi
                 throw new NodeCompletionFailedException(completion);
             }
             return new MiniProjectEvaluationOutcome(
-                    submissionRepository.save(submission.approve(evaluation, passingScore)), null, null);
+                    submissionRepository.save(submission.approve(evaluation, passingScore)), null, null,
+                    completion == NodeCompletionOutcome.COMPLETED);
         }
 
         // Serializes the escalations of the student, so a failed quiz and a delivery cannot both take the last one.

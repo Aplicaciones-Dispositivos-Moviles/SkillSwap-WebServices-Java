@@ -47,6 +47,11 @@ public class VerificationCaseRepositoryAdapter implements VerificationCaseReposi
     }
 
     @Override
+    public List<Integer> findAssignedIdsByVerifierUserId(int verifierUserId) {
+        return jpaRepository.findIdsByStatusAndVerifierUserId(CaseStatus.ASSIGNED, verifierUserId);
+    }
+
+    @Override
     public List<VerificationCase> findByVerifierUserId(int verifierUserId) {
         return jpaRepository.findByVerifierUserIdOrderByIdDesc(verifierUserId);
     }

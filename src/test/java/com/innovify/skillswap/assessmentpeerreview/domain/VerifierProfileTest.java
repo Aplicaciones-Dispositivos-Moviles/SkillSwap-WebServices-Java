@@ -102,4 +102,75 @@ class VerifierProfileTest {
 
         assertThatThrownBy(() -> profile.updateRating(rating)).isInstanceOf(DomainException.class);
     }
+
+    // ---------- Suspension (T61) ----------
+
+    private static final java.time.Instant NOW = java.time.Instant.parse("2026-10-21T10:00:00Z");
+
+    @Test
+    void suspend_marksTheProfileAndKeepsWhoWhenAndWhy() {
+        VerifierProfile profile = new VerifierProfile(3, "http-basics");
+
+        profile.suspend(9, "  Too many overturned decisions  ", NOW);
+
+        assertThat(profile.isSuspended()).isTrue();
+        assertThat(profile.getSuspendedBy()).isEqualTo(9);
+        assertThat(profile.getSuspendedAt()).isEqualTo(NOW);
+        assertThat(profile.getSuspensionReason()).isEqualTo("Too many overturned decisions");
+        assertThat(profile.isVerified()).isTrue();
+        assertThat(profile.isAvailable()).isTrue();
+    }
+
+    @Test
+    void canReview_isFalseWhileSuspendedAndTrueAgainAfterReinstating() {
+        VerifierProfile profile = new VerifierProfile(3, "http-basics");
+        profile.suspend(9, "Low reliability", NOW);
+
+        assertThat(profile.canReview("http-basics")).isFalse();
+
+        profile.reinstate();
+
+        assertThat(profile.canReview("http-basics")).isTrue();
+        assertThat(profile.isSuspended()).isFalse();
+        assertThat(profile.getSuspendedAt()).isNull();
+        assertThat(profile.getSuspensionReason()).isNull();
+        assertThat(profile.getSuspendedBy()).isNull();
+    }
+
+    @Test
+    void availability_cannotUndoASuspension() {
+        VerifierProfile profile = new VerifierProfile(3, "http-basics");
+        profile.suspend(9, "Low reliability", NOW);
+
+        profile.setAvailability(true);
+
+        assertThat(profile.canReview("http-basics")).isFalse();
+    }
+
+    @Test
+    void suspend_twice_throwsDomainException() {
+        VerifierProfile profile = new VerifierProfile(3, "http-basics");
+        profile.suspend(9, "Low reliability", NOW);
+
+        assertThatThrownBy(() -> profile.suspend(8, "Again", NOW)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void suspend_withInvalidData_throwsDomainException() {
+        VerifierProfile profile = new VerifierProfile(3, "http-basics");
+
+        assertThatThrownBy(() -> profile.suspend(0, "Reason", NOW)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> profile.suspend(3, "Reason", NOW)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> profile.suspend(9, null, NOW)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> profile.suspend(9, "   ", NOW)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> profile.suspend(9, "a".repeat(2001), NOW)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> profile.suspend(9, "Reason", null)).isInstanceOf(DomainException.class);
+        assertThat(profile.isSuspended()).isFalse();
+    }
+
+    @Test
+    void reinstate_aProfileThatIsNotSuspended_throwsDomainException() {
+        assertThatThrownBy(() -> new VerifierProfile(3, "http-basics").reinstate())
+                .isInstanceOf(DomainException.class);
+    }
 }

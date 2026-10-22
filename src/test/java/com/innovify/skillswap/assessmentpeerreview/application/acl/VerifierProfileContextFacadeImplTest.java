@@ -28,6 +28,15 @@ class VerifierProfileContextFacadeImplTest {
     }
 
     @Test
+    void aSuspendedVerifier_isNotEnabledNorAvailable() {
+        profiles.save(new VerifierProfile(2, "http-basics").suspend(9, "Low reliability", java.time.Instant.now()));
+        profiles.save(new VerifierProfile(3, "http-basics"));
+
+        assertThat(facade.isEnabledVerifier(2)).isFalse();
+        assertThat(facade.getAvailableVerifiers()).containsExactly(new VerifierWorkload(3, 0));
+    }
+
+    @Test
     void getAvailableVerifiers_leavesOutTheUnavailableAndRevokedOnesAndCountsTheirOpenCases() {
         profiles.save(new VerifierProfile(5, "http-basics"));
         profiles.save(new VerifierProfile(2, "sql-basics"));

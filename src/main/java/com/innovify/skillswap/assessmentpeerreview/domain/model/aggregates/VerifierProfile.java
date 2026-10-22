@@ -21,6 +21,8 @@ import java.util.List;
 @Table(name = "verifier_profiles")
 public class VerifierProfile {
 
+    public static final int MAX_SUSPENSION_REASON_LENGTH = 2000;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
@@ -47,6 +49,18 @@ public class VerifierProfile {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    @Column(name = "suspended", nullable = false)
+    private boolean suspended;
+
+    @Column(name = "suspended_at")
+    private Instant suspendedAt;
+
+    @Column(name = "suspension_reason", length = MAX_SUSPENSION_REASON_LENGTH)
+    private String suspensionReason;
+
+    @Column(name = "suspended_by")
+    private Integer suspendedBy;
 
     /** Required by JPA. */
     protected VerifierProfile() {
@@ -100,13 +114,33 @@ public class VerifierProfile {
         return createdAt;
     }
 
+    /** Whether a Verificador senior suspended the verifier; it stays so until a senior reinstates them. */
+    public boolean isSuspended() {
+        return suspended;
+    }
+
+    public Instant getSuspendedAt() {
+        return suspendedAt;
+    }
+
+    public String getSuspensionReason() {
+        return suspensionReason;
+    }
+
+    /** The user id of the senior who suspended the verifier; null when it is not suspended. */
+    public Integer getSuspendedBy() {
+        return suspendedBy;
+    }
+
     public boolean hasSkill(String skillTag) {
         return skillTags.contains(skillTag == null ? "" : skillTag.strip());
     }
 
-    /** Whether this verifier can take a case of the skill: still enabled and enabled for that skill. */
+    /**
+     * Whether this verifier can take a case of the skill: still enabled, not suspended and enabled for that skill.
+     */
     public boolean canReview(String skillTag) {
-        return verified && hasSkill(skillTag);
+        return verified && !suspended && hasSkill(skillTag);
     }
 
     /**
@@ -144,6 +178,55 @@ public class VerifierProfile {
         }
 
         this.rating = rating;
+        return this;
+    }
+
+    /**
+     * Suspends the verifier: it receives no more cases until it is reinstated.
+     *
+     * @param suspendedByUserId the senior who suspends; never the verifier themselves
+     * @throws DomainException when the verifier is already suspended, the senior is not valid or is the verifier, or
+     *                         the reason is empty or longer than {@value #MAX_SUSPENSION_REASON_LENGTH} characters
+     */
+    public VerifierProfile suspend(int suspendedByUserId, String reason, Instant now) {
+        if (suspended) {
+            throw new DomainException("The verifier is already suspended.");
+        }
+        if (suspendedByUserId <= 0) {
+            throw new DomainException("The suspension must be made by a valid user.");
+        }
+        if (suspendedByUserId == verifierUserId) {
+            throw new DomainException("A verifier cannot suspend themselves.");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new DomainException("The reason of the suspension is required.");
+        }
+        String stripped = reason.strip();
+        if (stripped.length() > MAX_SUSPENSION_REASON_LENGTH) {
+            throw new DomainException(
+                    "The reason cannot exceed %d characters.".formatted(MAX_SUSPENSION_REASON_LENGTH));
+        }
+        if (now == null) {
+            throw new DomainException("The moment of the suspension is required.");
+        }
+
+        this.suspended = true;
+        this.suspendedAt = now;
+        this.suspensionReason = stripped;
+        this.suspendedBy = suspendedByUserId;
+        return this;
+    }
+
+    /** @throws DomainException when the verifier is not suspended */
+    public VerifierProfile reinstate() {
+        if (!suspended) {
+            throw new DomainException("The verifier is not suspended.");
+        }
+
+        this.suspended = false;
+        this.suspendedAt = null;
+        this.suspensionReason = null;
+        this.suspendedBy = null;
         return this;
     }
 

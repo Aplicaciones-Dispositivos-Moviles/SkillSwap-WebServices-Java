@@ -3,6 +3,7 @@ package com.innovify.skillswap.reputation.application.acl;
 import com.innovify.skillswap.reputation.domain.model.aggregates.VerifierReliability;
 import com.innovify.skillswap.reputation.domain.repositories.VerifierReliabilityRepository;
 import java.util.Collection;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -20,6 +21,13 @@ public class ReputationContextFacadeImpl implements ReputationContextFacade {
         return reliabilityRepository.findByVerifierUserId(userId)
                 .map(VerifierReliability::isSeniorVerifier)
                 .orElse(false);
+    }
+
+    @Override
+    public OptionalInt reliabilityOf(int userId) {
+        return reliabilityRepository.findByVerifierUserId(userId)
+                .map(reliability -> OptionalInt.of(reliability.getScore().value()))
+                .orElseGet(OptionalInt::empty);
     }
 
     @Override

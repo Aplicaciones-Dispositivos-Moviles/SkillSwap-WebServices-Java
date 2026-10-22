@@ -24,6 +24,9 @@ public interface VerificationCaseRepository {
     /** The ids of the assigned cases whose review was due before that moment, the most overdue first. */
     List<Integer> findOverdueAssignedIds(Instant now);
 
+    /** The ids of the cases currently assigned to the verifier and not resolved yet, oldest first. */
+    List<Integer> findAssignedIdsByVerifierUserId(int verifierUserId);
+
     /** The cases assigned to the verifier, newest first. */
     List<VerificationCase> findByVerifierUserId(int verifierUserId);
 

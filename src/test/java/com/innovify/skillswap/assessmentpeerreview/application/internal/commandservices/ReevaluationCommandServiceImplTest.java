@@ -68,6 +68,11 @@ class ReevaluationCommandServiceImplTest {
             }
 
             @Override
+            public java.util.OptionalInt reliabilityOf(int userId) {
+                return java.util.OptionalInt.empty();
+            }
+
+            @Override
             public Set<Integer> findSeniorVerifiers(Collection<Integer> userIds) {
                 return userIds.stream().filter(seniors::contains).collect(Collectors.toSet());
             }

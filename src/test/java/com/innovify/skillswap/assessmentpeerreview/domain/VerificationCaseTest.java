@@ -528,4 +528,39 @@ class VerificationCaseTest {
         assertThat(verificationCase.getSubmissionId()).isEqualTo(3);
         assertThat(verificationCase.getEvidenceUrl()).isEqualTo(REPOSITORY);
     }
+
+    // ---------- Suspended verifier (T61) ----------
+
+    @Test
+    void releaseFromSuspendedVerifier_returnsTheCaseToPendingWithoutCountingAMissedDeadline() {
+        VerificationCase verificationCase = new VerificationCase(1, STUDENT_ID, 3, "http-basics", CaseType.QUIZ,
+                ReviewDeadline.hours(48)).assignVerifier(VERIFIER_ID);
+        Instant now = Instant.now().plusSeconds(3600);
+
+        verificationCase.releaseFromSuspendedVerifier(now);
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.getVerifierUserId()).isNull();
+        assertThat(verificationCase.getAssignedAt()).isNull();
+        assertThat(verificationCase.getDeadlineMissedAt()).isNull();
+        assertThat(verificationCase.getReviewDueAt()).isEqualTo(ReviewDeadline.hours(48).dueFrom(now));
+        assertThat(verificationCase.getReassignmentCount()).isZero();
+        assertThat(verificationCase.getPreviousVerifierUserId()).isNull();
+    }
+
+    @Test
+    void releaseFromSuspendedVerifier_thenAssigningToAnotherVerifier_works() {
+        VerificationCase verificationCase = assignedCase();
+
+        verificationCase.releaseFromSuspendedVerifier(Instant.now()).assignVerifier(7);
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.ASSIGNED);
+        assertThat(verificationCase.getVerifierUserId()).isEqualTo(7);
+    }
+
+    @Test
+    void releaseFromSuspendedVerifier_ofACaseThatIsNotAssigned_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().releaseFromSuspendedVerifier(Instant.now()))
+                .isInstanceOf(DomainException.class);
+    }
 }

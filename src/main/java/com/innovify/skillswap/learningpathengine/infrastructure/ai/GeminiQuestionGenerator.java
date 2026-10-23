@@ -32,10 +32,22 @@ public class GeminiQuestionGenerator implements QuestionGenerationService {
 
     private static final Pattern SKILL_TAG = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
 
+    /** The language the questions are written in when none is configured. */
+    public static final String DEFAULT_LANGUAGE = "English";
+
     private final GeminiClient client;
+    private final String language;
 
     public GeminiQuestionGenerator(GeminiClient client) {
+        this(client, DEFAULT_LANGUAGE);
+    }
+
+    /**
+     * @param language the language of the questions and options, as it is written in the prompt (e.g. "Spanish")
+     */
+    public GeminiQuestionGenerator(GeminiClient client, String language) {
         this.client = client;
+        this.language = language == null || language.isBlank() ? DEFAULT_LANGUAGE : language.trim();
     }
 
     public GeminiQuestionGenerator(GeminiSettings settings, HttpClient httpClient) {
@@ -73,7 +85,7 @@ public class GeminiQuestionGenerator implements QuestionGenerationService {
         return List.copyOf(distinct);
     }
 
-    private static String buildPrompt(String skillTag, List<String> excludedQuestions) {
+    private String buildPrompt(String skillTag, List<String> excludedQuestions) {
         String skill = skillTag.replace('-', ' ');
         String prompt = """
                 You are an assessment writer for a platform that validates software engineering skills.
@@ -87,8 +99,8 @@ public class GeminiQuestionGenerator implements QuestionGenerationService {
                 - The questions must be different from each other and cover different sub-topics of the skill.
                 - Name the sub-topic of each question in 2 to 4 words (under 60 characters). Questions about the same
                   sub-topic must use exactly the same name.
-                - Write in English. Keep each question under 300 characters and each option under 150 characters.
-                """.formatted(AssessmentBlueprint.QUESTION_COUNT, skill, Question.ANSWER_COUNT);
+                - Write in %4$s. Keep each question under 300 characters and each option under 150 characters.
+                """.formatted(AssessmentBlueprint.QUESTION_COUNT, skill, Question.ANSWER_COUNT, language);
 
         if (!excludedQuestions.isEmpty()) {
             StringBuilder previous = new StringBuilder();

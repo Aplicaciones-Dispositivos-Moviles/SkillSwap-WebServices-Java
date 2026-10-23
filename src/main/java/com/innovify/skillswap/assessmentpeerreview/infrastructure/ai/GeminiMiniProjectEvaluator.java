@@ -27,17 +27,27 @@ import java.util.TreeMap;
  */
 public class GeminiMiniProjectEvaluator implements MiniProjectEvaluationService {
 
+    private static final String DEFAULT_LANGUAGE = "English";
     private static final int MAX_CONFIDENCE = PreliminaryEvaluation.MAX_CONFIDENCE;
 
     private final GeminiClient client;
     private final Duration timeout;
+    private final String language;
 
     /**
      * @param timeout the time the whole evaluation may take (never more than gemini.total-timeout-seconds)
      */
     public GeminiMiniProjectEvaluator(GeminiClient client, Duration timeout) {
+        this(client, timeout, DEFAULT_LANGUAGE);
+    }
+
+    /**
+     * @param language the language of the feedback for the student, as it is written in the prompt (e.g. "Spanish")
+     */
+    public GeminiMiniProjectEvaluator(GeminiClient client, Duration timeout, String language) {
         this.client = client;
         this.timeout = timeout;
+        this.language = language == null || language.isBlank() ? DEFAULT_LANGUAGE : language.trim();
     }
 
     @Override
@@ -52,7 +62,7 @@ public class GeminiMiniProjectEvaluator implements MiniProjectEvaluationService 
         return parse(client.generateJsonReadingUrls(buildPrompt(brief, repositoryUrl.strip()), timeout), brief);
     }
 
-    private static String buildPrompt(MiniProjectBrief brief, String repositoryUrl) {
+    private String buildPrompt(MiniProjectBrief brief, String repositoryUrl) {
         StringBuilder rubric = new StringBuilder();
         for (MiniProjectBrief.Criterion criterion : brief.rubric()) {
             rubric.append("- \"").append(criterion.name()).append("\" (up to ").append(criterion.weight())
@@ -81,7 +91,7 @@ public class GeminiMiniProjectEvaluator implements MiniProjectEvaluationService 
                   value when the repository is small, ambiguous or you could only see part of it.
                 - If you could not open the repository, it is empty or private, or it has nothing to do with the
                   statement, set repositoryAccessible to false, every grade to 0 and confidence to 0.
-                - feedback is one short paragraph in English for the student (under 800 characters): what is
+                - feedback is one short paragraph in %6$s for the student (under 800 characters): what is
                   missing or what to improve, without inventing facts.
 
                 Respond ONLY with a JSON object of this shape:
@@ -89,7 +99,7 @@ public class GeminiMiniProjectEvaluator implements MiniProjectEvaluationService 
                  "criteria": [{"name": string, "score": number}],
                  "confidence": number,
                  "feedback": string}
-                """.formatted(brief.skillTag(), brief.title(), brief.statement(), rubric, repositoryUrl);
+                """.formatted(brief.skillTag(), brief.title(), brief.statement(), rubric, repositoryUrl, language);
     }
 
     private static PreliminaryEvaluation parse(String answerText, MiniProjectBrief brief) {

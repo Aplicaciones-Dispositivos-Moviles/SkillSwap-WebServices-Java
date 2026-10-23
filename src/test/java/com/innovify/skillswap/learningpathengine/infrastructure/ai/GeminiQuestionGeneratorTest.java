@@ -537,4 +537,17 @@ class GeminiQuestionGeneratorTest {
                 .contains("Previous question number " + GeminiQuestionGenerator.MAX_EXCLUDED_QUESTIONS + "?")
                 .doesNotContain("Previous question number " + (GeminiQuestionGenerator.MAX_EXCLUDED_QUESTIONS + 1) + "?");
     }
+
+    @Test
+    void generate_writesInTheConfiguredLanguage() {
+        create().generateQuestions("rest-api-design");
+        GeminiSettings settings = new GeminiSettings("secret-key", "test-model", List.of(), "low", 30, 60, 1, 0,
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/v1beta");
+        new GeminiQuestionGenerator(new GeminiClient(settings, httpClient), "Spanish")
+                .generateQuestions("rest-api-design");
+
+        assertThat(requests).hasSize(2);
+        assertThat(requests.get(0).body()).contains("Write in English.");
+        assertThat(requests.get(1).body()).contains("Write in Spanish.").doesNotContain("Write in English.");
+    }
 }

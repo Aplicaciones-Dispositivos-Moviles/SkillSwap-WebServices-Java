@@ -16,7 +16,7 @@ class MiniProjectEvaluationWiringTest {
     @Test
     void enabled_evaluatesWithGemini() {
         MiniProjectEvaluationService service = config.miniProjectEvaluationService(null,
-                new MiniProjectEvaluationSettings(true, 60, true));
+                new MiniProjectEvaluationSettings(true, 60, true), "Spanish");
 
         assertThat(service).isInstanceOf(GeminiMiniProjectEvaluator.class);
     }
@@ -24,7 +24,7 @@ class MiniProjectEvaluationWiringTest {
     @Test
     void disabled_neverEvaluates_soEveryDeliveryGoesToAVerifier() {
         MiniProjectEvaluationService service = config.miniProjectEvaluationService(null,
-                new MiniProjectEvaluationSettings(false, 60, true));
+                new MiniProjectEvaluationSettings(false, 60, true), "Spanish");
         MiniProjectBrief brief = new MiniProjectBrief("http-basics", "T", "S",
                 List.of(new MiniProjectBrief.Criterion("Functionality", "It works.", 100)), 70);
 

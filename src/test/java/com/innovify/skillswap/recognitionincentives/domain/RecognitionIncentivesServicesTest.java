@@ -19,13 +19,30 @@ class RecognitionIncentivesServicesTest {
     private final DefaultRedemptionPricing pricing = new DefaultRedemptionPricing();
 
     @Test
-    void pricing_advancedPathUnlockCostsTwoHundred() {
-        assertThat(pricing.calculateCost(RedemptionItem.ADVANCED_PATH_UNLOCK).value()).isEqualTo(200);
+    void pricing_advancedPathUnlockCostsFiveHundred() {
+        assertThat(pricing.calculateCost(RedemptionItem.ADVANCED_PATH_UNLOCK).value()).isEqualTo(500);
     }
 
     @Test
-    void pricing_contributionCertificateCostsOneHundredTwenty() {
-        assertThat(pricing.calculateCost(RedemptionItem.CONTRIBUTION_CERTIFICATE).value()).isEqualTo(120);
+    void pricing_contributionCertificateCostsThreeHundred() {
+        assertThat(pricing.calculateCost(RedemptionItem.CONTRIBUTION_CERTIFICATE).value()).isEqualTo(300);
+    }
+
+    @Test
+    void pricing_theBadgeCostsTwoHundred() {
+        assertThat(pricing.calculateCost(RedemptionItem.BADGE).value()).isEqualTo(200);
+    }
+
+    @Test
+    void pricing_theSponsoredCertificationCostsFifteenHundred() {
+        assertThat(pricing.calculateCost(RedemptionItem.SPONSORED_CERTIFICATION).value()).isEqualTo(1500);
+    }
+
+    @Test
+    void pricing_everyBenefitHasAPrice() {
+        for (RedemptionItem item : RedemptionItem.values()) {
+            assertThat(pricing.calculateCost(item).value()).isPositive();
+        }
     }
 
     @Test
@@ -49,7 +66,8 @@ class RecognitionIncentivesServicesTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"AdvancedPathUnlock,ADVANCED_PATH_UNLOCK", "contributioncertificate,CONTRIBUTION_CERTIFICATE",
+    @CsvSource({"Badge,BADGE", "sponsoredcertification,SPONSORED_CERTIFICATION",
+            "AdvancedPathUnlock,ADVANCED_PATH_UNLOCK", "contributioncertificate,CONTRIBUTION_CERTIFICATE",
             "' ContributionCertificate ',CONTRIBUTION_CERTIFICATE"})
     void redemptionItem_tryParse_isCaseInsensitive(String text, RedemptionItem expected) {
         assertThat(RedemptionItem.tryParse(text)).contains(expected);

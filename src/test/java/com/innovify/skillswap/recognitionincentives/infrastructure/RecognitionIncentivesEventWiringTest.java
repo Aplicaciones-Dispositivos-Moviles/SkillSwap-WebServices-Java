@@ -116,7 +116,7 @@ class RecognitionIncentivesEventWiringTest extends PostgresIntegrationTest {
 
     @Test
     void twoRedemptionsAtTheSameTime_spendTheCreditsOnlyOnce() throws Exception {
-        Wallet wallet = wallets.save(new Wallet(2).credit(new Credits(120)));
+        Wallet wallet = wallets.save(new Wallet(2).credit(new Credits(300)));
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);
         List<Future<Result<CreditTransaction>>> futures = new ArrayList<>();

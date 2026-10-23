@@ -110,6 +110,11 @@ public class WalletCommandServiceImpl implements WalletCommandService {
                 }
 
                 Wallet wallet = existing.get();
+                // The wallet is locked, so two simultaneous redemptions of the badge cannot both pass this check.
+                if (command.item() == RedemptionItem.BADGE
+                        && !transactions.findRedemptionIds(wallet.getId(), RedemptionItem.BADGE).isEmpty()) {
+                    return failures.<CreditTransaction>failure(RecognitionIncentivesError.BENEFIT_ALREADY_REDEEMED);
+                }
                 Credits cost = pricing.calculateCost(command.item());
                 if (!wallet.canAfford(cost)) {
                     return failures.<CreditTransaction>failure(RecognitionIncentivesError.INSUFFICIENT_BALANCE);

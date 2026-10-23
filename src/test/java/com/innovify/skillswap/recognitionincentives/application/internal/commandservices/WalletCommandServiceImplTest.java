@@ -208,7 +208,7 @@ class WalletCommandServiceImplTest {
 
     @Test
     void redeem_withEnoughBalance_debitsTheCostAndRecordsTheMovement() {
-        Wallet wallet = walletWith(2, 120);
+        Wallet wallet = walletWith(2, 300);
 
         Result<CreditTransaction> result = redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE);
 
@@ -216,36 +216,36 @@ class WalletCommandServiceImplTest {
         assertThat(wallet.getBalance()).isZero();
         CreditTransaction movement = result.value();
         assertThat(movement.getType()).isEqualTo(TransactionType.REDEEMED);
-        assertThat(movement.getAmount().value()).isEqualTo(120);
+        assertThat(movement.getAmount().value()).isEqualTo(300);
         assertThat(movement.getDescription()).isEqualTo("Redeemed: contribution certificate");
         assertThat(movement.getRelatedCaseId()).isNull();
         assertThat(wallets.lockedReads()).isEqualTo(1);
     }
 
     @Test
-    void redeem_theAdvancedPathUnlock_costsTwoHundred() {
-        Wallet wallet = walletWith(2, 230);
+    void redeem_theAdvancedPathUnlock_costsFiveHundred() {
+        Wallet wallet = walletWith(2, 530);
 
         Result<CreditTransaction> result = redeem(2, RedemptionItem.ADVANCED_PATH_UNLOCK);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(wallet.getBalance()).isEqualTo(30);
-        assertThat(result.value().getAmount().value()).isEqualTo(200);
+        assertThat(result.value().getAmount().value()).isEqualTo(500);
     }
 
     @Test
     void redeem_withInsufficientBalance_failsAndChangesNothing() {
-        Wallet wallet = walletWith(2, 119);
+        Wallet wallet = walletWith(2, 299);
 
         assertFailure(redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE),
                 RecognitionIncentivesError.INSUFFICIENT_BALANCE);
-        assertThat(wallet.getBalance()).isEqualTo(119);
+        assertThat(wallet.getBalance()).isEqualTo(299);
         assertThat(transactions.items()).isEmpty();
     }
 
     @Test
     void redeem_theAdvancedPathUnlockWithTheOldPrice_isInsufficient() {
-        walletWith(2, 199);
+        walletWith(2, 499);
 
         assertFailure(redeem(2, RedemptionItem.ADVANCED_PATH_UNLOCK),
                 RecognitionIncentivesError.INSUFFICIENT_BALANCE);
@@ -266,7 +266,7 @@ class WalletCommandServiceImplTest {
 
     @Test
     void redeem_whenTheDatabaseFails_returnsDatabaseError() {
-        walletWith(2, 120);
+        walletWith(2, 300);
         transactions.failOnSave(new DataIntegrityViolationException("boom"));
 
         assertFailure(redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE),
@@ -286,7 +286,7 @@ class WalletCommandServiceImplTest {
     @org.junit.jupiter.api.Test
     void redeem_anAdvancedPathUnlock_recordsTheBenefitAndAnnouncesIt() {
         var wallet = wallets.save(new com.innovify.skillswap.recognitionincentives.domain.model.aggregates.Wallet(4));
-        wallet.credit(new com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits(250));
+        wallet.credit(new com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits(550));
 
         var result = service.handle(new com.innovify.skillswap.recognitionincentives.domain.model.commands
                 .RedeemCommand(4, com.innovify.skillswap.recognitionincentives.domain.model.valueobjects
@@ -304,7 +304,7 @@ class WalletCommandServiceImplTest {
     @org.junit.jupiter.api.Test
     void redeem_aContributionCertificateOrWithoutBalance_announcesNothing() {
         var wallet = wallets.save(new com.innovify.skillswap.recognitionincentives.domain.model.aggregates.Wallet(4));
-        wallet.credit(new com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits(150));
+        wallet.credit(new com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits(350));
 
         var certificate = service.handle(new com.innovify.skillswap.recognitionincentives.domain.model.commands
                 .RedeemCommand(4, com.innovify.skillswap.recognitionincentives.domain.model.valueobjects
@@ -316,5 +316,53 @@ class WalletCommandServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(certificate.isSuccess()).isTrue();
         org.assertj.core.api.Assertions.assertThat(unlock.isFailure()).isTrue();
         org.assertj.core.api.Assertions.assertThat(events.published()).isEmpty();
+    }
+
+    @Test
+    void redeem_theBadge_costsTwoHundred() {
+        Wallet wallet = walletWith(2, 230);
+
+        Result<CreditTransaction> result = redeem(2, RedemptionItem.BADGE);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(wallet.getBalance()).isEqualTo(30);
+        assertThat(result.value().getAmount().value()).isEqualTo(200);
+        assertThat(result.value().getRedemptionItem()).isEqualTo(RedemptionItem.BADGE);
+        assertThat(result.value().getDescription()).isEqualTo("Redeemed: badge");
+    }
+
+    @Test
+    void redeem_theBadgeASecondTime_failsWithoutChargingAnything() {
+        Wallet wallet = walletWith(2, 600);
+        assertThat(redeem(2, RedemptionItem.BADGE).isSuccess()).isTrue();
+
+        assertFailure(redeem(2, RedemptionItem.BADGE), RecognitionIncentivesError.BENEFIT_ALREADY_REDEEMED);
+
+        assertThat(wallet.getBalance()).isEqualTo(400);
+        assertThat(transactions.items()).hasSize(1);
+    }
+
+    @Test
+    void redeem_theOtherBenefits_canBeRedeemedMoreThanOnce() {
+        walletWith(2, 600);
+
+        assertThat(redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE).isSuccess()).isTrue();
+        assertThat(redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE).isSuccess()).isTrue();
+        assertThat(transactions.items()).hasSize(2);
+    }
+
+    @Test
+    void redeem_theSponsoredCertification_costsFifteenHundred() {
+        Wallet wallet = walletWith(2, 1499);
+
+        assertFailure(redeem(2, RedemptionItem.SPONSORED_CERTIFICATION),
+                RecognitionIncentivesError.INSUFFICIENT_BALANCE);
+        wallet.credit(new Credits(1));
+        Result<CreditTransaction> result = redeem(2, RedemptionItem.SPONSORED_CERTIFICATION);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(wallet.getBalance()).isZero();
+        assertThat(result.value().getAmount().value()).isEqualTo(1500);
+        assertThat(events.published()).isEmpty();
     }
 }

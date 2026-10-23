@@ -5,13 +5,16 @@ import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Re
 import com.innovify.skillswap.shared.domain.exceptions.DomainException;
 
 /**
- * Advanced path unlock = 200 SkillCredits; contribution certificate = 120 SkillCredits. Scaled to the rewards (25
- * per quiz, 40 per mini-project), so a benefit still takes several resolved cases.
+ * The store: badge = 200 SkillCredits, contribution certificate = 300, advanced path unlock = 500 and sponsored
+ * certification = 1 500. Scaled to the rewards (25 per quiz, 40 per mini-project), so a benefit still takes several
+ * resolved cases; the sponsored certification is a long-term goal (38 mini-projects or 60 quizzes).
  */
 public class DefaultRedemptionPricing implements RedemptionPricing {
 
-    public static final int ADVANCED_PATH_UNLOCK_COST = 200;
-    public static final int CONTRIBUTION_CERTIFICATE_COST = 120;
+    public static final int BADGE_COST = 200;
+    public static final int CONTRIBUTION_CERTIFICATE_COST = 300;
+    public static final int ADVANCED_PATH_UNLOCK_COST = 500;
+    public static final int SPONSORED_CERTIFICATION_COST = 1500;
 
     @Override
     public Credits calculateCost(RedemptionItem item) {
@@ -19,8 +22,10 @@ public class DefaultRedemptionPricing implements RedemptionPricing {
             throw new DomainException("The benefit to redeem is not valid.");
         }
         return switch (item) {
-            case ADVANCED_PATH_UNLOCK -> new Credits(ADVANCED_PATH_UNLOCK_COST);
+            case BADGE -> new Credits(BADGE_COST);
             case CONTRIBUTION_CERTIFICATE -> new Credits(CONTRIBUTION_CERTIFICATE_COST);
+            case ADVANCED_PATH_UNLOCK -> new Credits(ADVANCED_PATH_UNLOCK_COST);
+            case SPONSORED_CERTIFICATION -> new Credits(SPONSORED_CERTIFICATION_COST);
         };
     }
 }

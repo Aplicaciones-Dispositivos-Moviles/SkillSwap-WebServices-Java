@@ -125,7 +125,7 @@ class AdvancedPathUnlockIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("US32/US05: redeeming the advanced path grants an available unlock to the student")
     void redeem_advancedPath_grantsAnAvailableUnlock() throws Exception {
-        giveCredits(200);
+        giveCredits(500);
 
         MvcResult redemption = redeemAdvancedPath();
         int redemptionId = read(redemption, "$.id");
@@ -141,7 +141,7 @@ class AdvancedPathUnlockIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("US05 E6: on the free plan the advanced path is not counted in the limit of active paths")
     void freePlan_withOneActivePath_canStillStartTheAdvancedPath() throws Exception {
-        giveCredits(200);
+        giveCredits(500);
         redeemAdvancedPath();
         assertThat(declare(REST_AND_JWT, false).getResponse().getStatus()).isEqualTo(201);
 
@@ -168,7 +168,7 @@ class AdvancedPathUnlockIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("US05 E6: the advanced path is not counted in the total either")
     void freePlan_withThreePathsInTotal_theAdvancedPathIsNotCounted() throws Exception {
-        giveCredits(200);
+        giveCredits(500);
         redeemAdvancedPath();
         assertThat(declare(REST_AND_JWT, true).getResponse().getStatus()).isEqualTo(201);
 
@@ -185,7 +185,7 @@ class AdvancedPathUnlockIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void advancedPath_canBeResumedWhateverTheLimit() throws Exception {
-        giveCredits(200);
+        giveCredits(500);
         redeemAdvancedPath();
         int advancedId = read(declare(REST_AND_JWT, true), "$.id");
         assertThat(call(patch("/api/v1/learning-paths/" + advancedId + "/pause"), null).getResponse().getStatus())
@@ -204,7 +204,7 @@ class AdvancedPathUnlockIntegrationTest extends PostgresIntegrationTest {
         FakePaymentGateway gateway = (FakePaymentGateway) paymentGateway;
         gateway.willAnswer(ana.getId(), FakePaymentGateway.active("GPA." + ana.getId()));
         assertThat(subscriptions.handle(new CreateSubscriptionCommand(ana.getId(), null)).isSuccess()).isTrue();
-        giveCredits(200);
+        giveCredits(500);
         redeemAdvancedPath();
         int advancedId = read(declare(REST_AND_JWT, true), "$.id");
         LearningPath older = declareDirectly(SQL).value();
@@ -228,7 +228,7 @@ class AdvancedPathUnlockIntegrationTest extends PostgresIntegrationTest {
         // A redemption whose event never reached Learning Path Engine (or one made before the benefit was delivered,
         // which the migration recognizes by its description).
         execute("INSERT INTO credit_transactions (wallet_id, amount, type, description, created_at, redemption_item) "
-                + "VALUES (" + walletId + ", 200, 'Redeemed', 'Redeemed: advanced path unlock', now(), "
+                + "VALUES (" + walletId + ", 500, 'Redeemed', 'Redeemed: advanced path unlock', now(), "
                 + "'AdvancedPathUnlock')");
 
         MvcResult unlocks = call(get("/api/v1/advanced-path-unlocks"), null);
@@ -242,7 +242,7 @@ class AdvancedPathUnlockIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void aContributionCertificate_grantsNoAdvancedPath() throws Exception {
-        giveCredits(120);
+        giveCredits(300);
 
         MvcResult result = call(post("/api/v1/credit-transactions/redeem"), "{\"item\":\"ContributionCertificate\"}");
 

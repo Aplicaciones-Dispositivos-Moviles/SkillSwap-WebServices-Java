@@ -309,17 +309,17 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void history_listsTheMovementsFromTheMostRecent() throws Exception {
-        resolveCases(bob, CaseType.MINI_PROJECT, 3);
+        resolveCases(bob, CaseType.MINI_PROJECT, 8);
         assertThat(status(redeem(bobToken, "ContributionCertificate"))).isEqualTo(201);
 
         MvcResult result = history(bobToken, bob);
 
         assertThat(status(result)).isEqualTo(200);
-        assertThat((List<Object>) read(result, "$")).hasSize(4);
+        assertThat((List<Object>) read(result, "$")).hasSize(9);
         assertThat((String) read(result, "$[0].type")).isEqualTo("Redeemed");
-        assertThat((int) read(result, "$[0].amount")).isEqualTo(120);
-        assertThat((String) read(result, "$[3].type")).isEqualTo("Earned");
-        assertThat((int) read(result, "$[3].relatedCaseId")).isEqualTo(1000);
+        assertThat((int) read(result, "$[0].amount")).isEqualTo(300);
+        assertThat((String) read(result, "$[8].type")).isEqualTo("Earned");
+        assertThat((int) read(result, "$[8].relatedCaseId")).isEqualTo(1000);
     }
 
     @Test
@@ -342,16 +342,16 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void redeem_withEnoughBalance_returns201AndTakesTheCost() throws Exception {
-        resolveCases(bob, CaseType.MINI_PROJECT, 3);
+        resolveCases(bob, CaseType.MINI_PROJECT, 8);
 
         MvcResult result = redeem(bobToken, "ContributionCertificate");
 
         assertThat(status(result)).isEqualTo(201);
         assertThat(result.getResponse().getHeader("Location")).isEqualTo(WALLETS + bob.getId() + "/transactions");
         assertThat((String) read(result, "$.type")).isEqualTo("Redeemed");
-        assertThat((int) read(result, "$.amount")).isEqualTo(120);
+        assertThat((int) read(result, "$.amount")).isEqualTo(300);
         assertThat((Object) read(result, "$.relatedCaseId")).isNull();
-        assertThat(balance(bobToken, bob)).isZero();
+        assertThat(balance(bobToken, bob)).isEqualTo(20);
     }
 
     @Test
@@ -366,20 +366,55 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void redeem_theAdvancedPathUnlock_costsTwoHundredCredits() throws Exception {
+    void redeem_theAdvancedPathUnlock_costsFiveHundredCredits() throws Exception {
         resolveCases(bob, CaseType.QUIZ, 4);
-        resolveCases(bob, CaseType.MINI_PROJECT, 2);
+        resolveCases(bob, CaseType.MINI_PROJECT, 9);
         MvcResult notEnough = redeem(bobToken, "AdvancedPathUnlock");
         assertThat(status(notEnough)).isEqualTo(409);
         assertThat(title(notEnough)).isEqualTo("InsufficientBalance");
 
-        resolveCases(bob, CaseType.QUIZ, 1);
+        resolveCases(bob, CaseType.QUIZ, 2);
 
         MvcResult result = redeem(bobToken, "AdvancedPathUnlock");
 
         assertThat(status(result)).isEqualTo(201);
-        assertThat((int) read(result, "$.amount")).isEqualTo(200);
-        assertThat(balance(bobToken, bob)).isEqualTo(5);
+        assertThat((int) read(result, "$.amount")).isEqualTo(500);
+        assertThat(balance(bobToken, bob)).isEqualTo(10);
+    }
+
+    @Test
+    void redeem_theBadge_costsTwoHundredAndCanBeRedeemedOnlyOnce() throws Exception {
+        resolveCases(bob, CaseType.MINI_PROJECT, 10);
+
+        MvcResult first = redeem(bobToken, "Badge");
+
+        assertThat(status(first)).isEqualTo(201);
+        assertThat((int) read(first, "$.amount")).isEqualTo(200);
+        assertThat((String) read(first, "$.redemptionItem")).isEqualTo("Badge");
+        assertThat(balance(bobToken, bob)).isEqualTo(200);
+
+        MvcResult second = redeem(bobToken, "Badge");
+
+        assertThat(status(second)).isEqualTo(409);
+        assertThat(title(second)).isEqualTo("BenefitAlreadyRedeemed");
+        assertThat(balance(bobToken, bob)).isEqualTo(200);
+    }
+
+    @Test
+    void redeem_theSponsoredCertification_needsFifteenHundredCredits() throws Exception {
+        resolveCases(bob, CaseType.MINI_PROJECT, 37);
+        MvcResult notEnough = redeem(bobToken, "SponsoredCertification");
+        assertThat(status(notEnough)).isEqualTo(409);
+        assertThat(title(notEnough)).isEqualTo("InsufficientBalance");
+
+        resolveCases(bob, CaseType.MINI_PROJECT, 1);
+
+        MvcResult result = redeem(bobToken, "SponsoredCertification");
+
+        assertThat(status(result)).isEqualTo(201);
+        assertThat((int) read(result, "$.amount")).isEqualTo(1500);
+        assertThat((String) read(result, "$.redemptionItem")).isEqualTo("SponsoredCertification");
+        assertThat(balance(bobToken, bob)).isEqualTo(20);
     }
 
     @Test

@@ -23,9 +23,18 @@ public class GeminiMiniProjectGenerator implements MiniProjectGenerationService 
     private static final Pattern SKILL_TAG = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
 
     private final GeminiClient client;
+    private final String language;
 
     public GeminiMiniProjectGenerator(GeminiClient client) {
+        this(client, GeminiQuestionGenerator.DEFAULT_LANGUAGE);
+    }
+
+    /**
+     * @param language the language of the statement and the rubric, as it is written in the prompt (e.g. "Spanish")
+     */
+    public GeminiMiniProjectGenerator(GeminiClient client, String language) {
         this.client = client;
+        this.language = language == null || language.isBlank() ? GeminiQuestionGenerator.DEFAULT_LANGUAGE : language.trim();
     }
 
     @Override
@@ -37,7 +46,7 @@ public class GeminiMiniProjectGenerator implements MiniProjectGenerationService 
         return parse(client.generateJson(buildPrompt(skillTag)));
     }
 
-    private static String buildPrompt(String skillTag) {
+    private String buildPrompt(String skillTag) {
         String skill = skillTag.replace('-', ' ');
         return """
                 You are an assessment writer for a platform that validates software engineering skills.
@@ -53,12 +62,12 @@ public class GeminiMiniProjectGenerator implements MiniProjectGenerationService 
                   must add up to exactly 100.
                 - The criteria must be observable in the repository (code, tests, documentation, commit history), not
                   subjective impressions.
-                - Write in English.
+                - Write in %2$s.
 
                 Respond ONLY with a JSON object of this shape:
                 {"title": string, "statement": string,
                  "rubric": [{"name": string, "description": string, "weight": number}]}
-                """.formatted(skill);
+                """.formatted(skill, language);
     }
 
     private static MiniProjectDraft parse(String answerText) {

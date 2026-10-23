@@ -196,4 +196,21 @@ class GeminiMiniProjectEvaluatorTest {
             assertThat(request.body()).doesNotContain("responseMimeType");
         }
     }
+
+    @Test
+    void evaluate_writesTheFeedbackInTheConfiguredLanguage() {
+        GeminiClient client = new GeminiClient(null, null) {
+            @Override
+            public String generateJsonReadingUrls(String prompt, Duration budget) {
+                prompts.add(prompt);
+                return VALID;
+            }
+        };
+        evaluatorAnswering(VALID).evaluate(BRIEF, REPOSITORY);
+        new GeminiMiniProjectEvaluator(client, Duration.ofSeconds(45), "Spanish").evaluate(BRIEF, REPOSITORY);
+
+        assertThat(prompts).hasSize(2);
+        assertThat(prompts.get(0)).contains("short paragraph in English for the student");
+        assertThat(prompts.get(1)).contains("short paragraph in Spanish for the student").doesNotContain("English");
+    }
 }

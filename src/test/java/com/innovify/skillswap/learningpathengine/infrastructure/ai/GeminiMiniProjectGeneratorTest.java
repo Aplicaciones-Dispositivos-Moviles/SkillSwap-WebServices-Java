@@ -105,4 +105,23 @@ class GeminiMiniProjectGeneratorTest {
         assertThatThrownBy(() -> generatorAnswering(answer).generateMiniProject("rest-api-design"))
                 .isInstanceOf(DomainException.class);
     }
+
+    @Test
+    void generate_writesInEnglishByDefaultAndInTheConfiguredLanguage() {
+        generatorAnswering(VALID).generateMiniProject("rest-api-design");
+        GeminiClient client = new GeminiClient(null, null) {
+            @Override
+            public String generateJson(String prompt) {
+                prompts.add(prompt);
+                return VALID;
+            }
+        };
+        new GeminiMiniProjectGenerator(client, "Spanish").generateMiniProject("rest-api-design");
+        new GeminiMiniProjectGenerator(client, "  ").generateMiniProject("rest-api-design");
+
+        assertThat(prompts).hasSize(3);
+        assertThat(prompts.get(0)).contains("- Write in English.");
+        assertThat(prompts.get(1)).contains("- Write in Spanish.").doesNotContain("English");
+        assertThat(prompts.get(2)).contains("- Write in English.");
+    }
 }

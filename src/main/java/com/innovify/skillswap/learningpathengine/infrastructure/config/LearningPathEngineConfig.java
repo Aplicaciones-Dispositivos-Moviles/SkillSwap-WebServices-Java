@@ -29,6 +29,7 @@ import com.innovify.skillswap.shared.domain.events.DomainEventHandler;
 import com.innovify.skillswap.subscriptionbilling.domain.model.events.SubscriptionExpired;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -100,13 +101,15 @@ public class LearningPathEngineConfig {
     }
 
     @Bean
-    public QuestionGenerationService questionGenerationService(GeminiClient geminiClient) {
-        return new GeminiQuestionGenerator(geminiClient);
+    public QuestionGenerationService questionGenerationService(
+            GeminiClient geminiClient, @Value("${gemini.content-language:Spanish}") String contentLanguage) {
+        return new GeminiQuestionGenerator(geminiClient, contentLanguage);
     }
 
     @Bean
-    public MiniProjectGenerationService miniProjectGenerationService(GeminiClient geminiClient) {
-        return new GeminiMiniProjectGenerator(geminiClient);
+    public MiniProjectGenerationService miniProjectGenerationService(
+            GeminiClient geminiClient, @Value("${gemini.content-language:Spanish}") String contentLanguage) {
+        return new GeminiMiniProjectGenerator(geminiClient, contentLanguage);
     }
 
     /**

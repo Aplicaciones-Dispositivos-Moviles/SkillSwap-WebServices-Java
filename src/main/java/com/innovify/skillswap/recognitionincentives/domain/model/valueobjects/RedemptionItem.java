@@ -4,13 +4,20 @@ import java.util.Optional;
 
 /** The benefits that can be redeemed with SkillCredits. */
 public enum RedemptionItem {
+    /** A badge shown on the profile of the verifier. It can be redeemed only once. */
+    BADGE("Badge", "badge"),
     /**
      * Unlocks an advanced learning path for the student: it is completed like any other path, but it does not count
      * toward the limits of the plan (delivered by Learning Path Engine).
      */
     ADVANCED_PATH_UNLOCK("AdvancedPathUnlock", "advanced path unlock"),
     /** An exportable certificate of the contribution as a verifier. */
-    CONTRIBUTION_CERTIFICATE("ContributionCertificate", "contribution certificate");
+    CONTRIBUTION_CERTIFICATE("ContributionCertificate", "contribution certificate"),
+    /**
+     * Covers the cost or the right to take the exam of an external certification; it does not guarantee passing it.
+     * The delivery is manual, outside the system (the app shows it as pending delivery by Innovify).
+     */
+    SPONSORED_CERTIFICATION("SponsoredCertification", "sponsored certification");
 
     private final String value;
     private final String description;

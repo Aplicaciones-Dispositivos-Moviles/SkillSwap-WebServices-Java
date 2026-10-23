@@ -21,7 +21,8 @@ public interface WalletCommandService {
 
     /**
      * Redeems a benefit, taking its cost from the balance and recording the movement. Fails with
-     * INVALID_REDEMPTION_ITEM, WALLET_NOT_FOUND or INSUFFICIENT_BALANCE.
+     * INVALID_REDEMPTION_ITEM, WALLET_NOT_FOUND, INSUFFICIENT_BALANCE or BENEFIT_ALREADY_REDEEMED
+     * (the badge can be redeemed only once).
      */
     Result<CreditTransaction> handle(RedeemCommand command);
 }

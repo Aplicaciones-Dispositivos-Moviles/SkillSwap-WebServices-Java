@@ -11,6 +11,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Verif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.EvaluateMiniProjectSubmissionCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.SubmitMiniProjectCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectApprovedByAi;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectEscalatedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectSubmitted;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.MiniProjectBrief;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.PreliminaryEvaluation;
@@ -177,6 +178,8 @@ public class MiniProjectSubmissionCommandServiceImpl implements MiniProjectSubmi
                     outcome.submission().getPreliminaryConfidence());
             if (outcome.nodeCompleted()) {
                 announceApproval(outcome.submission());
+            } else if (outcome.verificationCase() != null) {
+                announceEscalation(outcome.submission(), outcome.verificationCase());
             }
             return Result.success(outcome);
         } catch (AlreadyEvaluatedException exception) {
@@ -201,6 +204,19 @@ public class MiniProjectSubmissionCommandServiceImpl implements MiniProjectSubmi
                     approved.getPathNodeId(), approved.getSkillTag()));
         } catch (RuntimeException exception) {
             log.error("Could not announce the approval of the delivery {}", approved.getId(), exception);
+        }
+    }
+
+    /**
+     * Tells the other contexts (notifications) that the AI sent the delivery to a verifier. Like the approval, it is
+     * announced once the evaluation is committed, and a failure here is only logged.
+     */
+    private void announceEscalation(MiniProjectSubmission escalated, VerificationCase opened) {
+        try {
+            eventPublisher.publish(new MiniProjectEscalatedByAi(escalated.getId(), escalated.getStudentId(),
+                    escalated.getPathNodeId(), escalated.getSkillTag(), opened.getId()));
+        } catch (RuntimeException exception) {
+            log.error("Could not announce the escalation of the delivery {}", escalated.getId(), exception);
         }
     }
 

@@ -21,6 +21,7 @@ import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Verif
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.EvaluateMiniProjectSubmissionCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.SubmitMiniProjectCommand;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectApprovedByAi;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectEscalatedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectSubmitted;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
@@ -628,5 +629,39 @@ class MiniProjectSubmissionCommandServiceImplTest {
         deliverAndEvaluate();
 
         assertThat(approvals()).isEmpty();
+    }
+
+    private List<MiniProjectEscalatedByAi> escalations() {
+        return events.published().stream().filter(MiniProjectEscalatedByAi.class::isInstance)
+                .map(MiniProjectEscalatedByAi.class::cast).toList();
+    }
+
+    @Test
+    void evaluate_whenAVerifierMustReviewIt_announcesTheEscalationWithTheCase() {
+        Result<MiniProjectEvaluationOutcome> result = deliverAndEvaluate();
+
+        MiniProjectSubmission submission = result.value().submission();
+        assertThat(escalations()).containsExactly(new MiniProjectEscalatedByAi(submission.getId(), STUDENT_ID,
+                NODE_ID, "http-basics", result.value().verificationCase().getId()));
+    }
+
+    @Test
+    void evaluate_whenTheAiApproves_announcesNoEscalation() {
+        ai.returnEvaluation(FakeMiniProjectEvaluationService.ENOUGH);
+
+        deliverAndEvaluate();
+
+        assertThat(escalations()).isEmpty();
+    }
+
+    @Test
+    void evaluate_whenThePlanHasNoEscalationsLeft_announcesNoEscalation() {
+        seedCasesOpenedThisMonth(3);
+
+        Result<MiniProjectEvaluationOutcome> result = deliverAndEvaluate();
+
+        assertThat(result.value().submission().getEvaluationStatus())
+                .isEqualTo(EvaluationStatus.ESCALATION_LIMIT_REACHED);
+        assertThat(escalations()).isEmpty();
     }
 }

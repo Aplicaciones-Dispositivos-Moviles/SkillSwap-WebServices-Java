@@ -2,13 +2,20 @@ package com.innovify.skillswap.assessmentpeerreview.infrastructure.config;
 
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.MiniProjectSubmissionCommandService;
 import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.EvaluateMiniProjectEventHandler;
+import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.NotifyCaseResolutionEventHandler;
+import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.NotifyMiniProjectApprovedEventHandler;
+import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.NotifyMiniProjectEscalatedEventHandler;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectApprovedByAi;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectEscalatedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectSubmitted;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.MiniProjectSubmissionRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.DefaultVerifierMatcher;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.MiniProjectEvaluationService;
 import com.innovify.skillswap.assessmentpeerreview.domain.services.VerifierMatcher;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.ai.GeminiMiniProjectEvaluator;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.startup.PendingEvaluationRecovery;
+import com.innovify.skillswap.iam.application.acl.UserNotificationsContextFacade;
 import com.innovify.skillswap.learningpathengine.infrastructure.ai.GeminiClient;
 import com.innovify.skillswap.shared.domain.events.DomainEventHandler;
 import com.innovify.skillswap.shared.domain.events.DomainEventPublisher;
@@ -21,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -69,6 +77,27 @@ public class AssessmentPeerReviewConfig {
             MiniProjectSubmissionCommandService commandService, MiniProjectEvaluationSettings settings) {
         Executor executor = settings.asynchronous() ? newEvaluationExecutor() : Runnable::run;
         return new EvaluateMiniProjectEventHandler(commandService, executor);
+    }
+
+    /** Push notification to the student when the AI approves the delivery of the mini-project. */
+    @Bean
+    public DomainEventHandler<MiniProjectApprovedByAi> notifyMiniProjectApprovedEventHandler(
+            UserNotificationsContextFacade notifications, MessageSource messageSource) {
+        return new NotifyMiniProjectApprovedEventHandler(notifications, messageSource);
+    }
+
+    /** Push notification to the student when the AI sends the delivery to a verifier. */
+    @Bean
+    public DomainEventHandler<MiniProjectEscalatedByAi> notifyMiniProjectEscalatedEventHandler(
+            UserNotificationsContextFacade notifications, MessageSource messageSource) {
+        return new NotifyMiniProjectEscalatedEventHandler(notifications, messageSource);
+    }
+
+    /** Push notification to the student when a verifier resolves their case. */
+    @Bean
+    public DomainEventHandler<VerificationCaseResolved> notifyCaseResolutionEventHandler(
+            UserNotificationsContextFacade notifications, MessageSource messageSource) {
+        return new NotifyCaseResolutionEventHandler(notifications, messageSource);
     }
 
     /** Retries the evaluations that a restart interrupted, once the application is ready. */

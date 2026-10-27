@@ -16,6 +16,13 @@ import java.time.Instant;
  * @param status         Scheduled, VideoSubmitted, Approved, Rejected or Cancelled
  * @param createdAt      when it was scheduled (UTC)
  * @param updatedAt      when it last changed (UTC)
+ * @param hasVideo       whether the student uploaded the video (read it with GET /{id}/video)
+ * @param videoContentType the MIME type of the video; null without video
+ * @param videoSubmittedAt when the video was uploaded (UTC); null without video
+ * @param score          the score the verifier gave with the rubric (0 to 100; 70 or more approves); null until the
+ *                       review
+ * @param feedback       what the verifier suggests improving; null when there is none
+ * @param reviewedAt     when the verifier reviewed it (UTC); null until the review
  */
 public record FinalDemonstrationResource(
         int id, int studentId, int learningPathId, String skillTag, int verifierUserId,
@@ -23,5 +30,7 @@ public record FinalDemonstrationResource(
         Instant scheduledAt,
         @Schema(allowableValues = {"Scheduled", "VideoSubmitted", "Approved", "Rejected", "Cancelled"})
         String status,
-        Instant createdAt, Instant updatedAt) {
+        Instant createdAt, Instant updatedAt,
+        boolean hasVideo, String videoContentType, Instant videoSubmittedAt, Integer score, String feedback,
+        Instant reviewedAt) {
 }

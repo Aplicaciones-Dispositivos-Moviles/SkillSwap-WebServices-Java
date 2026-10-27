@@ -151,6 +151,8 @@ public final class AssessmentPeerReviewResourceAssemblers {
         return new FinalDemonstrationResource(demonstration.getId(), demonstration.getStudentId(),
                 demonstration.getLearningPathId(), demonstration.getSkillTag(), demonstration.getVerifierUserId(),
                 demonstration.getModality().value(), demonstration.getScheduledAt(), demonstration.getStatus().value(),
-                demonstration.getCreatedAt(), demonstration.getUpdatedAt());
+                demonstration.getCreatedAt(), demonstration.getUpdatedAt(), demonstration.hasVideo(),
+                demonstration.getVideoContentType(), demonstration.getVideoSubmittedAt(), demonstration.getScore(),
+                demonstration.getFeedback(), demonstration.getReviewedAt());
     }
 }

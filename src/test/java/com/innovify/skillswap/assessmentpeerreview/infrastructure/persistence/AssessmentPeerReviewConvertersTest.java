@@ -5,11 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.DemonstrationModality;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.DemonstrationStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.EvaluationStatus;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.Score;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.CaseStatusConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.CaseTypeConverter;
+import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.DemonstrationModalityConverter;
+import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.DemonstrationStatusConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.EvaluationStatusConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.IntegerListConverter;
 import com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.converters.ReviewDecisionConverter;
@@ -146,5 +150,25 @@ class AssessmentPeerReviewConvertersTest {
                 .containsExactly("Pending", "Approved", "Escalated", "EscalationLimitReached");
         assertThatThrownBy(() -> evaluationStatuses.convertToEntityAttribute("Graded"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(DemonstrationModality.class)
+    void demonstrationModality_roundTripsAsItsText(DemonstrationModality modality) {
+        DemonstrationModalityConverter converter = new DemonstrationModalityConverter();
+
+        assertThat(converter.convertToEntityAttribute(converter.convertToDatabaseColumn(modality))).isEqualTo(modality);
+        assertThat(converter.convertToDatabaseColumn(null)).isNull();
+        assertThat(converter.convertToEntityAttribute(null)).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(DemonstrationStatus.class)
+    void demonstrationStatus_roundTripsAsItsText(DemonstrationStatus status) {
+        DemonstrationStatusConverter converter = new DemonstrationStatusConverter();
+
+        assertThat(converter.convertToEntityAttribute(converter.convertToDatabaseColumn(status))).isEqualTo(status);
+        assertThat(converter.convertToDatabaseColumn(null)).isNull();
+        assertThat(converter.convertToEntityAttribute(null)).isNull();
     }
 }

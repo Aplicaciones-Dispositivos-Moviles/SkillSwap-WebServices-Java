@@ -2,6 +2,7 @@ package com.innovify.skillswap.assessmentpeerreview.application.eventhandlers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.FinalDemonstrationReviewed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectApprovedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectEscalatedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
@@ -104,5 +105,34 @@ class AssessmentPushNotificationHandlersTest {
                 .handle(new MiniProjectEscalatedByAi(5, 7, 10, "oop", 33));
 
         assertThat(sent).hasSize(2);
+    }
+
+    @Test
+    void anApprovedFinalDemonstration_notifiesTheStudent() {
+        new NotifyFinalDemonstrationReviewedEventHandler(facade, messages)
+                .handle(new FinalDemonstrationReviewed(4, 7, 9, "rest-api-design", 88, true));
+
+        assertThat(sent).singleElement().satisfies(push -> {
+            assertThat(push.userId()).isEqualTo(7);
+            assertThat(push.title()).isEqualTo("¡Demostración final aprobada!");
+            assertThat(push.body()).isEqualTo("Un Verificador aprobó tu demostración final de rest api design.");
+            assertThat(push.data()).containsEntry("type", "FinalDemonstrationApproved")
+                    .containsEntry("demonstrationId", "4").containsEntry("skillTag", "rest-api-design")
+                    .containsEntry("score", "88");
+        });
+    }
+
+    @Test
+    void aRejectedFinalDemonstration_notifiesTheStudent() {
+        new NotifyFinalDemonstrationReviewedEventHandler(facade, messages)
+                .handle(new FinalDemonstrationReviewed(4, 7, 9, "oop", 40, false));
+
+        assertThat(sent).singleElement().satisfies(push -> {
+            assertThat(push.title()).isEqualTo("Demostración final no aprobada");
+            assertThat(push.body()).isEqualTo(
+                    "Un Verificador no aprobó tu demostración final de oop. Revisa el detalle en la app.");
+            assertThat(push.data()).containsEntry("type", "FinalDemonstrationRejected")
+                    .containsEntry("demonstrationId", "4").containsEntry("score", "40");
+        });
     }
 }

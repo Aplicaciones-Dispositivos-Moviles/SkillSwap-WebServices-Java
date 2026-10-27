@@ -20,7 +20,9 @@ import java.time.temporal.ChronoUnit;
  * valid or not.
  *
  * <p>It is scheduled at least {@link #MIN_LEAD_TIME} ahead and can be rescheduled or cancelled while it is
- * {@link DemonstrationStatus#SCHEDULED}.
+ * {@link DemonstrationStatus#SCHEDULED}. The student then uploads the video of the demonstration (US29), which can be
+ * replaced until the verifier reviews it. The verifier scores it with the rubric: {@link #PASSING_SCORE} or more
+ * approves it, less rejects it and needs a feedback.
  */
 @Entity
 @Table(name = "final_demonstrations")
@@ -28,6 +30,12 @@ public class FinalDemonstration {
 
     /** How far in the future the demonstration must be scheduled. */
     public static final Duration MIN_LEAD_TIME = Duration.ofHours(24);
+
+    /** The score (0 to 100) from which the verifier approves the demonstration. */
+    public static final int PASSING_SCORE = 70;
+
+    public static final int MAX_FEEDBACK_LENGTH = 1000;
+    public static final int MAX_VIDEO_REFERENCE_LENGTH = 300;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -64,6 +72,29 @@ public class FinalDemonstration {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** Where the video is stored (null until it is uploaded). */
+    @Column(name = "video_storage_reference", length = 300)
+    private String videoStorageReference;
+
+    @Column(name = "video_content_type", length = 50)
+    private String videoContentType;
+
+    @Column(name = "video_size_bytes")
+    private Long videoSizeBytes;
+
+    @Column(name = "video_submitted_at")
+    private Instant videoSubmittedAt;
+
+    /** The score the verifier gave with the rubric (0 to 100); null until the review. */
+    @Column(name = "score")
+    private Integer score;
+
+    @Column(name = "feedback", length = 1000)
+    private String feedback;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
 
     /** Required by JPA. */
     protected FinalDemonstration() {
@@ -148,6 +179,51 @@ public class FinalDemonstration {
         return updatedAt;
     }
 
+    public String getVideoStorageReference() {
+        return videoStorageReference;
+    }
+
+    public String getVideoContentType() {
+        return videoContentType;
+    }
+
+    public Long getVideoSizeBytes() {
+        return videoSizeBytes;
+    }
+
+    public Instant getVideoSubmittedAt() {
+        return videoSubmittedAt;
+    }
+
+    public Integer getScore() {
+        return score;
+    }
+
+    public String getFeedback() {
+        return feedback;
+    }
+
+    public Instant getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public boolean hasVideo() {
+        return videoStorageReference != null;
+    }
+
+    /** Whether the student can still upload (or replace) the video: scheduled or with a video not reviewed yet. */
+    public boolean acceptsVideo() {
+        return status == DemonstrationStatus.SCHEDULED || status == DemonstrationStatus.VIDEO_SUBMITTED;
+    }
+
+    public boolean isVideoSubmitted() {
+        return status == DemonstrationStatus.VIDEO_SUBMITTED;
+    }
+
+    public boolean isReviewed() {
+        return status == DemonstrationStatus.APPROVED || status == DemonstrationStatus.REJECTED;
+    }
+
     public boolean isOwnedBy(int userId) {
         return studentId == userId;
     }
@@ -185,6 +261,64 @@ public class FinalDemonstration {
         requireScheduled();
         this.status = DemonstrationStatus.CANCELLED;
         this.updatedAt = now();
+        return this;
+    }
+
+    /**
+     * Stores the video of the demonstration, replacing the previous one while it is not reviewed.
+     *
+     * @throws DomainException when the demonstration does not accept a video or the data of the video is not valid
+     */
+    public FinalDemonstration attachVideo(String storageReference, String contentType, long sizeBytes) {
+        if (!acceptsVideo()) {
+            throw new DomainException("This demonstration cannot receive a video.");
+        }
+        String reference = storageReference == null ? "" : storageReference.strip();
+        if (reference.isEmpty() || reference.length() > MAX_VIDEO_REFERENCE_LENGTH) {
+            throw new DomainException("The video must have a valid storage reference.");
+        }
+        if (contentType == null || contentType.isBlank()) {
+            throw new DomainException("The content type of the video is required.");
+        }
+        if (sizeBytes <= 0) {
+            throw new DomainException("The video cannot be empty.");
+        }
+
+        this.videoStorageReference = reference;
+        this.videoContentType = contentType.strip();
+        this.videoSizeBytes = sizeBytes;
+        this.videoSubmittedAt = now();
+        this.status = DemonstrationStatus.VIDEO_SUBMITTED;
+        this.updatedAt = videoSubmittedAt;
+        return this;
+    }
+
+    /**
+     * Records the review of the verifier: {@link #PASSING_SCORE} or more approves, less rejects and needs a feedback.
+     *
+     * @throws DomainException when the video was not submitted or was already reviewed, the score is not between 0 and
+     *                         100, the feedback is too long, or a rejection has no feedback
+     */
+    public FinalDemonstration review(int score, String feedback) {
+        if (!isVideoSubmitted()) {
+            throw new DomainException("Only a demonstration with a submitted video can be reviewed.");
+        }
+        if (score < 0 || score > 100) {
+            throw new DomainException("The score must be between 0 and 100.");
+        }
+        String notes = feedback == null ? "" : feedback.strip();
+        if (notes.length() > MAX_FEEDBACK_LENGTH) {
+            throw new DomainException("The feedback cannot exceed %d characters.".formatted(MAX_FEEDBACK_LENGTH));
+        }
+        if (score < PASSING_SCORE && notes.isEmpty()) {
+            throw new DomainException("A rejection needs a feedback.");
+        }
+
+        this.score = score;
+        this.feedback = notes.isEmpty() ? null : notes;
+        this.status = score >= PASSING_SCORE ? DemonstrationStatus.APPROVED : DemonstrationStatus.REJECTED;
+        this.reviewedAt = now();
+        this.updatedAt = reviewedAt;
         return this;
     }
 

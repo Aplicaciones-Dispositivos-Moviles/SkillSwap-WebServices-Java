@@ -3,11 +3,14 @@ package com.innovify.skillswap.assessmentpeerreview.interfaces.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.VerifierProfileRepository;
+import com.innovify.skillswap.credentialverification.application.fakes.FakeFileStorageService;
+import com.innovify.skillswap.credentialverification.application.internal.outboundservices.FileStorageService;
 import com.innovify.skillswap.iam.TestData;
 import com.innovify.skillswap.iam.application.internal.outboundservices.TokenGenerator;
 import com.innovify.skillswap.iam.domain.model.aggregates.User;
@@ -26,9 +29,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -60,6 +64,9 @@ class FinalDemonstrationsIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private VerifierProfileRepository profiles;
 
+    @Autowired
+    private FileStorageService fileStorage;
+
     private MockMvc mockMvc;
     private String anaToken;
     private String bobToken;
@@ -74,6 +81,8 @@ class FinalDemonstrationsIntegrationTest extends PostgresIntegrationTest {
 
         ana = userRepository.save(TestData.newUser("ana", "ana@upc.edu.pe", UserRole.STUDENT));
         bob = userRepository.save(TestData.newUser("bob", "bob@upc.edu.pe", UserRole.STUDENT));
+        ((FakeFileStorageService) fileStorage).uploads().clear();
+        ((FakeFileStorageService) fileStorage).deleted().clear();
         User carla = userRepository.save(TestData.newUser("carla", "carla@upc.edu.pe", UserRole.STUDENT));
         anaToken = tokenGenerator.generateToken(ana);
         bobToken = tokenGenerator.generateToken(bob);
@@ -86,7 +95,7 @@ class FinalDemonstrationsIntegrationTest extends PostgresIntegrationTest {
 
     // ---------- Helpers ----------
 
-    private MvcResult call(MockHttpServletRequestBuilder request, String token, String json) throws Exception {
+    private MvcResult call(AbstractMockHttpServletRequestBuilder<?> request, String token, String json) throws Exception {
         if (token != null) {
             request.header("Authorization", "Bearer " + token);
         }
@@ -336,5 +345,229 @@ class FinalDemonstrationsIntegrationTest extends PostgresIntegrationTest {
         assertThat(status(reschedule)).isEqualTo(409);
         assertThat(JsonPath.<List<Integer>>read(body(call(get(DEMONSTRATIONS + "/assigned"), bobToken, null)),
                 "$[*].id")).isEmpty();
+    }
+
+    // ---------- Video and review (US29) ----------
+
+    /** A few bytes that start like an MP4 file. */
+    private static byte[] mp4() {
+        byte[] content = new byte[256];
+        content[3] = 24;
+        content[4] = 'f';
+        content[5] = 't';
+        content[6] = 'y';
+        content[7] = 'p';
+        content[8] = 'i';
+        content[9] = 's';
+        content[10] = 'o';
+        content[11] = 'm';
+        return content;
+    }
+
+    private MvcResult uploadVideo(String token, int id, byte[] content, String contentType) throws Exception {
+        return call(multipart(DEMONSTRATIONS + "/" + id + "/video")
+                .file(new MockMultipartFile("file", "demo.mp4", contentType, content)), token, null);
+    }
+
+    private MvcResult review(String token, int id, String json) throws Exception {
+        return call(patch(DEMONSTRATIONS + "/" + id + "/review"), token, json);
+    }
+
+    /** Ana has a completed path, Bob is her verifier, and the demonstration has its video. */
+    private int demonstrationWithVideo() throws Exception {
+        completePath();
+        enableBobAsVerifier();
+        int id = scheduleOk();
+        MvcResult uploaded = uploadVideo(anaToken, id, mp4(), "video/mp4");
+        assertThat(status(uploaded)).as(body(uploaded)).isEqualTo(200);
+        return id;
+    }
+
+    @Test
+    void uploadVideo_storesItAndMarksTheDemonstration() throws Exception {
+        completePath();
+        enableBobAsVerifier();
+        int id = scheduleOk();
+
+        MvcResult result = uploadVideo(anaToken, id, mp4(), "video/mp4");
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat((String) read(result, "$.status")).isEqualTo("VideoSubmitted");
+        assertThat((Boolean) read(result, "$.hasVideo")).isTrue();
+        assertThat((String) read(result, "$.videoContentType")).isEqualTo("video/mp4");
+        assertThat(((FakeFileStorageService) fileStorage).uploads()).singleElement().satisfies(upload -> {
+            assertThat(upload.key()).startsWith("demonstrations/" + id + "/");
+            assertThat(upload.contentType()).isEqualTo("video/mp4");
+        });
+    }
+
+    @Test
+    void uploadVideo_withInvalidFileOrUser_isRejected() throws Exception {
+        completePath();
+        enableBobAsVerifier();
+        int id = scheduleOk();
+
+        MvcResult notVideo = uploadVideo(anaToken, id, new byte[256], "video/mp4");
+        MvcResult wrongType = uploadVideo(anaToken, id, mp4(), "video/webm");
+        MvcResult noFile = call(multipart(DEMONSTRATIONS + "/" + id + "/video"), anaToken, null);
+        MvcResult stranger = uploadVideo(carlaToken, id, mp4(), "video/mp4");
+        MvcResult unknown = uploadVideo(anaToken, 9999, mp4(), "video/mp4");
+        MvcResult withoutToken = uploadVideo(null, id, mp4(), "video/mp4");
+
+        assertThat(status(notVideo)).isEqualTo(415);
+        assertThat(title(notVideo)).isEqualTo("UnsupportedVideoType");
+        assertThat(status(wrongType)).isEqualTo(415);
+        assertThat(status(noFile)).isEqualTo(400);
+        assertThat(title(noFile)).isEqualTo("VideoRequired");
+        assertThat(status(stranger)).isEqualTo(403);
+        assertThat(title(stranger)).isEqualTo("NotDemonstrationOwner");
+        assertThat(status(unknown)).isEqualTo(404);
+        assertThat(status(withoutToken)).isEqualTo(401);
+        assertThat(((FakeFileStorageService) fileStorage).uploads()).isEmpty();
+    }
+
+    @Test
+    void uploadVideo_ofACancelledDemonstration_isConflict() throws Exception {
+        completePath();
+        enableBobAsVerifier();
+        int id = scheduleOk();
+        call(patch(DEMONSTRATIONS + "/" + id + "/cancel"), anaToken, null);
+
+        MvcResult result = uploadVideo(anaToken, id, mp4(), "video/mp4");
+
+        assertThat(status(result)).isEqualTo(409);
+        assertThat(title(result)).isEqualTo("DemonstrationClosed");
+    }
+
+    @Test
+    void uploadVideo_again_replacesTheFile() throws Exception {
+        int id = demonstrationWithVideo();
+
+        MvcResult second = uploadVideo(anaToken, id, mp4(), "video/mp4");
+
+        assertThat(status(second)).isEqualTo(200);
+        assertThat(((FakeFileStorageService) fileStorage).uploads()).hasSize(2);
+        assertThat(((FakeFileStorageService) fileStorage).deleted()).hasSize(1);
+    }
+
+    @Test
+    void getVideo_givesATemporaryLinkToTheStudentAndTheVerifierOnly() throws Exception {
+        int id = demonstrationWithVideo();
+
+        MvcResult student = call(get(DEMONSTRATIONS + "/" + id + "/video"), anaToken, null);
+        MvcResult verifier = call(get(DEMONSTRATIONS + "/" + id + "/video"), bobToken, null);
+        MvcResult stranger = call(get(DEMONSTRATIONS + "/" + id + "/video"), carlaToken, null);
+
+        assertThat(status(student)).as(body(student)).isEqualTo(200);
+        assertThat((String) read(student, "$.url")).startsWith("https://files.test/").contains("demonstrations/" + id);
+        assertThat((String) read(student, "$.contentType")).isEqualTo("video/mp4");
+        assertThat(Instant.parse(read(student, "$.expiresAt"))).isAfter(Instant.now());
+        assertThat(status(verifier)).isEqualTo(200);
+        assertThat(status(stranger)).isEqualTo(403);
+        assertThat(title(stranger)).isEqualTo("NotDemonstrationParticipant");
+    }
+
+    @Test
+    void getVideo_withoutVideo_orUnknown_isNotFound() throws Exception {
+        completePath();
+        enableBobAsVerifier();
+        int id = scheduleOk();
+
+        MvcResult noVideo = call(get(DEMONSTRATIONS + "/" + id + "/video"), anaToken, null);
+        MvcResult unknown = call(get(DEMONSTRATIONS + "/9999/video"), anaToken, null);
+
+        assertThat(status(noVideo)).isEqualTo(404);
+        assertThat(title(noVideo)).isEqualTo("VideoNotFound");
+        assertThat(status(unknown)).isEqualTo(404);
+        assertThat(title(unknown)).isEqualTo("DemonstrationNotFound");
+    }
+
+    @Test
+    void review_approvesWithThePassingScore() throws Exception {
+        int id = demonstrationWithVideo();
+
+        MvcResult result = review(bobToken, id, "{\"score\":85,\"feedback\":\"Well explained.\"}");
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat((String) read(result, "$.status")).isEqualTo("Approved");
+        assertThat((Integer) read(result, "$.score")).isEqualTo(85);
+        assertThat((String) read(result, "$.feedback")).isEqualTo("Well explained.");
+        assertThat((String) read(result, "$.reviewedAt")).isNotBlank();
+
+        MvcResult again = schedule(anaToken, pathId, "AdvancedProject", inDays(5));
+        assertThat(status(again)).isEqualTo(409);
+        assertThat(title(again)).isEqualTo("DemonstrationAlreadyActive");
+    }
+
+    @Test
+    void review_rejectsAndLetsTheStudentScheduleAgain() throws Exception {
+        int id = demonstrationWithVideo();
+
+        MvcResult result = review(bobToken, id, "{\"score\":50,\"feedback\":\"The tests are missing.\"}");
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat((String) read(result, "$.status")).isEqualTo("Rejected");
+        assertThat(status(schedule(anaToken, pathId, "SupervisedExam", inDays(5)))).isEqualTo(201);
+    }
+
+    @Test
+    void review_withInvalidDataOrUser_isRejected() throws Exception {
+        int id = demonstrationWithVideo();
+
+        MvcResult missingScore = review(bobToken, id, "{\"feedback\":\"x\"}");
+        MvcResult outOfRange = review(bobToken, id, "{\"score\":120}");
+        MvcResult rejectionWithoutFeedback = review(bobToken, id, "{\"score\":30}");
+        MvcResult student = review(anaToken, id, "{\"score\":90}");
+        MvcResult stranger = review(carlaToken, id, "{\"score\":90}");
+        MvcResult unknown = review(bobToken, 9999, "{\"score\":90}");
+
+        assertThat(status(missingScore)).isEqualTo(400);
+        assertThat(title(missingScore)).isEqualTo("InvalidDemonstrationScore");
+        assertThat(status(outOfRange)).isEqualTo(400);
+        assertThat(status(rejectionWithoutFeedback)).isEqualTo(400);
+        assertThat(title(rejectionWithoutFeedback)).isEqualTo("DemonstrationFeedbackRequired");
+        assertThat(status(student)).isEqualTo(403);
+        assertThat(title(student)).isEqualTo("NotDemonstrationVerifier");
+        assertThat(status(stranger)).isEqualTo(403);
+        assertThat(status(unknown)).isEqualTo(404);
+    }
+
+    @Test
+    void review_beforeTheVideo_isConflict() throws Exception {
+        completePath();
+        enableBobAsVerifier();
+        int withoutVideo = scheduleOk();
+
+        MvcResult early = review(bobToken, withoutVideo, "{\"score\":90}");
+
+        assertThat(status(early)).isEqualTo(409);
+        assertThat(title(early)).isEqualTo("VideoNotSubmitted");
+
+        assertThat(status(call(patch(DEMONSTRATIONS + "/" + withoutVideo + "/cancel"), anaToken, null))).isEqualTo(200);
+        assertThat(status(schedule(anaToken, pathId, "AdvancedProject", inDays(4)))).isEqualTo(201);
+    }
+
+    @Test
+    void review_twice_isConflict() throws Exception {
+        int id = demonstrationWithVideo();
+        review(bobToken, id, "{\"score\":90}");
+
+        MvcResult again = review(bobToken, id, "{\"score\":10,\"feedback\":\"Changed my mind.\"}");
+
+        assertThat(status(again)).isEqualTo(409);
+        assertThat(title(again)).isEqualTo("DemonstrationAlreadyReviewed");
+        MvcResult upload = uploadVideo(anaToken, id, mp4(), "video/mp4");
+        assertThat(status(upload)).isEqualTo(409);
+        assertThat(title(upload)).isEqualTo("DemonstrationClosed");
+    }
+
+    @Test
+    void cancel_afterTheVideo_isConflict() throws Exception {
+        int id = demonstrationWithVideo();
+
+        MvcResult result = call(patch(DEMONSTRATIONS + "/" + id + "/cancel"), anaToken, null);
+
+        assertThat(status(result)).isEqualTo(409);
+        assertThat(title(result)).isEqualTo("DemonstrationNotScheduled");
     }
 }

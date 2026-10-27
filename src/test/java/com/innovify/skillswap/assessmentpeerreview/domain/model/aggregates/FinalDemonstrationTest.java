@@ -111,4 +111,100 @@ class FinalDemonstrationTest {
         assertThatThrownBy(() -> DemonstrationModality.fromValue("x")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> DemonstrationStatus.fromValue("x")).isInstanceOf(IllegalArgumentException.class);
     }
+
+    // ---------- Video and review (US29) ----------
+
+    private static FinalDemonstration withVideo() {
+        return scheduled().attachVideo("demonstrations/1/abc.mp4", "video/mp4", 1024);
+    }
+
+    @Test
+    void attachVideo_marksTheVideoSubmitted() {
+        FinalDemonstration demonstration = scheduled();
+
+        demonstration.attachVideo(" demonstrations/1/abc.mp4 ", "video/mp4", 2048);
+
+        assertThat(demonstration.getStatus()).isEqualTo(DemonstrationStatus.VIDEO_SUBMITTED);
+        assertThat(demonstration.hasVideo()).isTrue();
+        assertThat(demonstration.getVideoStorageReference()).isEqualTo("demonstrations/1/abc.mp4");
+        assertThat(demonstration.getVideoContentType()).isEqualTo("video/mp4");
+        assertThat(demonstration.getVideoSizeBytes()).isEqualTo(2048L);
+        assertThat(demonstration.getVideoSubmittedAt()).isNotNull();
+    }
+
+    @Test
+    void attachVideo_replacesTheVideoUntilItIsReviewed() {
+        FinalDemonstration demonstration = withVideo();
+
+        demonstration.attachVideo("demonstrations/1/new.webm", "video/webm", 4096);
+
+        assertThat(demonstration.getVideoStorageReference()).isEqualTo("demonstrations/1/new.webm");
+        assertThat(demonstration.getVideoContentType()).isEqualTo("video/webm");
+
+        demonstration.review(90, null);
+
+        assertThat(demonstration.acceptsVideo()).isFalse();
+        assertThatThrownBy(() -> demonstration.attachVideo("x.mp4", "video/mp4", 1))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void attachVideo_ofACancelledDemonstration_orWithInvalidData_isRejected() {
+        FinalDemonstration cancelled = scheduled().cancel();
+
+        assertThatThrownBy(() -> cancelled.attachVideo("x.mp4", "video/mp4", 1)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> scheduled().attachVideo(" ", "video/mp4", 1)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> scheduled().attachVideo("x.mp4", null, 1)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> scheduled().attachVideo("x.mp4", "video/mp4", 0)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void cancel_afterTheVideoWasSubmitted_isRejected() {
+        assertThatThrownBy(() -> withVideo().cancel()).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void review_withThePassingScoreApproves() {
+        FinalDemonstration demonstration = withVideo();
+
+        demonstration.review(70, "  Good work  ");
+
+        assertThat(demonstration.getStatus()).isEqualTo(DemonstrationStatus.APPROVED);
+        assertThat(demonstration.getScore()).isEqualTo(70);
+        assertThat(demonstration.getFeedback()).isEqualTo("Good work");
+        assertThat(demonstration.getReviewedAt()).isNotNull();
+        assertThat(demonstration.isReviewed()).isTrue();
+    }
+
+    @Test
+    void review_underThePassingScoreRejectsAndNeedsAFeedback() {
+        FinalDemonstration demonstration = withVideo();
+
+        assertThatThrownBy(() -> demonstration.review(69, " ")).isInstanceOf(DomainException.class);
+
+        demonstration.review(69, "The tests are missing.");
+
+        assertThat(demonstration.getStatus()).isEqualTo(DemonstrationStatus.REJECTED);
+        assertThat(demonstration.getFeedback()).isEqualTo("The tests are missing.");
+    }
+
+    @Test
+    void review_withInvalidDataOrWithoutVideo_isRejected() {
+        FinalDemonstration demonstration = withVideo();
+
+        assertThatThrownBy(() -> demonstration.review(-1, "x")).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> demonstration.review(101, "x")).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> demonstration.review(80, "x".repeat(1001))).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> scheduled().review(90, null)).isInstanceOf(DomainException.class);
+        assertThat(demonstration.getStatus()).isEqualTo(DemonstrationStatus.VIDEO_SUBMITTED);
+    }
+
+    @Test
+    void review_twice_isRejected() {
+        FinalDemonstration demonstration = withVideo();
+        demonstration.review(95, null);
+
+        assertThatThrownBy(() -> demonstration.review(10, "No")).isInstanceOf(DomainException.class);
+        assertThat(demonstration.getStatus()).isEqualTo(DemonstrationStatus.APPROVED);
+    }
 }

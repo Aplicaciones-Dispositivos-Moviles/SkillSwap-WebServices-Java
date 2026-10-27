@@ -112,4 +112,50 @@ class FinalDemonstrationPersistenceTest extends PostgresIntegrationTest {
 
         assertThat(id).isEqualTo(saved.getId());
     }
+
+    @Test
+    void videoAndReview_arePersisted() {
+        FinalDemonstration saved = add(1, 5, 9);
+        saved.attachVideo("demonstrations/" + saved.getId() + "/abc.mp4", "video/mp4", 4096);
+        demonstrations.save(saved);
+
+        FinalDemonstration withVideo = demonstrations.findById(saved.getId()).orElseThrow();
+        assertThat(withVideo.getStatus()).isEqualTo(DemonstrationStatus.VIDEO_SUBMITTED);
+        assertThat(withVideo.getVideoStorageReference()).endsWith("/abc.mp4");
+        assertThat(withVideo.getVideoSizeBytes()).isEqualTo(4096L);
+        assertThat(withVideo.getVideoSubmittedAt()).isNotNull();
+
+        withVideo.review(85, "Clear and complete.");
+        demonstrations.save(withVideo);
+
+        FinalDemonstration reviewed = demonstrations.findById(saved.getId()).orElseThrow();
+        assertThat(reviewed.getStatus()).isEqualTo(DemonstrationStatus.APPROVED);
+        assertThat(reviewed.getScore()).isEqualTo(85);
+        assertThat(reviewed.getFeedback()).isEqualTo("Clear and complete.");
+        assertThat(reviewed.getReviewedAt()).isNotNull();
+        assertThat(demonstrations.findBlockingByLearningPathId(5)).isPresent();
+    }
+
+    @Test
+    void rejectedDemonstration_letsThePathScheduleAnother() {
+        FinalDemonstration saved = add(1, 5, 9);
+        saved.attachVideo("demonstrations/x/abc.mp4", "video/mp4", 10);
+        saved.review(40, "Not enough.");
+        demonstrations.save(saved);
+
+        assertThat(demonstrations.findBlockingByLearningPathId(5)).isEmpty();
+        assertThat(add(1, 5, 10).getId()).isNotNull();
+    }
+
+    @Test
+    void submittedOrReviewedStatus_withoutTheVideoOrScore_isRejectedByTheDatabase() throws SQLException {
+        FinalDemonstration saved = add(1, 5, 9);
+
+        assertThatThrownBy(() -> execute("UPDATE final_demonstrations SET status = 'VideoSubmitted' WHERE id = "
+                + saved.getId())).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> execute("UPDATE final_demonstrations SET status = 'Approved', "
+                + "video_storage_reference = 'x.mp4' WHERE id = " + saved.getId())).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> execute("UPDATE final_demonstrations SET score = 101 WHERE id = " + saved.getId()))
+                .isInstanceOf(SQLException.class);
+    }
 }

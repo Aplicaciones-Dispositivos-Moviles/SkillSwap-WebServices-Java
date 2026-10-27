@@ -11,10 +11,12 @@ import java.time.Instant;
  * @param type          Earned (credits gained by resolving a case) or Redeemed (credits spent on a benefit)
  * @param description   what the movement was for
  * @param relatedCaseId the verification case that paid an earned movement, if any
+ * @param relatedDemonstrationId the final demonstration that paid an earned movement, if any
  * @param createdAt     when it was recorded (UTC)
  * @param redemptionItem the benefit a redeemed movement bought (Badge, ContributionCertificate,
  *                       AdvancedPathUnlock or SponsoredCertification); null for the earned ones
  */
 public record CreditTransactionResource(int id, int walletId, int amount, String type, String description,
-                                        Integer relatedCaseId, Instant createdAt, String redemptionItem) {
+                                        Integer relatedCaseId, Integer relatedDemonstrationId, Instant createdAt,
+                                        String redemptionItem) {
 }

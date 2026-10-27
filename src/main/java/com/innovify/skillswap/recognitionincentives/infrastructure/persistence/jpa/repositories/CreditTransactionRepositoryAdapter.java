@@ -33,6 +33,12 @@ public class CreditTransactionRepositoryAdapter implements CreditTransactionRepo
     }
 
     @Override
+    public boolean existsEarnedForDemonstration(int walletId, int demonstrationId) {
+        return jpaRepository.existsByWalletIdAndTypeAndRelatedDemonstrationId(walletId, TransactionType.EARNED,
+                demonstrationId);
+    }
+
+    @Override
     public List<Integer> findRedemptionIds(int walletId, RedemptionItem item) {
         return jpaRepository.findIdsByWalletIdAndRedemptionItem(walletId, item);
     }

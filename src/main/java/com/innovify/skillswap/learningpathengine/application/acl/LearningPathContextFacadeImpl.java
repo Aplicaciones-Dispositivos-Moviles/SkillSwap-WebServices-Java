@@ -9,6 +9,7 @@ import com.innovify.skillswap.learningpathengine.domain.model.commands.CompleteP
 import com.innovify.skillswap.learningpathengine.domain.model.commands.ReopenPathNodeCommand;
 import com.innovify.skillswap.learningpathengine.domain.model.entities.PathNode;
 import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.NodeStatus;
+import com.innovify.skillswap.learningpathengine.domain.model.valueobjects.PathStatus;
 import com.innovify.skillswap.learningpathengine.domain.repositories.AssessmentBlueprintRepository;
 import com.innovify.skillswap.learningpathengine.domain.repositories.LearningPathRepository;
 import com.innovify.skillswap.learningpathengine.domain.repositories.MiniProjectRepository;
@@ -147,6 +148,13 @@ public class LearningPathContextFacadeImpl implements LearningPathContextFacade 
             };
         }
         return NodeReopenOutcome.FAILED;
+    }
+
+    @Override
+    public Optional<PathCompletionView> getPathCompletion(int pathId) {
+        return learningPathRepository.findById(pathId).map(path -> new PathCompletionView(path.getId(),
+                path.getStudentId(), path.getStatus() == PathStatus.COMPLETED,
+                List.copyOf(new LinkedHashSet<>(path.getNodes().stream().map(PathNode::getSkillTag).toList()))));
     }
 
     @Override

@@ -6,12 +6,14 @@ import com.innovify.skillswap.assessmentpeerreview.application.queryservices.Ass
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.MiniProjectSubmissionDetail;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.VerificationCaseDetail;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.FinalDemonstration;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.MiniProjectSubmission;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.AssessmentAttemptResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.FailedQuestionResource;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.FinalDemonstrationResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.MiniProjectSubmissionResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.PlanLimitReachedResource;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.ReevaluationResource;
@@ -143,5 +145,12 @@ public final class AssessmentPeerReviewResourceAssemblers {
                 profile.isSuspended(),
                 profile.getSuspendedAt(),
                 profile.getSuspensionReason());
+    }
+
+    public static FinalDemonstrationResource toResource(FinalDemonstration demonstration) {
+        return new FinalDemonstrationResource(demonstration.getId(), demonstration.getStudentId(),
+                demonstration.getLearningPathId(), demonstration.getSkillTag(), demonstration.getVerifierUserId(),
+                demonstration.getModality().value(), demonstration.getScheduledAt(), demonstration.getStatus().value(),
+                demonstration.getCreatedAt(), demonstration.getUpdatedAt());
     }
 }

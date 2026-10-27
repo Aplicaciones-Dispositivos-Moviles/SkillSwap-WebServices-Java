@@ -28,6 +28,9 @@ public interface LearningPathContextFacade {
      */
     NodeReopenOutcome reopenNode(int pathNodeId);
 
+    /** The completion of the path with its skills, or empty when it does not exist. */
+    Optional<PathCompletionView> getPathCompletion(int pathId);
+
     /** Whether the student has a completed node for the skill in any of their paths. */
     boolean hasCompletedSkill(int studentId, String skillTag);
 

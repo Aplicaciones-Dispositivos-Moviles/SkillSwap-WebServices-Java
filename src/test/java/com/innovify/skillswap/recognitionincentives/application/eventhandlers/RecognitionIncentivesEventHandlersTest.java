@@ -2,6 +2,7 @@ package com.innovify.skillswap.recognitionincentives.application.eventhandlers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.FinalDemonstrationReviewed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
@@ -12,6 +13,7 @@ import com.innovify.skillswap.recognitionincentives.domain.model.RecognitionInce
 import com.innovify.skillswap.recognitionincentives.domain.model.aggregates.Wallet;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreateWalletCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierCommand;
+import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierForDemonstrationCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.RedeemCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.ResolvedCaseType;
@@ -73,10 +75,31 @@ class RecognitionIncentivesEventHandlersTest {
         assertThat(service.credits).hasSize(1);
     }
 
+    @ParameterizedTest
+    @CsvSource({"true,90", "false,40"})
+    void demonstrationReviewed_creditsTheVerifierWhateverTheOutcome(boolean approved, int score) {
+        new CreditVerifierForDemonstrationEventHandler(service).handle(
+                new FinalDemonstrationReviewed(8, 1, 2, "http-basics", score, approved));
+
+        assertThat(service.demonstrationCredits).containsExactly(new CreditVerifierForDemonstrationCommand(2, 8));
+        assertThat(service.credits).isEmpty();
+    }
+
+    @Test
+    void demonstrationReviewed_whenTheServiceFails_doesNotThrow() {
+        service.fail = true;
+
+        new CreditVerifierForDemonstrationEventHandler(service).handle(
+                new FinalDemonstrationReviewed(8, 1, 2, "http-basics", 90, true));
+
+        assertThat(service.demonstrationCredits).hasSize(1);
+    }
+
     private static final class RecordingWalletCommandService implements WalletCommandService {
 
         final List<CreateWalletCommand> creations = new ArrayList<>();
         final List<CreditVerifierCommand> credits = new ArrayList<>();
+        final List<CreditVerifierForDemonstrationCommand> demonstrationCredits = new ArrayList<>();
         boolean fail;
 
         private <T> Result<T> answer(T value) {
@@ -92,6 +115,12 @@ class RecognitionIncentivesEventHandlersTest {
         @Override
         public Result<Wallet> handle(CreditVerifierCommand command) {
             credits.add(command);
+            return answer(new Wallet(command.verifierUserId()));
+        }
+
+        @Override
+        public Result<Wallet> handle(CreditVerifierForDemonstrationCommand command) {
+            demonstrationCredits.add(command);
             return answer(new Wallet(command.verifierUserId()));
         }
 

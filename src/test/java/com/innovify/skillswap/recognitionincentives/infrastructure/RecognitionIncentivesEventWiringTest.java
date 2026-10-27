@@ -2,6 +2,7 @@ package com.innovify.skillswap.recognitionincentives.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.FinalDemonstrationReviewed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
@@ -112,6 +113,34 @@ class RecognitionIncentivesEventWiringTest extends PostgresIntegrationTest {
         Wallet wallet = wallets.findByOwnerId(2).orElseThrow();
         assertThat(wallet.getBalance()).isEqualTo(65);
         assertThat(transactions.findByWalletId(wallet.getId())).hasSize(2);
+    }
+
+    @Test
+    void reviewedFinalDemonstration_creditsTheVerifierFortyCreditsWhateverTheOutcome() {
+        publisher.publish(new FinalDemonstrationReviewed(8, 1, 2, "http-basics", 40, false));
+
+        Wallet wallet = wallets.findByOwnerId(2).orElseThrow();
+        assertThat(wallet.getBalance()).isEqualTo(40);
+        assertThat(transactions.findByWalletId(wallet.getId())).extracting(CreditTransaction::getRelatedDemonstrationId)
+                .containsExactly(8);
+    }
+
+    @Test
+    void sameFinalDemonstrationTwice_paysOnlyOnce() {
+        publisher.publish(new FinalDemonstrationReviewed(8, 1, 2, "http-basics", 90, true));
+        publisher.publish(new FinalDemonstrationReviewed(8, 1, 2, "http-basics", 90, true));
+
+        Wallet wallet = wallets.findByOwnerId(2).orElseThrow();
+        assertThat(wallet.getBalance()).isEqualTo(40);
+        assertThat(transactions.findByWalletId(wallet.getId())).hasSize(1);
+    }
+
+    @Test
+    void caseAndDemonstrationWithTheSameId_bothPay() {
+        publisher.publish(resolved(8, 2, ReviewDecision.APPROVED));
+        publisher.publish(new FinalDemonstrationReviewed(8, 1, 2, "http-basics", 90, true));
+
+        assertThat(wallets.findByOwnerId(2).orElseThrow().getBalance()).isEqualTo(65);
     }
 
     @Test

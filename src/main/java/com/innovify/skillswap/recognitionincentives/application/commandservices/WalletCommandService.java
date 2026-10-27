@@ -3,6 +3,7 @@ package com.innovify.skillswap.recognitionincentives.application.commandservices
 import com.innovify.skillswap.recognitionincentives.domain.model.aggregates.Wallet;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreateWalletCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierCommand;
+import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierForDemonstrationCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.RedeemCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
 import com.innovify.skillswap.shared.application.Result;
@@ -18,6 +19,12 @@ public interface WalletCommandService {
      * only once, so repeating the command changes nothing.
      */
     Result<Wallet> handle(CreditVerifierCommand command);
+
+    /**
+     * Credits a verifier for a reviewed final demonstration, creating their wallet if they have none yet. A
+     * demonstration pays a wallet only once, so repeating the command changes nothing.
+     */
+    Result<Wallet> handle(CreditVerifierForDemonstrationCommand command);
 
     /**
      * Redeems a benefit, taking its cost from the balance and recording the movement. Fails with

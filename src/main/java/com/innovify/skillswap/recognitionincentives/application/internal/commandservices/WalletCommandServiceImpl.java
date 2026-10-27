@@ -5,11 +5,13 @@ import com.innovify.skillswap.recognitionincentives.domain.model.RecognitionInce
 import com.innovify.skillswap.recognitionincentives.domain.model.aggregates.Wallet;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreateWalletCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierCommand;
+import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierForDemonstrationCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.RedeemCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
 import com.innovify.skillswap.recognitionincentives.domain.model.events.AdvancedPathUnlockRedeemed;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.ResolvedCaseType;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.CreditTransactionRepository;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.WalletRepository;
@@ -35,6 +37,7 @@ import org.springframework.transaction.support.TransactionOperations;
 public class WalletCommandServiceImpl implements WalletCommandService {
 
     static final String EARNED_DESCRIPTION = "Verification case resolved";
+    static final String DEMONSTRATION_EARNED_DESCRIPTION = "Final demonstration reviewed";
     static final String REDEEMED_DESCRIPTION_PREFIX = "Redeemed: ";
 
     private static final Logger log = LoggerFactory.getLogger(WalletCommandServiceImpl.class);
@@ -92,6 +95,33 @@ public class WalletCommandServiceImpl implements WalletCommandService {
             return Result.success(credited);
         } catch (RuntimeException exception) {
             log.error("Could not credit the verifier {}", command.verifierUserId(), exception);
+            return failures.failure(RecognitionIncentivesFailures.toError(exception));
+        }
+    }
+
+    @Override
+    public Result<Wallet> handle(CreditVerifierForDemonstrationCommand command) {
+        try {
+            Credits amount = CreditRewards.forResolvedCase(ResolvedCaseType.FINAL_DEMONSTRATION);
+            Wallet credited = transactionOperations.execute(status -> {
+                Optional<Wallet> existing = wallets.findByOwnerIdForUpdate(command.verifierUserId());
+                if (existing.isPresent()
+                        && transactions.existsEarnedForDemonstration(existing.get().getId(), command.demonstrationId())) {
+                    return existing.get();
+                }
+
+                // The movement needs the id of the wallet, so a new wallet is saved first.
+                Wallet wallet = existing.orElseGet(() -> wallets.save(new Wallet(command.verifierUserId())));
+                wallet.credit(amount);
+                Wallet saved = wallets.save(wallet);
+                transactions.save(CreditTransaction.earnedForDemonstration(saved.getId(), amount,
+                        DEMONSTRATION_EARNED_DESCRIPTION, command.demonstrationId()));
+                return saved;
+            });
+            return Result.success(credited);
+        } catch (RuntimeException exception) {
+            log.error("Could not credit the verifier {} for the demonstration {}", command.verifierUserId(),
+                    command.demonstrationId(), exception);
             return failures.failure(RecognitionIncentivesFailures.toError(exception));
         }
     }

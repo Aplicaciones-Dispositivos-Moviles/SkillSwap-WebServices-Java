@@ -6,5 +6,6 @@ package com.innovify.skillswap.recognitionincentives.domain.model.valueobjects;
  */
 public enum ResolvedCaseType {
     QUIZ,
-    MINI_PROJECT
+    MINI_PROJECT,
+    FINAL_DEMONSTRATION
 }

@@ -61,6 +61,11 @@ class RecognitionIncentivesServicesTest {
     }
 
     @Test
+    void rewards_aReviewedFinalDemonstrationIsWorthForty() {
+        assertThat(CreditRewards.forResolvedCase(ResolvedCaseType.FINAL_DEMONSTRATION).value()).isEqualTo(40);
+    }
+
+    @Test
     void rewards_withoutCaseType_throwsDomainException() {
         assertThatThrownBy(() -> CreditRewards.forResolvedCase(null)).isInstanceOf(DomainException.class);
     }

@@ -16,6 +16,9 @@ public interface CreditTransactionRepository {
     /** Whether the wallet already earned credits for the case. */
     boolean existsEarnedForCase(int walletId, int caseId);
 
+    /** Whether the wallet already earned credits for the final demonstration. */
+    boolean existsEarnedForDemonstration(int walletId, int demonstrationId);
+
     /** The ids of the redemptions of the wallet that bought the benefit, oldest first. */
     List<Integer> findRedemptionIds(int walletId, RedemptionItem item);
 }

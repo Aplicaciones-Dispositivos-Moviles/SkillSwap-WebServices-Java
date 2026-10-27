@@ -43,6 +43,9 @@ public class CreditTransaction {
     @Column(name = "related_case_id")
     private Integer relatedCaseId;
 
+    @Column(name = "related_demonstration_id")
+    private Integer relatedDemonstrationId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -111,6 +114,22 @@ public class CreditTransaction {
         this.createdAt = Instant.now();
     }
 
+    /**
+     * An earned movement for reviewing a final demonstration; the demonstration keeps it from paying twice.
+     *
+     * @throws DomainException when the wallet, amount, description or demonstration are not valid
+     */
+    public static CreditTransaction earnedForDemonstration(int walletId, Credits amount, String description,
+                                                           int demonstrationId) {
+        if (demonstrationId <= 0) {
+            throw new DomainException("The related demonstration must be valid.");
+        }
+        CreditTransaction transaction = new CreditTransaction(walletId, amount, TransactionType.EARNED, description,
+                null);
+        transaction.relatedDemonstrationId = demonstrationId;
+        return transaction;
+    }
+
     public Integer getId() {
         return id;
     }
@@ -134,6 +153,11 @@ public class CreditTransaction {
     /** The verification case that originated an earned transaction, if any. */
     public Integer getRelatedCaseId() {
         return relatedCaseId;
+    }
+
+    /** The final demonstration that originated an earned transaction, if any. */
+    public Integer getRelatedDemonstrationId() {
+        return relatedDemonstrationId;
     }
 
     public Instant getCreatedAt() {

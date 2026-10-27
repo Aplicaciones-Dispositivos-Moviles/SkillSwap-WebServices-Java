@@ -15,6 +15,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -25,7 +26,8 @@ import java.util.UUID;
  * signed private-download URL that expires.
  *
  * <p>The storage reference is "{publicId}.{extension}", e.g. "certificates/7/3fa1....pdf". PDFs are stored as
- * Cloudinary "image" resources, like JPG and PNG.
+ * Cloudinary "image" resources, like JPG and PNG; MP4, WebM and QuickTime videos are "video" resources, which the
+ * extension of the reference tells apart.
  */
 public class CloudinaryStorageService implements FileStorageService {
 
@@ -35,7 +37,12 @@ public class CloudinaryStorageService implements FileStorageService {
     private static final Map<String, String> EXTENSIONS = Map.of(
             "image/jpeg", "jpg",
             "image/png", "png",
-            "application/pdf", "pdf");
+            "application/pdf", "pdf",
+            "video/mp4", "mp4",
+            "video/webm", "webm",
+            "video/quicktime", "mov");
+
+    private static final Set<String> VIDEO_EXTENSIONS = Set.of("mp4", "webm", "mov");
 
     private final CloudinarySettings settings;
     private final HttpClient httpClient;
@@ -71,7 +78,7 @@ public class CloudinaryStorageService implements FileStorageService {
         writeFile(body, boundary, fileKey, contentType, content);
         writeAscii(body, "--" + boundary + "--\r\n");
 
-        HttpRequest request = HttpRequest.newBuilder(endpoint("upload"))
+        HttpRequest request = HttpRequest.newBuilder(endpoint(resourceTypeOf(extension), "upload"))
                 .timeout(REQUEST_TIMEOUT)
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
@@ -99,7 +106,7 @@ public class CloudinaryStorageService implements FileStorageService {
         parameters.forEach((name, value) -> query.add(name + "=" + encode(value)));
         query.add("api_key=" + encode(settings.apiKey()));
         query.add("signature=" + sign(parameters));
-        return endpoint("download") + "?" + query;
+        return endpoint(resourceTypeOf(reference.format()), "download") + "?" + query;
     }
 
     @Override
@@ -118,7 +125,7 @@ public class CloudinaryStorageService implements FileStorageService {
         form.add("api_key=" + encode(settings.apiKey()));
         form.add("signature=" + signature);
 
-        HttpRequest request = HttpRequest.newBuilder(endpoint("destroy"))
+        HttpRequest request = HttpRequest.newBuilder(endpoint(resourceTypeOf(reference.format()), "destroy"))
                 .timeout(REQUEST_TIMEOUT)
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(form.toString()))
@@ -126,8 +133,14 @@ public class CloudinaryStorageService implements FileStorageService {
         send(request, "delete");
     }
 
-    private URI endpoint(String action) {
-        return URI.create("%s/v1_1/%s/image/%s".formatted(settings.apiBaseUrl(), settings.cloudName(), action));
+    private URI endpoint(String resourceType, String action) {
+        return URI.create("%s/v1_1/%s/%s/%s".formatted(settings.apiBaseUrl(), settings.cloudName(), resourceType,
+                action));
+    }
+
+    /** Videos are Cloudinary "video" resources; images and PDFs are "image" resources. */
+    private static String resourceTypeOf(String extension) {
+        return VIDEO_EXTENSIONS.contains(extension) ? "video" : "image";
     }
 
     private void send(HttpRequest request, String operation) {

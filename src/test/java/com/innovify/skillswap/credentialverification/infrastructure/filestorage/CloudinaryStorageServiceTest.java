@@ -173,7 +173,8 @@ class CloudinaryStorageServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"image/jpeg:jpg", "image/png:png", "application/pdf:pdf"})
+    @ValueSource(strings = {"image/jpeg:jpg", "image/png:png", "application/pdf:pdf", "video/mp4:mp4",
+            "video/webm:webm", "video/quicktime:mov"})
     void upload_returnsTheExtensionOfTheContentType(String pair) {
         String[] parts = pair.split(":");
 
@@ -285,5 +286,22 @@ class CloudinaryStorageServiceTest {
     void delete_withAnInvalidReference_throwsBeforeAnyNetworkCall(String reference) {
         assertThatThrownBy(() -> service.delete(reference)).isInstanceOf(IllegalArgumentException.class);
         assertThat(requests).isEmpty();
+    }
+
+    @Test
+    void video_isUploadedDeletedAndReadAsAVideoResource() {
+        String reference = service.upload(new byte[]{1, 2, 3}, "video/mp4", "demonstrations/4/abc");
+        service.delete(reference);
+
+        assertThat(reference).isEqualTo("demonstrations/4/abc.mp4");
+        assertThat(requests).extracting(Received::path)
+                .containsExactly("/v1_1/demo/video/upload", "/v1_1/demo/video/destroy");
+
+        String url = create("https://api.cloudinary.com").getTemporaryUrl(reference, Duration.ofMinutes(15));
+
+        assertThat(URI.create(url).getPath()).isEqualTo("/v1_1/demo/video/download");
+        assertThat(queryFields(url)).containsEntry("public_id", "demonstrations/4/abc")
+                .containsEntry("format", "mp4")
+                .containsEntry("type", "authenticated");
     }
 }

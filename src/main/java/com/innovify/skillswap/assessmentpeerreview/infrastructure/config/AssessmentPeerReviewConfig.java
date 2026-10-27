@@ -3,8 +3,10 @@ package com.innovify.skillswap.assessmentpeerreview.infrastructure.config;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.MiniProjectSubmissionCommandService;
 import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.EvaluateMiniProjectEventHandler;
 import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.NotifyCaseResolutionEventHandler;
+import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.NotifyFinalDemonstrationReviewedEventHandler;
 import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.NotifyMiniProjectApprovedEventHandler;
 import com.innovify.skillswap.assessmentpeerreview.application.eventhandlers.NotifyMiniProjectEscalatedEventHandler;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.FinalDemonstrationReviewed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectApprovedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectEscalatedByAi;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.MiniProjectSubmitted;
@@ -98,6 +100,13 @@ public class AssessmentPeerReviewConfig {
     public DomainEventHandler<VerificationCaseResolved> notifyCaseResolutionEventHandler(
             UserNotificationsContextFacade notifications, MessageSource messageSource) {
         return new NotifyCaseResolutionEventHandler(notifications, messageSource);
+    }
+
+    /** Push notification to the student when a verifier reviews the video of their final demonstration. */
+    @Bean
+    public DomainEventHandler<FinalDemonstrationReviewed> notifyFinalDemonstrationReviewedEventHandler(
+            UserNotificationsContextFacade notifications, MessageSource messageSource) {
+        return new NotifyFinalDemonstrationReviewedEventHandler(notifications, messageSource);
     }
 
     /** Retries the evaluations that a restart interrupted, once the application is ready. */

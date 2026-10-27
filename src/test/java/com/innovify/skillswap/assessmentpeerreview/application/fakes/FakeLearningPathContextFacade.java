@@ -7,6 +7,7 @@ import com.innovify.skillswap.learningpathengine.application.acl.MiniProjectRubr
 import com.innovify.skillswap.learningpathengine.application.acl.MiniProjectView;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeCompletionOutcome;
 import com.innovify.skillswap.learningpathengine.application.acl.NodeReopenOutcome;
+import com.innovify.skillswap.learningpathengine.application.acl.PathCompletionView;
 import com.innovify.skillswap.learningpathengine.application.acl.RubricCriterionView;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
 
     private final Map<Integer, BlueprintView> blueprints = new HashMap<>();
     private final Map<Integer, MiniProjectView> miniProjects = new HashMap<>();
+    private final Map<Integer, PathCompletionView> paths = new HashMap<>();
     private final Set<String> completedSkills = new HashSet<>();
     private final List<Integer> completedNodes = new ArrayList<>();
     private final List<Integer> reopenedNodes = new ArrayList<>();
@@ -141,6 +143,18 @@ public class FakeLearningPathContextFacade implements LearningPathContextFacade 
             completedNodes.add(pathNodeId);
         }
         return nextOutcome;
+    }
+
+    /** Adds a path of the student with the given skills. */
+    public PathCompletionView addPath(int pathId, int studentId, boolean completed, String... skillTags) {
+        PathCompletionView view = new PathCompletionView(pathId, studentId, completed, List.of(skillTags));
+        paths.put(pathId, view);
+        return view;
+    }
+
+    @Override
+    public Optional<PathCompletionView> getPathCompletion(int pathId) {
+        return Optional.ofNullable(paths.get(pathId));
     }
 
     @Override

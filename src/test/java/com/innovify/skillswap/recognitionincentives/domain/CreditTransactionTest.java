@@ -30,6 +30,24 @@ class CreditTransactionTest {
     }
 
     @Test
+    void earnedForDemonstration_recordsAnEarnedMovementWithItsDemonstration() {
+        CreditTransaction transaction = CreditTransaction.earnedForDemonstration(2, new Credits(40),
+                "Final demonstration reviewed", 8);
+
+        assertThat(transaction.getType()).isEqualTo(TransactionType.EARNED);
+        assertThat(transaction.getAmount().value()).isEqualTo(40);
+        assertThat(transaction.getRelatedDemonstrationId()).isEqualTo(8);
+        assertThat(transaction.getRelatedCaseId()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1})
+    void earnedForDemonstration_withAnInvalidDemonstration_throwsDomainException(int demonstrationId) {
+        assertThatThrownBy(() -> CreditTransaction.earnedForDemonstration(2, new Credits(40), "x", demonstrationId))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
     void constructor_recordsARedeemedMovementWithoutCase() {
         CreditTransaction transaction = new CreditTransaction(2, new Credits(30), TransactionType.REDEEMED,
                 "Redeemed: contribution certificate", null);

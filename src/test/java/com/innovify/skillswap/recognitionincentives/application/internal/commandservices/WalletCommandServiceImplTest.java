@@ -10,6 +10,7 @@ import com.innovify.skillswap.recognitionincentives.domain.model.RecognitionInce
 import com.innovify.skillswap.recognitionincentives.domain.model.aggregates.Wallet;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreateWalletCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierCommand;
+import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierForDemonstrationCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.RedeemCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits;
@@ -159,6 +160,50 @@ class WalletCommandServiceImplTest {
         assertThat(result.value()).isSameAs(existing);
         assertThat(existing.getBalance()).isEqualTo(45);
         assertThat(wallets.lockedReads()).isEqualTo(1);
+    }
+
+    @Test
+    void creditDemonstration_aVerifierWithoutWallet_createsItWithTheRewardAndTheMovement() {
+        Result<Wallet> result = service.handle(new CreditVerifierForDemonstrationCommand(2, 8));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getBalance()).isEqualTo(40);
+        assertThat(transactions.items()).hasSize(1);
+        CreditTransaction movement = transactions.items().get(0);
+        assertThat(movement.getType()).isEqualTo(TransactionType.EARNED);
+        assertThat(movement.getAmount().value()).isEqualTo(40);
+        assertThat(movement.getRelatedDemonstrationId()).isEqualTo(8);
+        assertThat(movement.getRelatedCaseId()).isNull();
+        assertThat(movement.getDescription()).isEqualTo("Final demonstration reviewed");
+    }
+
+    @Test
+    void creditDemonstration_theSameDemonstrationTwice_paysOnlyOnce() {
+        service.handle(new CreditVerifierForDemonstrationCommand(2, 8));
+
+        Result<Wallet> again = service.handle(new CreditVerifierForDemonstrationCommand(2, 8));
+
+        assertThat(again.isSuccess()).isTrue();
+        assertThat(again.value().getBalance()).isEqualTo(40);
+        assertThat(transactions.items()).hasSize(1);
+    }
+
+    @Test
+    void creditDemonstration_withTheSameIdAsAPaidCase_stillPays() {
+        credit(2, 8);
+
+        Result<Wallet> result = service.handle(new CreditVerifierForDemonstrationCommand(2, 8));
+
+        assertThat(result.value().getBalance()).isEqualTo(65);
+        assertThat(transactions.items()).hasSize(2);
+    }
+
+    @Test
+    void creditDemonstration_whenTheDatabaseFails_returnsDatabaseError() {
+        transactions.failOnSave(new DataIntegrityViolationException("boom"));
+
+        assertFailure(service.handle(new CreditVerifierForDemonstrationCommand(2, 8)),
+                RecognitionIncentivesError.DATABASE_ERROR);
     }
 
     @Test

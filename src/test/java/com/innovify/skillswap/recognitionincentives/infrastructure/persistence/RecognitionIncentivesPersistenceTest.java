@@ -108,6 +108,42 @@ class RecognitionIncentivesPersistenceTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void transaction_isStoredWithItsDemonstration() {
+        Wallet wallet = wallets.save(new Wallet(3));
+        transactions.save(CreditTransaction.earnedForDemonstration(wallet.getId(), new Credits(40),
+                "Final demonstration reviewed", 8));
+
+        CreditTransaction loaded = transactions.findByWalletId(wallet.getId()).get(0);
+
+        assertThat(loaded.getRelatedDemonstrationId()).isEqualTo(8);
+        assertThat(loaded.getRelatedCaseId()).isNull();
+        assertThat(transactions.existsEarnedForDemonstration(wallet.getId(), 8)).isTrue();
+        assertThat(transactions.existsEarnedForDemonstration(wallet.getId(), 9)).isFalse();
+    }
+
+    @Test
+    void transaction_aDemonstrationPaysAWalletOnlyOnce() {
+        Wallet wallet = wallets.save(new Wallet(3));
+        Wallet other = wallets.save(new Wallet(4));
+        transactions.save(CreditTransaction.earnedForDemonstration(wallet.getId(), new Credits(40), "x", 8));
+
+        transactions.save(CreditTransaction.earnedForDemonstration(other.getId(), new Credits(40), "x", 8));
+        assertThatThrownBy(() -> transactions.save(
+                CreditTransaction.earnedForDemonstration(wallet.getId(), new Credits(40), "x", 8)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void transaction_aDemonstrationAndACaseWithTheSameIdDoNotCollide() {
+        Wallet wallet = wallets.save(new Wallet(3));
+        earned(wallet.getId(), 25, 8);
+
+        transactions.save(CreditTransaction.earnedForDemonstration(wallet.getId(), new Credits(40), "x", 8));
+
+        assertThat(transactions.findByWalletId(wallet.getId())).hasSize(2);
+    }
+
+    @Test
     void transaction_isStoredAsTheTextTheCSharpApiWrote() throws Exception {
         Wallet wallet = wallets.save(new Wallet(3));
         transactions.save(new CreditTransaction(wallet.getId(), new Credits(30), TransactionType.REDEEMED,

@@ -53,6 +53,13 @@ public class FakeCreditTransactionRepository implements CreditTransactionReposit
     }
 
     @Override
+    public boolean existsEarnedForDemonstration(int walletId, int demonstrationId) {
+        return items.stream().anyMatch(t -> t.getWalletId() == walletId
+                && t.getType() == TransactionType.EARNED
+                && t.getRelatedDemonstrationId() != null && t.getRelatedDemonstrationId() == demonstrationId);
+    }
+
+    @Override
     public List<Integer> findRedemptionIds(int walletId, RedemptionItem item) {
         return items.stream()
                 .filter(t -> t.getWalletId() == walletId && t.getRedemptionItem() == item)

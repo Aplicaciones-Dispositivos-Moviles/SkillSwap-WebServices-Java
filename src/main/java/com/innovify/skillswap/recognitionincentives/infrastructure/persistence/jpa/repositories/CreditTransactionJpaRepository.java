@@ -15,6 +15,9 @@ public interface CreditTransactionJpaRepository extends JpaRepository<CreditTran
 
     boolean existsByWalletIdAndTypeAndRelatedCaseId(int walletId, TransactionType type, int relatedCaseId);
 
+    boolean existsByWalletIdAndTypeAndRelatedDemonstrationId(int walletId, TransactionType type,
+                                                             int relatedDemonstrationId);
+
     @Query("select t.id from CreditTransaction t where t.walletId = :walletId and t.redemptionItem = :item "
             + "order by t.id")
     List<Integer> findIdsByWalletIdAndRedemptionItem(@Param("walletId") int walletId,

@@ -13,6 +13,7 @@ public final class CreditRewards {
 
     public static final int PER_RESOLVED_MINI_PROJECT = 40;
     public static final int PER_RESOLVED_QUIZ = 25;
+    public static final int PER_REVIEWED_DEMONSTRATION = 40;
 
     private CreditRewards() {
     }
@@ -25,6 +26,7 @@ public final class CreditRewards {
         return switch (caseType) {
             case MINI_PROJECT -> new Credits(PER_RESOLVED_MINI_PROJECT);
             case QUIZ -> new Credits(PER_RESOLVED_QUIZ);
+            case FINAL_DEMONSTRATION -> new Credits(PER_REVIEWED_DEMONSTRATION);
         };
     }
 }

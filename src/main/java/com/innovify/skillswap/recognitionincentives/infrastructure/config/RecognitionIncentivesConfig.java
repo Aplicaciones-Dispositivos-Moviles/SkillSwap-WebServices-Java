@@ -1,5 +1,6 @@
 package com.innovify.skillswap.recognitionincentives.infrastructure.config;
 
+import com.innovify.skillswap.assessmentpeerreview.domain.model.events.FinalDemonstrationReviewed;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.events.VerificationCaseResolved;
 import com.innovify.skillswap.iam.application.acl.IamContextFacade;
 import com.innovify.skillswap.iam.domain.model.events.UserRegistered;
@@ -11,6 +12,7 @@ import com.innovify.skillswap.recognitionincentives.application.commandservices.
 import com.innovify.skillswap.recognitionincentives.application.commandservices.WalletCommandService;
 import com.innovify.skillswap.recognitionincentives.application.eventhandlers.CreateWalletEventHandler;
 import com.innovify.skillswap.recognitionincentives.application.eventhandlers.CreditVerifierEventHandler;
+import com.innovify.skillswap.recognitionincentives.application.eventhandlers.CreditVerifierForDemonstrationEventHandler;
 import com.innovify.skillswap.recognitionincentives.application.internal.CredentialViews;
 import com.innovify.skillswap.recognitionincentives.application.internal.commandservices.ShareableCredentialCommandServiceImpl;
 import com.innovify.skillswap.recognitionincentives.application.internal.commandservices.WalletCommandServiceImpl;
@@ -108,5 +110,11 @@ public class RecognitionIncentivesConfig {
     public DomainEventHandler<VerificationCaseResolved> creditVerifierEventHandler(
             WalletCommandService commandService) {
         return new CreditVerifierEventHandler(commandService);
+    }
+
+    @Bean
+    public DomainEventHandler<FinalDemonstrationReviewed> creditVerifierForDemonstrationEventHandler(
+            WalletCommandService commandService) {
+        return new CreditVerifierForDemonstrationEventHandler(commandService);
     }
 }

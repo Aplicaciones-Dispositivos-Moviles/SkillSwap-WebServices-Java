@@ -1,4 +1,6 @@
 package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.repositories;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
+import org.springframework.data.domain.PageRequest;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
@@ -70,6 +72,17 @@ public class VerificationCaseRepositoryAdapter implements VerificationCaseReposi
     @Override
     public List<VerificationCase> findPendingBySkillTag(String skillTag) {
         return jpaRepository.findByStatusAndSkillTagOrderByIdAsc(CaseStatus.PENDING, skillTag);
+    }
+
+    @Override
+    public List<VerificationCase> findRecentApprovedExcludingStudent(int excludedStudentId, String skillTag,
+                                                                     int limit) {
+        PageRequest page = PageRequest.of(0, limit);
+        return skillTag == null
+                ? jpaRepository.findByStatusAndDecisionAndStudentIdNotOrderByResolvedAtDescIdDesc(
+                        CaseStatus.RESOLVED, ReviewDecision.APPROVED, excludedStudentId, page)
+                : jpaRepository.findByStatusAndDecisionAndStudentIdNotAndSkillTagOrderByResolvedAtDescIdDesc(
+                        CaseStatus.RESOLVED, ReviewDecision.APPROVED, excludedStudentId, skillTag, page);
     }
 
     @Override

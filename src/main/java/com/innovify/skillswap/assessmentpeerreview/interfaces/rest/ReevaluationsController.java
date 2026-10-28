@@ -1,4 +1,10 @@
 package com.innovify.skillswap.assessmentpeerreview.interfaces.rest;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.GetMapping;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.ReevaluationCandidateResource;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetReevaluationCandidatesQuery;
+import com.innovify.skillswap.assessmentpeerreview.application.queryservices.ReevaluationQueryService;
 
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.ReevaluationCommandService;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.commands.OrderReevaluationCommand;
@@ -29,9 +35,30 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReevaluationsController {
 
     private final ReevaluationCommandService commandService;
+    private final ReevaluationQueryService queryService;
 
-    public ReevaluationsController(ReevaluationCommandService commandService) {
+    public ReevaluationsController(ReevaluationCommandService commandService,
+                                   ReevaluationQueryService queryService) {
         this.commandService = commandService;
+        this.queryService = queryService;
+    }
+
+    /**
+     * The approved results the caller, a Verificador senior (Gold rank and a reliability of 90 or more), can order
+     * to evaluate again: passed quiz attempts and approved cases of other students, newest first, without the ones
+     * that were already reevaluated or have a case in progress. It carries nothing about the student. Optional
+     * filters: skillTag, and limit (20 by default, 50 at most). 200 or 403 NotSeniorVerifier.
+     */
+    @GetMapping("/candidates")
+    @PreAuthorize("hasRole('STUDENT')")
+    @ApiResponse(responseCode = "200",
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = ReevaluationCandidateResource.class))))
+    public ResponseEntity<?> getCandidates(@RequestParam(required = false) String skillTag,
+                                           @RequestParam(required = false) Integer limit,
+                                           @AuthenticationPrincipal User actor) {
+        var result = queryService.handle(new GetReevaluationCandidatesQuery(actor.getId(), skillTag, limit));
+        return AssessmentPeerReviewActionResultAssembler.toResponse(result, candidates -> ResponseEntity.ok(
+                candidates.stream().map(AssessmentPeerReviewResourceAssemblers::toResource).toList()));
     }
 
     /**

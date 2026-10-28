@@ -49,6 +49,18 @@ public class FakeAssessmentAttemptRepository implements AssessmentAttemptReposit
     }
 
     @Override
+    public List<AssessmentAttempt> findRecentPassedExcludingStudent(int excludedStudentId, String skillTag,
+                                                                    int limit) {
+        return attempts.stream()
+                .filter(a -> a.isPassed() && a.getStudentId() != excludedStudentId
+                        && (skillTag == null || skillTag.equals(a.getSkillTag())))
+                .sorted(java.util.Comparator.comparing(AssessmentAttempt::getCompletedAt)
+                        .thenComparing(AssessmentAttempt::getId).reversed())
+                .limit(limit)
+                .toList();
+    }
+
+    @Override
     public List<AssessmentAttempt> findCompletedBetween(Instant from, Instant to) {
         return attempts.stream()
                 .filter(a -> !a.getCompletedAt().isBefore(from) && a.getCompletedAt().isBefore(to))

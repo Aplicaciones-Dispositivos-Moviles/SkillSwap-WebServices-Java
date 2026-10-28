@@ -56,4 +56,12 @@ public interface VerificationCaseRepository {
      * verifiers who resolved none are not in the map.
      */
     Map<Integer, Double> averageResolutionSecondsByVerifier();
+
+    /**
+     * The cases resolved as approved of the students other than the given one, the most recently resolved first, at
+     * most {@code limit}.
+     *
+     * @param skillTag only the cases of that skill; null for all
+     */
+    List<VerificationCase> findRecentApprovedExcludingStudent(int excludedStudentId, String skillTag, int limit);
 }

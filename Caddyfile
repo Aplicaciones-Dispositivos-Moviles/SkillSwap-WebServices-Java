@@ -1,0 +1,9 @@
+# Caddy gets and renews the HTTPS certificate of {$DOMAIN} by itself (Let's Encrypt). Ports 80 and 443 must be open.
+{$DOMAIN} {
+    encode gzip
+    # 25 MB: the largest file the API accepts (demonstration videos).
+    request_body {
+        max_size 26MB
+    }
+    reverse_proxy app:8080
+}

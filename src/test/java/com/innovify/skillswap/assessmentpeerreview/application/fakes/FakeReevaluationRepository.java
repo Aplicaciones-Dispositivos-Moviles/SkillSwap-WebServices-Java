@@ -38,6 +38,15 @@ public class FakeReevaluationRepository implements ReevaluationRepository {
     }
 
     @Override
+    public java.util.Set<Integer> findReevaluatedSourceIds(ReevaluationSourceType sourceType,
+                                                           java.util.Collection<Integer> sourceIds) {
+        return reevaluations.stream()
+                .filter(r -> r.getSourceType() == sourceType && sourceIds.contains(r.getSourceId()))
+                .map(Reevaluation::getSourceId)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    @Override
     public List<Reevaluation> findBySource(ReevaluationSourceType sourceType, int sourceId) {
         return reevaluations.stream()
                 .filter(r -> r.getSourceType() == sourceType && r.getSourceId() == sourceId)

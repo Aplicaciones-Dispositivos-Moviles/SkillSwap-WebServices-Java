@@ -1,4 +1,5 @@
 package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.repositories;
+import java.util.Collection;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReevaluationSourceType;
@@ -10,4 +11,7 @@ public interface ReevaluationJpaRepository extends JpaRepository<Reevaluation, I
 
     List<Reevaluation> findBySourceTypeAndSourceIdOrderByCreatedAtAscIdAsc(ReevaluationSourceType sourceType,
                                                                            int sourceId);
+
+    List<Reevaluation> findBySourceTypeAndSourceIdIn(ReevaluationSourceType sourceType,
+                                                     Collection<Integer> sourceIds);
 }

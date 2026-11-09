@@ -210,6 +210,90 @@ class ReevaluationsIntegrationTest extends PostgresIntegrationTest {
         return userId == bob.getId() ? bobToken : carlaToken;
     }
 
+    // ---------- Candidates ----------
+
+    private MvcResult candidates(String token, String query) throws Exception {
+        return call(get(REEVALUATIONS + "/candidates" + query), token, null);
+    }
+
+    private static int count(MvcResult result) throws Exception {
+        List<Object> items = read(result, "$");
+        return items.size();
+    }
+
+    @Test
+    @DisplayName("US37: a verifier who is not senior cannot list the candidates")
+    void candidates_byWhoIsNotASenior_returns403() throws Exception {
+        enroll(bob, bobToken);
+
+        MvcResult result = candidates(bobToken, "");
+
+        assertThat(status(result)).isEqualTo(403);
+        assertThat(title(result)).isEqualTo("NotSeniorVerifier");
+    }
+
+    @Test
+    void candidates_withoutAToken_isRejected() throws Exception {
+        assertThat(status(candidates(null, ""))).isIn(401, 403);
+    }
+
+    @Test
+    @DisplayName("US37: the senior lists the passed attempts of other students, without personal data")
+    void candidates_listsThePassedAttemptsOfOtherStudents() throws Exception {
+        makeSenior(senior);
+        int attemptId = passAssessment(ana, anaToken);
+
+        MvcResult result = candidates(seniorToken, "");
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat(count(result)).isEqualTo(1);
+        assertThat((String) read(result, "$[0].sourceType")).isEqualTo("Attempt");
+        assertThat((int) read(result, "$[0].sourceId")).isEqualTo(attemptId);
+        assertThat((String) read(result, "$[0].skillTag")).isEqualTo(SKILL);
+        assertThat((Object) read(result, "$[0].caseType")).isNull();
+        assertThat((String) read(result, "$[0].resolvedAt")).isNotBlank();
+        assertThat(body(result)).doesNotContain("studentId");
+    }
+
+    @Test
+    void candidates_skipTheOwnResultsAndTheAlreadyReevaluatedOnes() throws Exception {
+        makeSenior(senior);
+        passAssessment(senior, seniorToken);
+        int attemptId = passAssessment(ana, anaToken);
+        assertThat(status(order(seniorToken, "Attempt", attemptId, JUSTIFICATION))).isEqualTo(201);
+
+        assertThat(count(candidates(seniorToken, ""))).isZero();
+    }
+
+    @Test
+    void candidates_listsAnApprovedCaseWithItsType() throws Exception {
+        makeSenior(senior);
+        enroll(bob, bobToken);
+        enroll(carla, carlaToken);
+        int caseId = failAssessment(ana, anaToken);
+        int approver = read(getCase(anaToken, caseId), "$.verificationCase.verifierUserId");
+        assertThat(status(decide(tokenOf(approver), caseId, "Approved"))).isEqualTo(200);
+
+        MvcResult result = candidates(seniorToken, "");
+
+        List<Integer> caseIds = read(result, "$[?(@.sourceType=='Case')].sourceId");
+        List<String> caseTypes = read(result, "$[?(@.sourceType=='Case')].caseType");
+        assertThat(caseIds).containsExactly(caseId);
+        assertThat(caseTypes).containsExactly("Quiz");
+    }
+
+    @Test
+    void candidates_applyTheSkillAndLimitFilters() throws Exception {
+        makeSenior(senior);
+        passAssessment(ana, anaToken);
+        passAssessment(bob, bobToken);
+
+        assertThat(count(candidates(seniorToken, ""))).isEqualTo(2);
+        assertThat(count(candidates(seniorToken, "?limit=1"))).isEqualTo(1);
+        assertThat(count(candidates(seniorToken, "?skillTag=" + SKILL))).isEqualTo(2);
+        assertThat(count(candidates(seniorToken, "?skillTag=unknown-skill"))).isZero();
+    }
+
     // ---------- Attempts ----------
 
     @Test

@@ -139,6 +139,18 @@ public class FakeVerificationCaseRepository implements VerificationCaseRepositor
     }
 
     @Override
+    public List<VerificationCase> findRecentApprovedExcludingStudent(int excludedStudentId, String skillTag,
+                                                                     int limit) {
+        return cases.stream()
+                .filter(c -> c.canBeReevaluated() && c.getStudentId() != excludedStudentId
+                        && (skillTag == null || skillTag.equals(c.getSkillTag())))
+                .sorted(Comparator.comparing(VerificationCase::getResolvedAt)
+                        .thenComparing(VerificationCase::getId).reversed())
+                .limit(limit)
+                .toList();
+    }
+
+    @Override
     public Map<Integer, Double> averageResolutionSecondsByVerifier() {
         Map<Integer, java.util.List<Double>> seconds = new HashMap<>();
         for (VerificationCase c : cases) {

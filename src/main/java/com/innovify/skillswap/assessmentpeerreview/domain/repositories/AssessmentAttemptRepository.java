@@ -18,4 +18,11 @@ public interface AssessmentAttemptRepository {
 
     /** The attempts completed from {@code from} (inclusive) until {@code to} (exclusive), whatever their result. */
     List<AssessmentAttempt> findCompletedBetween(Instant from, Instant to);
+
+    /**
+     * The passed attempts of the students other than the given one, newest first, at most {@code limit}.
+     *
+     * @param skillTag only the attempts of that skill; null for all
+     */
+    List<AssessmentAttempt> findRecentPassedExcludingStudent(int excludedStudentId, String skillTag, int limit);
 }

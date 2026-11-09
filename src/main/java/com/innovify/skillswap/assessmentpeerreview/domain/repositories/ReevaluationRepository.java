@@ -1,4 +1,6 @@
 package com.innovify.skillswap.assessmentpeerreview.domain.repositories;
+import java.util.Set;
+import java.util.Collection;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReevaluationSourceType;
@@ -12,4 +14,7 @@ public interface ReevaluationRepository {
 
     /** The reevaluations ordered for an attempt or a case, from the oldest to the newest. */
     List<Reevaluation> findBySource(ReevaluationSourceType sourceType, int sourceId);
+
+    /** Which of the attempts or cases already have a reevaluation ordered; empty when none or when no ids are given. */
+    Set<Integer> findReevaluatedSourceIds(ReevaluationSourceType sourceType, Collection<Integer> sourceIds);
 }

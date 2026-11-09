@@ -1,4 +1,6 @@
 package com.innovify.skillswap.assessmentpeerreview.interfaces.rest.transform;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.ReevaluationCandidateResource;
+import com.innovify.skillswap.assessmentpeerreview.application.queryservices.ReevaluationCandidate;
 
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.EscalationLimitReached;
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.SubmitAssessmentAttemptOutcome;
@@ -55,6 +57,12 @@ public final class AssessmentPeerReviewResourceAssemblers {
     private static PlanLimitReachedResource toResource(EscalationLimitReached limitReached) {
         return limitReached == null ? null : new PlanLimitReachedResource("MonthlyEscalations", limitReached.plan(),
                 limitReached.max(), limitReached.current(), limitReached.upgradeAvailable());
+    }
+
+    public static ReevaluationCandidateResource toResource(ReevaluationCandidate candidate) {
+        return new ReevaluationCandidateResource(candidate.sourceType().value(), candidate.sourceId(),
+                candidate.skillTag(), candidate.caseType() == null ? null : candidate.caseType().value(),
+                candidate.resolvedAt(), candidate.approvedByName());
     }
 
     public static ReevaluationResource toResource(Reevaluation reevaluation) {

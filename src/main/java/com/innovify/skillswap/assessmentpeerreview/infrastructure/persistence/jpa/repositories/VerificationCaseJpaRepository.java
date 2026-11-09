@@ -1,4 +1,6 @@
 package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.repositories;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
+import org.springframework.data.domain.Pageable;
 
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
@@ -44,6 +46,12 @@ public interface VerificationCaseJpaRepository extends JpaRepository<Verificatio
                                                               CaseStatus status);
 
     long countByStudentIdAndOpenedAtGreaterThanEqual(int studentId, Instant since);
+
+    List<VerificationCase> findByStatusAndDecisionAndStudentIdNotOrderByResolvedAtDescIdDesc(
+            CaseStatus status, ReviewDecision decision, int studentId, Pageable pageable);
+
+    List<VerificationCase> findByStatusAndDecisionAndStudentIdNotAndSkillTagOrderByResolvedAtDescIdDesc(
+            CaseStatus status, ReviewDecision decision, int studentId, String skillTag, Pageable pageable);
 
     /** Transaction-level advisory lock of PostgreSQL on (namespace, student): released at the commit or rollback. */
     @Query(value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(:namespace, :studentId)) AS locked",

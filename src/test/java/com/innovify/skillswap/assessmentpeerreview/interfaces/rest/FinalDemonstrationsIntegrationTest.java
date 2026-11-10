@@ -297,7 +297,7 @@ class FinalDemonstrationsIntegrationTest extends PostgresIntegrationTest {
         completePath();
         enableBobAsVerifier();
         int id = scheduleOk();
-        String later = Instant.now().plus(Duration.ofDays(6)).toString();
+        String later = Instant.now().plus(Duration.ofDays(6)).truncatedTo(java.time.temporal.ChronoUnit.MICROS).toString();
 
         MvcResult result = call(patch(DEMONSTRATIONS + "/" + id + "/reschedule"), anaToken,
                 "{\"scheduledAt\":\"" + later + "\"}");

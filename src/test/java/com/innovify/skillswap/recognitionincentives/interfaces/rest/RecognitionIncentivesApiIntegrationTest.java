@@ -451,7 +451,7 @@ class RecognitionIncentivesApiIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void redeem_acceptsTheNameInAnyCase() throws Exception {
-        resolveCases(bob, CaseType.MINI_PROJECT, 3);
+        resolveCases(bob, CaseType.MINI_PROJECT, 8);
 
         assertThat(status(redeem(bobToken, "contributioncertificate"))).isEqualTo(201);
     }

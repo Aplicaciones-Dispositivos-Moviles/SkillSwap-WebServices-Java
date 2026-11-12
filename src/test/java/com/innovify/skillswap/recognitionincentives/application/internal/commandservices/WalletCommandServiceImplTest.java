@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.innovify.skillswap.recognitionincentives.application.fakes.FakeCreditTransactionRepository;
 import com.innovify.skillswap.recognitionincentives.application.fakes.FakeDomainEventPublisher;
+import com.innovify.skillswap.recognitionincentives.application.fakes.FakeRedemptionIdempotencyKeyRepository;
 import com.innovify.skillswap.recognitionincentives.application.fakes.FakeWalletRepository;
 import com.innovify.skillswap.recognitionincentives.application.fakes.TestMessages;
 import com.innovify.skillswap.recognitionincentives.domain.model.RecognitionIncentivesError;
@@ -13,7 +14,10 @@ import com.innovify.skillswap.recognitionincentives.domain.model.commands.Credit
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierForDemonstrationCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.commands.RedeemCommand;
 import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
+import com.innovify.skillswap.recognitionincentives.domain.model.entities.RedemptionIdempotencyKey;
+import com.innovify.skillswap.recognitionincentives.domain.model.events.AdvancedPathUnlockRedeemed;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Credits;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.IdempotencyKey;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.ResolvedCaseType;
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
@@ -31,13 +35,14 @@ class WalletCommandServiceImplTest {
 
     private final FakeWalletRepository wallets = new FakeWalletRepository();
     private final FakeCreditTransactionRepository transactions = new FakeCreditTransactionRepository();
+    private final FakeRedemptionIdempotencyKeyRepository idempotencyKeys = new FakeRedemptionIdempotencyKeyRepository();
     private final FakeDomainEventPublisher events = new FakeDomainEventPublisher();
     private WalletCommandServiceImpl service;
 
     @BeforeEach
     void setUp() {
         LocaleContextHolder.setLocale(Locale.US);
-        service = new WalletCommandServiceImpl(wallets, transactions, new DefaultRedemptionPricing(),
+        service = new WalletCommandServiceImpl(wallets, transactions, idempotencyKeys, new DefaultRedemptionPricing(),
                 TransactionOperations.withoutTransaction(), events, TestMessages.source());
     }
 
@@ -65,6 +70,10 @@ class WalletCommandServiceImplTest {
 
     private Result<CreditTransaction> redeem(int userId, RedemptionItem item) {
         return service.handle(new RedeemCommand(userId, item));
+    }
+
+    private Result<CreditTransaction> redeem(int userId, RedemptionItem item, String key) {
+        return service.handle(new RedeemCommand(userId, item, new IdempotencyKey(key)));
     }
 
     private static void assertFailure(Result<?> result, RecognitionIncentivesError expected) {
@@ -408,6 +417,105 @@ class WalletCommandServiceImplTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(wallet.getBalance()).isZero();
         assertThat(result.value().getAmount().value()).isEqualTo(1500);
+        assertThat(events.published()).isEmpty();
+    }
+
+    // ---------- Redeem with an idempotency key ----------
+
+    @Test
+    void redeem_withoutKey_storesNoKey() {
+        walletWith(2, 600);
+
+        assertThat(redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE).isSuccess()).isTrue();
+        assertThat(redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE).isSuccess()).isTrue();
+
+        assertThat(transactions.items()).hasSize(2);
+        assertThat(idempotencyKeys.items()).isEmpty();
+    }
+
+    @Test
+    void redeem_withANewKey_chargesAndStoresTheKeyWithTheMovement() {
+        Wallet wallet = walletWith(2, 300);
+
+        Result<CreditTransaction> result = redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE, "attempt-1");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(wallet.getBalance()).isZero();
+        assertThat(idempotencyKeys.items()).singleElement().satisfies(stored -> {
+            assertThat(stored.getUserId()).isEqualTo(2);
+            assertThat(stored.getKey()).isEqualTo(new IdempotencyKey("attempt-1"));
+            assertThat(stored.getCreditTransactionId()).isEqualTo(result.value().getId());
+        });
+    }
+
+    @Test
+    void redeem_retriedWithTheSameKey_answersTheStoredMovementWithoutChargingAgain() {
+        Wallet wallet = walletWith(2, 600);
+        Result<CreditTransaction> first = redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE, "attempt-1");
+
+        Result<CreditTransaction> retry = redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE, "attempt-1");
+
+        assertThat(retry.isSuccess()).isTrue();
+        assertThat(retry.value().getId()).isEqualTo(first.value().getId());
+        assertThat(wallet.getBalance()).isEqualTo(300);
+        assertThat(transactions.items()).hasSize(1);
+        assertThat(idempotencyKeys.items()).hasSize(1);
+    }
+
+    @Test
+    void redeem_anAdvancedPathUnlockRetriedWithTheSameKey_isAnnouncedOnlyOnce() {
+        walletWith(2, 1000);
+        Result<CreditTransaction> first = redeem(2, RedemptionItem.ADVANCED_PATH_UNLOCK, "attempt-1");
+
+        redeem(2, RedemptionItem.ADVANCED_PATH_UNLOCK, "attempt-1");
+
+        assertThat(events.published()).containsExactly(new AdvancedPathUnlockRedeemed(2, first.value().getId()));
+    }
+
+    @Test
+    void redeem_theSameKeyFromAnotherUser_chargesThatUser() {
+        Wallet first = walletWith(2, 300);
+        Wallet second = walletWith(3, 300);
+        Result<CreditTransaction> mine = redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE, "attempt-1");
+
+        Result<CreditTransaction> theirs = redeem(3, RedemptionItem.CONTRIBUTION_CERTIFICATE, "attempt-1");
+
+        assertThat(theirs.isSuccess()).isTrue();
+        assertThat(theirs.value().getId()).isNotEqualTo(mine.value().getId());
+        assertThat(theirs.value().getWalletId()).isEqualTo(second.getId());
+        assertThat(first.getBalance()).isZero();
+        assertThat(second.getBalance()).isZero();
+        assertThat(idempotencyKeys.items()).hasSize(2);
+    }
+
+    @Test
+    void redeem_thatFailsWithAKey_storesNoKeySoARetryCanSucceed() {
+        Wallet wallet = walletWith(2, 299);
+
+        assertFailure(redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE, "attempt-1"),
+                RecognitionIncentivesError.INSUFFICIENT_BALANCE);
+        assertThat(idempotencyKeys.items()).isEmpty();
+
+        wallet.credit(new Credits(1));
+        Result<CreditTransaction> retry = redeem(2, RedemptionItem.CONTRIBUTION_CERTIFICATE, "attempt-1");
+
+        assertThat(retry.isSuccess()).isTrue();
+        assertThat(wallet.getBalance()).isZero();
+        assertThat(idempotencyKeys.items()).hasSize(1);
+    }
+
+    @Test
+    void redeem_whenAnotherRequestStoredTheSameKeyFirst_answersItsMovement() {
+        walletWith(2, 1000);
+        CreditTransaction winner = redeem(2, RedemptionItem.ADVANCED_PATH_UNLOCK).value();
+        events.published().clear();
+        idempotencyKeys.storeFirstOnNextSave(
+                new RedemptionIdempotencyKey(2, new IdempotencyKey("attempt-1"), winner.getId()));
+
+        Result<CreditTransaction> result = redeem(2, RedemptionItem.ADVANCED_PATH_UNLOCK, "attempt-1");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.value().getId()).isEqualTo(winner.getId());
         assertThat(events.published()).isEmpty();
     }
 }

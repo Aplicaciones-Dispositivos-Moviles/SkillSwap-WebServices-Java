@@ -5,6 +5,7 @@ import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Re
 import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.TransactionType;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.CreditTransactionRepository;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
 /** Implements the domain {@link CreditTransactionRepository} port on top of Spring Data JPA. */
@@ -20,6 +21,11 @@ public class CreditTransactionRepositoryAdapter implements CreditTransactionRepo
     @Override
     public CreditTransaction save(CreditTransaction transaction) {
         return jpaRepository.saveAndFlush(transaction);
+    }
+
+    @Override
+    public Optional<CreditTransaction> findById(int id) {
+        return jpaRepository.findById(id);
     }
 
     @Override

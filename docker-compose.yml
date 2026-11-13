@@ -1,0 +1,59 @@
+# SkillSwap on a single server (AWS EC2): PostgreSQL + the API + Caddy (automatic HTTPS).
+# Everything is read from the .env file next to this one (see .env.aws.example). Start it with:
+#   docker compose up -d --build
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: skillswap
+      POSTGRES_USER: skillswap
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillswap -d skillswap"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No published ports: only the API reaches the database, through the internal network.
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # The application turns this URL into a JDBC one. It overrides any DATABASE_URL of the .env file.
+      DATABASE_URL: postgres://skillswap:${POSTGRES_PASSWORD}@db:5432/skillswap
+      PORT: "8080"
+      # Caddy terminates HTTPS: trust its X-Forwarded-* headers (links and Swagger use https).
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      # 2 GB server shared with PostgreSQL: a smaller heap than the default 75 %.
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Not published: Caddy is the only way in.
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

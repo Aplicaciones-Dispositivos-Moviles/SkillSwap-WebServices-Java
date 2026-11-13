@@ -1,0 +1,36 @@
+package com.innovify.skillswap.recognitionincentives.application.commandservices;
+
+import com.innovify.skillswap.recognitionincentives.domain.model.aggregates.Wallet;
+import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreateWalletCommand;
+import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierCommand;
+import com.innovify.skillswap.recognitionincentives.domain.model.commands.CreditVerifierForDemonstrationCommand;
+import com.innovify.skillswap.recognitionincentives.domain.model.commands.RedeemCommand;
+import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
+import com.innovify.skillswap.shared.application.Result;
+
+/** Wallet command service interface. Nobody gives credits to anybody: they are earned only through events. */
+public interface WalletCommandService {
+
+    /** Creates the empty wallet of a user; answers the existing one when there is already one. */
+    Result<Wallet> handle(CreateWalletCommand command);
+
+    /**
+     * Credits a verifier for a resolved case, creating their wallet if they have none yet. A case pays a wallet
+     * only once, so repeating the command changes nothing.
+     */
+    Result<Wallet> handle(CreditVerifierCommand command);
+
+    /**
+     * Credits a verifier for a reviewed final demonstration, creating their wallet if they have none yet. A
+     * demonstration pays a wallet only once, so repeating the command changes nothing.
+     */
+    Result<Wallet> handle(CreditVerifierForDemonstrationCommand command);
+
+    /**
+     * Redeems a benefit, taking its cost from the balance and recording the movement. Fails with
+     * INVALID_REDEMPTION_ITEM, WALLET_NOT_FOUND, INSUFFICIENT_BALANCE or BENEFIT_ALREADY_REDEEMED
+     * (the badge can be redeemed only once). With an idempotency key, a retry of a successful redemption with the
+     * same key answers the movement already recorded, without charging again; a failed one stores no key.
+     */
+    Result<CreditTransaction> handle(RedeemCommand command);
+}

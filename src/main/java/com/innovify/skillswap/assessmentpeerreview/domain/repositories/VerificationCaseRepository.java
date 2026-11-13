@@ -1,0 +1,67 @@
+package com.innovify.skillswap.assessmentpeerreview.domain.repositories;
+
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+/** Persistence port of the {@link VerificationCase} aggregate. */
+public interface VerificationCaseRepository {
+
+    /** Persists a new or updated case and flushes right away. */
+    VerificationCase save(VerificationCase verificationCase);
+
+    Optional<VerificationCase> findById(int id);
+
+    /**
+     * Same as {@link #findById(int)} but locks the row until the current transaction ends, so the verifier resolving
+     * a case and the reassignment of an overdue one never change it at once. It must run inside a transaction.
+     */
+    Optional<VerificationCase> findByIdForUpdate(int id);
+
+    /** The ids of the assigned cases whose review was due before that moment, the most overdue first. */
+    List<Integer> findOverdueAssignedIds(Instant now);
+
+    /** The ids of the cases currently assigned to the verifier and not resolved yet, oldest first. */
+    List<Integer> findAssignedIdsByVerifierUserId(int verifierUserId);
+
+    /** The cases assigned to the verifier, newest first. */
+    List<VerificationCase> findByVerifierUserId(int verifierUserId);
+
+    /** The case opened by a mini-project delivery, if its preliminary evaluation sent it to a verifier. */
+    Optional<VerificationCase> findBySubmissionId(int submissionId);
+
+    /** The unresolved case of the student for the node, if any. */
+    Optional<VerificationCase> findOpenByStudentAndNode(int studentId, int pathNodeId);
+
+    /** The cases of the skill that still wait for a verifier, oldest first. */
+    List<VerificationCase> findPendingBySkillTag(String skillTag);
+
+    /** How many cases the student opened from that moment on, whatever their state (appeals do not open cases). */
+    int countOpenedByStudentSince(int studentId, Instant since);
+
+    /**
+     * Serializes the escalations of a student until the current transaction ends, so two attempts cannot both see
+     * room under the monthly quota of the plan. It must run inside a transaction.
+     */
+    void lockStudentEscalations(int studentId);
+
+    /** The number of unresolved cases of each verifier; verifiers without any are not in the map. */
+    Map<Integer, Integer> countOpenByVerifierUserIds(Collection<Integer> verifierUserIds);
+
+    /**
+     * The average seconds between the assignment and the resolution of the resolved cases of each verifier;
+     * verifiers who resolved none are not in the map.
+     */
+    Map<Integer, Double> averageResolutionSecondsByVerifier();
+
+    /**
+     * The cases resolved as approved of the students other than the given one, the most recently resolved first, at
+     * most {@code limit}.
+     *
+     * @param skillTag only the cases of that skill; null for all
+     */
+    List<VerificationCase> findRecentApprovedExcludingStudent(int excludedStudentId, String skillTag, int limit);
+}

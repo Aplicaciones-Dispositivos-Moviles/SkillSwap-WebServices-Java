@@ -1,0 +1,66 @@
+package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.repositories;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
+import org.springframework.data.domain.Pageable;
+
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import jakarta.persistence.LockModeType;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+/** Spring Data access to the "verification_cases" table. Only {@link VerificationCaseRepositoryAdapter} uses it. */
+public interface VerificationCaseJpaRepository extends JpaRepository<VerificationCase, Integer> {
+
+    List<VerificationCase> findByVerifierUserIdOrderByIdDesc(int verifierUserId);
+
+    /** SELECT ... FOR UPDATE: it waits for the other transactions that hold the case. Needs a transaction. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from VerificationCase c where c.id = :id")
+    Optional<VerificationCase> findForUpdateById(@Param("id") int id);
+
+    @Query("select c.id from VerificationCase c where c.status = :status and c.reviewDueAt <= :now "
+            + "order by c.reviewDueAt, c.id")
+    List<Integer> findIdsByStatusAndReviewDueAtNotAfter(@Param("status") CaseStatus status,
+                                                        @Param("now") Instant now);
+
+    @Query("select c.id from VerificationCase c where c.status = :status and c.verifierUserId = :verifierUserId "
+            + "order by c.id")
+    List<Integer> findIdsByStatusAndVerifierUserId(@Param("status") CaseStatus status,
+                                                   @Param("verifierUserId") int verifierUserId);
+
+    /** At most one: the database has a unique index on submission_id (V14). */
+    Optional<VerificationCase> findBySubmissionId(Integer submissionId);
+
+    Optional<VerificationCase> findFirstByStudentIdAndPathNodeIdAndStatusNot(int studentId, int pathNodeId,
+                                                                           CaseStatus status);
+
+    List<VerificationCase> findByStatusAndSkillTagOrderByIdAsc(CaseStatus status, String skillTag);
+
+    List<VerificationCase> findByVerifierUserIdInAndStatusNot(Collection<Integer> verifierUserIds,
+                                                              CaseStatus status);
+
+    long countByStudentIdAndOpenedAtGreaterThanEqual(int studentId, Instant since);
+
+    List<VerificationCase> findByStatusAndDecisionAndStudentIdNotOrderByResolvedAtDescIdDesc(
+            CaseStatus status, ReviewDecision decision, int studentId, Pageable pageable);
+
+    List<VerificationCase> findByStatusAndDecisionAndStudentIdNotAndSkillTagOrderByResolvedAtDescIdDesc(
+            CaseStatus status, ReviewDecision decision, int studentId, String skillTag, Pageable pageable);
+
+    /** Transaction-level advisory lock of PostgreSQL on (namespace, student): released at the commit or rollback. */
+    @Query(value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(:namespace, :studentId)) AS locked",
+            nativeQuery = true)
+    Integer lockStudent(@Param("namespace") int namespace, @Param("studentId") int studentId);
+
+    @Query(value = "SELECT verifier_user_id, AVG(EXTRACT(EPOCH FROM (resolved_at - assigned_at))) "
+            + "FROM verification_cases WHERE status = 'Resolved' AND verifier_user_id IS NOT NULL "
+            + "AND assigned_at IS NOT NULL AND resolved_at IS NOT NULL GROUP BY verifier_user_id",
+            nativeQuery = true)
+    List<Object[]> averageResolutionSecondsByVerifier();
+}

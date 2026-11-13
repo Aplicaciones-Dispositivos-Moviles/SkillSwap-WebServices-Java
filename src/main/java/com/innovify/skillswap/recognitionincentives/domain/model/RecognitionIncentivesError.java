@@ -1,0 +1,18 @@
+package com.innovify.skillswap.recognitionincentives.domain.model;
+
+/** Errors of the Recognition &amp; Incentives context. The API code is the PascalCase name (WalletNotFound...). */
+public enum RecognitionIncentivesError {
+    NONE,
+    INVALID_REDEMPTION_ITEM,
+    INVALID_IDEMPOTENCY_KEY,
+    WALLET_NOT_FOUND,
+    NOT_WALLET_OWNER,
+    INSUFFICIENT_BALANCE,
+    BENEFIT_ALREADY_REDEEMED,
+    INVALID_SKILL_TAG,
+    SKILL_NOT_VERIFIED,
+    CREDENTIAL_NOT_FOUND,
+    OPERATION_CANCELLED,
+    DATABASE_ERROR,
+    INTERNAL_SERVER_ERROR
+}

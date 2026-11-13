@@ -1,0 +1,50 @@
+package com.innovify.skillswap.assessmentpeerreview.infrastructure.persistence.jpa.repositories;
+import org.springframework.data.domain.PageRequest;
+
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
+import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.stereotype.Repository;
+
+/** Implements the domain {@link AssessmentAttemptRepository} port on top of Spring Data JPA. */
+@Repository
+public class AssessmentAttemptRepositoryAdapter implements AssessmentAttemptRepository {
+
+    private final AssessmentAttemptJpaRepository jpaRepository;
+
+    public AssessmentAttemptRepositoryAdapter(AssessmentAttemptJpaRepository jpaRepository) {
+        this.jpaRepository = jpaRepository;
+    }
+
+    @Override
+    public AssessmentAttempt save(AssessmentAttempt attempt) {
+        return jpaRepository.saveAndFlush(attempt);
+    }
+
+    @Override
+    public Optional<AssessmentAttempt> findById(int id) {
+        return jpaRepository.findById(id);
+    }
+
+    @Override
+    public Optional<AssessmentAttempt> findByBlueprintId(int blueprintId) {
+        return jpaRepository.findByBlueprintId(blueprintId);
+    }
+
+    @Override
+    public List<AssessmentAttempt> findCompletedBetween(Instant from, Instant to) {
+        return jpaRepository.findByCompletedAtGreaterThanEqualAndCompletedAtLessThan(from, to);
+    }
+
+    @Override
+    public List<AssessmentAttempt> findRecentPassedExcludingStudent(int excludedStudentId, String skillTag,
+                                                                    int limit) {
+        PageRequest page = PageRequest.of(0, limit);
+        return skillTag == null
+                ? jpaRepository.findByPassedTrueAndStudentIdNotOrderByCompletedAtDescIdDesc(excludedStudentId, page)
+                : jpaRepository.findByPassedTrueAndStudentIdNotAndSkillTagOrderByCompletedAtDescIdDesc(
+                        excludedStudentId, skillTag, page);
+    }
+}

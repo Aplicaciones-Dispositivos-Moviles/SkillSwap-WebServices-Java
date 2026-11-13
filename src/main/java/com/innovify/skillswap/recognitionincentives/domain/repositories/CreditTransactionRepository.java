@@ -1,0 +1,28 @@
+package com.innovify.skillswap.recognitionincentives.domain.repositories;
+
+import com.innovify.skillswap.recognitionincentives.domain.model.entities.CreditTransaction;
+import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.RedemptionItem;
+import java.util.List;
+import java.util.Optional;
+
+/** Persistence port of the {@link CreditTransaction} entity. */
+public interface CreditTransactionRepository {
+
+    /** Persists a new movement and flushes right away. */
+    CreditTransaction save(CreditTransaction transaction);
+
+    /** The movement with the id, as it was stored. */
+    Optional<CreditTransaction> findById(int id);
+
+    /** The movements of a wallet, newest first. */
+    List<CreditTransaction> findByWalletId(int walletId);
+
+    /** Whether the wallet already earned credits for the case. */
+    boolean existsEarnedForCase(int walletId, int caseId);
+
+    /** Whether the wallet already earned credits for the final demonstration. */
+    boolean existsEarnedForDemonstration(int walletId, int demonstrationId);
+
+    /** The ids of the redemptions of the wallet that bought the benefit, oldest first. */
+    List<Integer> findRedemptionIds(int walletId, RedemptionItem item);
+}

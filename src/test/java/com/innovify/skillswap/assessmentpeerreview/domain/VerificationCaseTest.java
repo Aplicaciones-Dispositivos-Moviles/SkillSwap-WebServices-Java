@@ -1,0 +1,566 @@
+package com.innovify.skillswap.assessmentpeerreview.domain;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseStatus;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
+import com.innovify.skillswap.shared.domain.exceptions.DomainException;
+import java.time.Duration;
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+class VerificationCaseTest {
+
+    private static final int STUDENT_ID = 1;
+    private static final int VERIFIER_ID = 2;
+
+    private static VerificationCase newCase() {
+        return new VerificationCase(10, STUDENT_ID, 5, " http-basics ", CaseType.QUIZ);
+    }
+
+    private static VerificationCase assignedCase() {
+        return newCase().assignVerifier(VERIFIER_ID);
+    }
+
+    // ---------- Constructor ----------
+
+    @Test
+    void constructor_opensAPendingCaseWithoutVerifier() {
+        Instant before = Instant.now();
+
+        VerificationCase verificationCase = newCase();
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.getAttemptId()).isEqualTo(10);
+        assertThat(verificationCase.getStudentId()).isEqualTo(STUDENT_ID);
+        assertThat(verificationCase.getPathNodeId()).isEqualTo(5);
+        assertThat(verificationCase.getSkillTag()).isEqualTo("http-basics");
+        assertThat(verificationCase.getCaseType()).isEqualTo(CaseType.QUIZ);
+        assertThat(verificationCase.getVerifierUserId()).isNull();
+        assertThat(verificationCase.getDecision()).isNull();
+        assertThat(verificationCase.isOpen()).isTrue();
+        assertThat(verificationCase.getOpenedAt()).isBetween(before, Instant.now());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0,1,1,skill", "1,0,1,skill", "1,1,0,skill", "1,1,1,' '"})
+    void constructor_withInvalidData_throwsDomainException(int attemptId, int studentId, int pathNodeId,
+                                                           String skillTag) {
+        assertThatThrownBy(() -> new VerificationCase(attemptId, studentId, pathNodeId, skillTag, CaseType.QUIZ))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void constructor_withAnAttempt_opensAQuizCaseWithoutSubmission() {
+        VerificationCase verificationCase = newCase();
+
+        assertThat(verificationCase.getCaseType()).isEqualTo(CaseType.QUIZ);
+        assertThat(verificationCase.getAttemptId()).isEqualTo(10);
+        assertThat(verificationCase.getSubmissionId()).isNull();
+        assertThat(verificationCase.getEvidenceUrl()).isNull();
+    }
+
+    @Test
+    void constructor_withAnAttemptAndAMiniProjectType_throwsDomainException() {
+        assertThatThrownBy(() -> new VerificationCase(10, STUDENT_ID, 5, "http-basics", CaseType.MINI_PROJECT))
+                .isInstanceOf(DomainException.class).hasMessageContaining("quiz");
+    }
+
+    @Test
+    void constructor_withoutType_throwsDomainException() {
+        assertThatThrownBy(() -> new VerificationCase(10, STUDENT_ID, 5, "http-basics", null))
+                .isInstanceOf(DomainException.class);
+    }
+
+    // ---------- Assign ----------
+
+    @Test
+    void assignVerifier_movesTheCaseToAssigned() {
+        VerificationCase verificationCase = assignedCase();
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.ASSIGNED);
+        assertThat(verificationCase.getVerifierUserId()).isEqualTo(VERIFIER_ID);
+        assertThat(verificationCase.getAssignedAt()).isNotNull();
+        assertThat(verificationCase.isAssignedTo(VERIFIER_ID)).isTrue();
+        assertThat(verificationCase.isAssignedTo(99)).isFalse();
+    }
+
+    @Test
+    void isAssignedTo_isFalseWhileTheCaseIsPending() {
+        assertThat(newCase().isAssignedTo(VERIFIER_ID)).isFalse();
+    }
+
+    @Test
+    void assignVerifier_toTheStudentOfTheCase_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().assignVerifier(STUDENT_ID)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void assignVerifier_withAnInvalidVerifier_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().assignVerifier(0)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void assignVerifier_toACaseAlreadyAssigned_throwsDomainException() {
+        assertThatThrownBy(() -> assignedCase().assignVerifier(3)).isInstanceOf(DomainException.class);
+    }
+
+    // ---------- Evidence ----------
+
+    @ParameterizedTest
+    @ValueSource(strings = {"https://github.com/student/project", "http://portfolio.example.com/work"})
+    void attachEvidence_withAValidLink_keepsItTrimmed(String url) {
+        VerificationCase verificationCase = newCase().attachEvidence("  " + url + "  ");
+
+        assertThat(verificationCase.getEvidenceUrl()).isEqualTo(url);
+    }
+
+    @Test
+    void attachEvidence_toAnAssignedCase_isAllowedAndReplacesThePreviousLink() {
+        VerificationCase verificationCase = assignedCase()
+                .attachEvidence("https://github.com/student/one")
+                .attachEvidence("https://github.com/student/two");
+
+        assertThat(verificationCase.getEvidenceUrl()).isEqualTo("https://github.com/student/two");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "not a url", "ftp://files.example.com/work", "javascript:alert(1)",
+            "https://", "/relative/path"})
+    void attachEvidence_withAnInvalidLink_throwsDomainException(String url) {
+        assertThatThrownBy(() -> newCase().attachEvidence(url)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void attachEvidence_withNull_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().attachEvidence(null)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void attachEvidence_withATooLongLink_throwsDomainException() {
+        String url = "https://example.com/" + "a".repeat(VerificationCase.MAX_EVIDENCE_URL_LENGTH);
+
+        assertThatThrownBy(() -> newCase().attachEvidence(url)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void attachEvidence_toAResolvedCase_throwsDomainException() {
+        VerificationCase verificationCase = assignedCase().resolve(ReviewDecision.REJECTED, "Needs work.");
+
+        assertThatThrownBy(() -> verificationCase.attachEvidence("https://github.com/student/project"))
+                .isInstanceOf(DomainException.class);
+    }
+
+    // ---------- Resolve ----------
+
+    @ParameterizedTest
+    @EnumSource(ReviewDecision.class)
+    void resolve_recordsTheDecisionAndTheNotes(ReviewDecision decision) {
+        Instant before = Instant.now();
+
+        VerificationCase verificationCase = assignedCase().resolve(decision, "  Good use of status codes.  ");
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.RESOLVED);
+        assertThat(verificationCase.getDecision()).isEqualTo(decision);
+        assertThat(verificationCase.getRubricNotes()).isEqualTo("Good use of status codes.");
+        assertThat(verificationCase.getResolvedAt()).isBetween(before, Instant.now());
+        assertThat(verificationCase.isOpen()).isFalse();
+    }
+
+    @Test
+    void resolve_aPendingCase_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().resolve(ReviewDecision.APPROVED, "Notes"))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void resolve_aResolvedCase_throwsDomainException() {
+        VerificationCase verificationCase = assignedCase().resolve(ReviewDecision.APPROVED, "Notes");
+
+        assertThatThrownBy(() -> verificationCase.resolve(ReviewDecision.REJECTED, "Other"))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void resolve_withoutNotes_throwsDomainException(String notes) {
+        assertThatThrownBy(() -> assignedCase().resolve(ReviewDecision.APPROVED, notes))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void resolve_withTooLongNotes_throwsDomainException() {
+        String notes = "a".repeat(VerificationCase.MAX_RUBRIC_NOTES_LENGTH + 1);
+
+        assertThatThrownBy(() -> assignedCase().resolve(ReviewDecision.APPROVED, notes))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void resolve_withoutADecision_throwsDomainException() {
+        assertThatThrownBy(() -> assignedCase().resolve(null, "Notes")).isInstanceOf(DomainException.class);
+    }
+
+    // ---------- Appeal ----------
+
+    private static VerificationCase rejectedCase() {
+        return assignedCase().resolve(ReviewDecision.REJECTED, "Needs more work.");
+    }
+
+    @Test
+    void canBeAppealed_onlyForARejectedCaseWithAppealsLeft() {
+        assertThat(newCase().canBeAppealed()).isFalse();
+        assertThat(assignedCase().canBeAppealed()).isFalse();
+        assertThat(assignedCase().resolve(ReviewDecision.APPROVED, "Good.").canBeAppealed()).isFalse();
+        assertThat(rejectedCase().canBeAppealed()).isTrue();
+    }
+
+    @Test
+    void appeal_reopensTheCaseWithoutVerifierNorDecision() {
+        VerificationCase verificationCase = assignedCase();
+        verificationCase.attachEvidence("https://github.com/student/project");
+        verificationCase.resolve(ReviewDecision.REJECTED, "Needs more work.");
+
+        verificationCase.appeal();
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.getVerifierUserId()).isNull();
+        assertThat(verificationCase.getDecision()).isNull();
+        assertThat(verificationCase.getRubricNotes()).isNull();
+        assertThat(verificationCase.getAssignedAt()).isNull();
+        assertThat(verificationCase.getResolvedAt()).isNull();
+        assertThat(verificationCase.getAppealCount()).isEqualTo(1);
+        assertThat(verificationCase.getPreviousVerifierUserId()).isEqualTo(VERIFIER_ID);
+        assertThat(verificationCase.getEvidenceUrl()).isEqualTo("https://github.com/student/project");
+        assertThat(verificationCase.isOpen()).isTrue();
+    }
+
+    @Test
+    void appeal_aCaseThatIsNotRejected_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().appeal()).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> assignedCase().appeal()).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> assignedCase().resolve(ReviewDecision.APPROVED, "Good.").appeal())
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void appeal_twice_throwsDomainException() {
+        VerificationCase verificationCase = rejectedCase().appeal().assignVerifier(3)
+                .resolve(ReviewDecision.REJECTED, "Still not enough.");
+
+        assertThat(verificationCase.canBeAppealed()).isFalse();
+        assertThatThrownBy(verificationCase::appeal).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void assignVerifier_afterAnAppeal_toTheFirstVerifier_throwsDomainException() {
+        VerificationCase verificationCase = rejectedCase().appeal();
+
+        assertThatThrownBy(() -> verificationCase.assignVerifier(VERIFIER_ID))
+                .isInstanceOf(DomainException.class);
+        assertThat(verificationCase.assignVerifier(3).getVerifierUserId()).isEqualTo(3);
+    }
+
+    @Test
+    void overturnedVerifierUserId_isTheFirstVerifierOnlyWhenTheAppealEndsInAnApproval() {
+        assertThat(rejectedCase().overturnedVerifierUserId()).isNull();
+
+        VerificationCase approved = rejectedCase().appeal().assignVerifier(3)
+                .resolve(ReviewDecision.APPROVED, "Meets the rubric.");
+        assertThat(approved.overturnedVerifierUserId()).isEqualTo(VERIFIER_ID);
+
+        VerificationCase confirmed = rejectedCase().appeal().assignVerifier(3)
+                .resolve(ReviewDecision.REJECTED, "Still not enough.");
+        assertThat(confirmed.overturnedVerifierUserId()).isNull();
+
+        VerificationCase neverAppealed = assignedCase().resolve(ReviewDecision.APPROVED, "Good.");
+        assertThat(neverAppealed.overturnedVerifierUserId()).isNull();
+    }
+
+    // ---------- Missed deadline (US39) ----------
+
+    private static VerificationCase overdueCase(int studentId, int verifierId) {
+        VerificationCase verificationCase = new VerificationCase(1, studentId, 3, "http-basics",
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType.QUIZ,
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline.hours(48))
+                .assignVerifier(verifierId);
+        org.springframework.test.util.ReflectionTestUtils.setField(verificationCase, "reviewDueAt",
+                java.time.Instant.now().minusSeconds(60));
+        return verificationCase;
+    }
+
+    @org.junit.jupiter.api.Test
+    void constructor_storesTheDeadlineItWasOpenedWith() {
+        VerificationCase verificationCase = new VerificationCase(1, 2, 3, "http-basics",
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType.QUIZ,
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline.businessDays(3));
+
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getReviewDeadline()).isEqualTo(
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline.businessDays(3));
+        org.assertj.core.api.Assertions.assertThat(new VerificationCase(1, 2, 3, "http-basics",
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType.QUIZ)
+                .getReviewDeadline()).isNull();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.isOverdue(java.time.Instant.now())).isFalse();
+    }
+
+    @org.junit.jupiter.api.Test
+    void recordMissedDeadline_onlyOncePerAssignment() {
+        VerificationCase verificationCase = overdueCase(2, 5);
+        java.time.Instant now = java.time.Instant.now();
+
+        org.assertj.core.api.Assertions.assertThat(verificationCase.isOverdue(now)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.recordMissedDeadline(now)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.recordMissedDeadline(now)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getDeadlineMissedAt()).isEqualTo(now);
+
+        VerificationCase onTime = new VerificationCase(1, 2, 3, "http-basics",
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType.QUIZ,
+                com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline.hours(48))
+                .assignVerifier(5);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> onTime.recordMissedDeadline(now))
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+    }
+
+    @org.junit.jupiter.api.Test
+    void reassignAfterMissedDeadline_givesTheSameDeadlineToAnotherVerifier() {
+        VerificationCase verificationCase = overdueCase(2, 5);
+        java.time.Instant now = java.time.Instant.now();
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> verificationCase.reassignAfterMissedDeadline(6, null, now))
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+        verificationCase.recordMissedDeadline(now);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> verificationCase.reassignAfterMissedDeadline(2, null, now))
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> verificationCase.reassignAfterMissedDeadline(5, null, now))
+                .isInstanceOf(com.innovify.skillswap.shared.domain.exceptions.DomainException.class);
+
+        verificationCase.reassignAfterMissedDeadline(6, null, now);
+
+        org.assertj.core.api.Assertions.assertThat(verificationCase.isAssignedTo(6)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getAssignedAt()).isEqualTo(now);
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getReviewDueAt())
+                .isEqualTo(now.plus(java.time.Duration.ofHours(48)));
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getDeadlineMissedAt()).isNull();
+        org.assertj.core.api.Assertions.assertThat(verificationCase.getReassignmentCount()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(verificationCase.isOverdue(now)).isFalse();
+    }
+
+    // ---------- Reevaluation ----------
+
+    private static VerificationCase approvedCase() {
+        return assignedCase().resolve(ReviewDecision.APPROVED, "Meets the rubric.");
+    }
+
+    @Test
+    void canBeReevaluated_isTrueOnlyForAnApprovedCase() {
+        assertThat(approvedCase().canBeReevaluated()).isTrue();
+        assertThat(newCase().canBeReevaluated()).isFalse();
+        assertThat(assignedCase().canBeReevaluated()).isFalse();
+        assertThat(rejectedCase().canBeReevaluated()).isFalse();
+    }
+
+    @Test
+    void reopenForReevaluation_reopensTheApprovedCaseWithoutVerifierNorDecision() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(ReviewDeadline.hours(48));
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.isOpen()).isTrue();
+        assertThat(verificationCase.getVerifierUserId()).isNull();
+        assertThat(verificationCase.getDecision()).isNull();
+        assertThat(verificationCase.getRubricNotes()).isNull();
+        assertThat(verificationCase.getAssignedAt()).isNull();
+        assertThat(verificationCase.getResolvedAt()).isNull();
+        assertThat(verificationCase.getReevaluationCount()).isEqualTo(1);
+        assertThat(verificationCase.getAppealCount()).isZero();
+        assertThat(verificationCase.getPreviousVerifierUserId()).isEqualTo(VERIFIER_ID);
+    }
+
+    @Test
+    void reopenForReevaluation_countsTheDeadlineAgainFromNow() {
+        Instant before = Instant.now();
+
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(ReviewDeadline.hours(48));
+
+        assertThat(verificationCase.getReviewDueAt())
+                .isBetween(before.plus(Duration.ofHours(48)), Instant.now().plus(Duration.ofHours(48)));
+        assertThat(verificationCase.getReviewDeadline()).isEqualTo(ReviewDeadline.hours(48));
+    }
+
+    @Test
+    void reopenForReevaluation_withoutDeadline_leavesTheCaseWithoutOne() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null);
+
+        assertThat(verificationCase.getReviewDueAt()).isNull();
+        assertThat(verificationCase.getReviewDeadline()).isNull();
+    }
+
+    @Test
+    void reopenForReevaluation_keepsTheVerifierWhoApprovedItFromReviewingItAgain() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null);
+
+        assertThatThrownBy(() -> verificationCase.assignVerifier(VERIFIER_ID)).isInstanceOf(DomainException.class);
+        assertThat(verificationCase.assignVerifier(3).getVerifierUserId()).isEqualTo(3);
+    }
+
+    @Test
+    void reopenForReevaluation_ofACaseThatIsNotApproved_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().reopenForReevaluation(null)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> assignedCase().reopenForReevaluation(null)).isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> rejectedCase().reopenForReevaluation(null)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void reopenForReevaluation_canHappenAgainAfterANewApproval() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null).assignVerifier(3)
+                .resolve(ReviewDecision.APPROVED, "Meets the rubric.");
+
+        verificationCase.reopenForReevaluation(null);
+
+        assertThat(verificationCase.getReevaluationCount()).isEqualTo(2);
+        assertThat(verificationCase.getPreviousVerifierUserId()).isEqualTo(3);
+    }
+
+    @Test
+    void reopenForReevaluation_doesNotUseTheAppealOfTheStudent() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null).assignVerifier(3)
+                .resolve(ReviewDecision.REJECTED, "Not enough.");
+
+        assertThat(verificationCase.canBeAppealed()).isTrue();
+    }
+
+    @Test
+    void overturnedVerifierUserId_isNullWhenAReevaluatedCaseIsApprovedAgain() {
+        VerificationCase verificationCase = approvedCase().reopenForReevaluation(null).assignVerifier(3)
+                .resolve(ReviewDecision.APPROVED, "Meets the rubric.");
+
+        assertThat(verificationCase.overturnedVerifierUserId()).isNull();
+    }
+
+    // ---------- Mini-project cases ----------
+
+    private static final String REPOSITORY = "https://github.com/ana/http-basics";
+
+    private static VerificationCase miniProjectCase() {
+        return VerificationCase.forMiniProject(3, STUDENT_ID, 5, " http-basics ", REPOSITORY, null);
+    }
+
+    @Test
+    void forMiniProject_opensAPendingCaseOfTheDeliveryWithTheRepositoryAsEvidence() {
+        Instant before = Instant.now();
+
+        VerificationCase verificationCase = miniProjectCase();
+
+        assertThat(verificationCase.getCaseType()).isEqualTo(CaseType.MINI_PROJECT);
+        assertThat(verificationCase.getSubmissionId()).isEqualTo(3);
+        assertThat(verificationCase.getAttemptId()).isNull();
+        assertThat(verificationCase.getStudentId()).isEqualTo(STUDENT_ID);
+        assertThat(verificationCase.getPathNodeId()).isEqualTo(5);
+        assertThat(verificationCase.getSkillTag()).isEqualTo("http-basics");
+        assertThat(verificationCase.getEvidenceUrl()).isEqualTo(REPOSITORY);
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.getVerifierUserId()).isNull();
+        assertThat(verificationCase.getOpenedAt()).isBetween(before, Instant.now());
+    }
+
+    @Test
+    void forMiniProject_withTheDeadlineOfThePlan_dueFromTheOpening() {
+        VerificationCase verificationCase = VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics",
+                REPOSITORY, ReviewDeadline.hours(48));
+
+        assertThat(verificationCase.getReviewDeadline()).isEqualTo(ReviewDeadline.hours(48));
+        assertThat(verificationCase.getReviewDueAt())
+                .isEqualTo(verificationCase.getOpenedAt().plus(Duration.ofHours(48)));
+    }
+
+    @Test
+    void forMiniProject_stripsTheLink() {
+        assertThat(VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics", "  " + REPOSITORY + " ", null)
+                .getEvidenceUrl()).isEqualTo(REPOSITORY);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0,1,1,skill", "1,0,1,skill", "1,1,0,skill", "1,1,1,' '"})
+    void forMiniProject_withInvalidData_throwsDomainException(int submissionId, int studentId, int pathNodeId,
+                                                              String skillTag) {
+        assertThatThrownBy(() -> VerificationCase.forMiniProject(submissionId, studentId, pathNodeId, skillTag,
+                REPOSITORY, null)).isInstanceOf(DomainException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "not a url", "ftp://files.example.com/work", "javascript:alert(1)", "https://"})
+    void forMiniProject_withAnInvalidLink_throwsDomainException(String url) {
+        assertThatThrownBy(() -> VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics", url, null))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void forMiniProject_withoutALinkOrWithATooLongOne_throwsDomainException() {
+        String tooLong = "https://example.com/" + "a".repeat(VerificationCase.MAX_EVIDENCE_URL_LENGTH);
+
+        assertThatThrownBy(() -> VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics", null, null))
+                .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> VerificationCase.forMiniProject(3, STUDENT_ID, 5, "http-basics", tooLong, null))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void miniProjectCase_followsTheSameLifecycleAsAQuizCase() {
+        VerificationCase verificationCase = miniProjectCase().assignVerifier(VERIFIER_ID)
+                .resolve(ReviewDecision.REJECTED, "The README is missing.");
+
+        assertThat(verificationCase.canBeAppealed()).isTrue();
+
+        verificationCase.appeal();
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.getAppealCount()).isEqualTo(1);
+        assertThat(verificationCase.getSubmissionId()).isEqualTo(3);
+        assertThat(verificationCase.getEvidenceUrl()).isEqualTo(REPOSITORY);
+    }
+
+    // ---------- Suspended verifier (T61) ----------
+
+    @Test
+    void releaseFromSuspendedVerifier_returnsTheCaseToPendingWithoutCountingAMissedDeadline() {
+        VerificationCase verificationCase = new VerificationCase(1, STUDENT_ID, 3, "http-basics", CaseType.QUIZ,
+                ReviewDeadline.hours(48)).assignVerifier(VERIFIER_ID);
+        Instant now = Instant.now().plusSeconds(3600);
+
+        verificationCase.releaseFromSuspendedVerifier(now);
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.PENDING);
+        assertThat(verificationCase.getVerifierUserId()).isNull();
+        assertThat(verificationCase.getAssignedAt()).isNull();
+        assertThat(verificationCase.getDeadlineMissedAt()).isNull();
+        assertThat(verificationCase.getReviewDueAt()).isEqualTo(ReviewDeadline.hours(48).dueFrom(now));
+        assertThat(verificationCase.getReassignmentCount()).isZero();
+        assertThat(verificationCase.getPreviousVerifierUserId()).isNull();
+    }
+
+    @Test
+    void releaseFromSuspendedVerifier_thenAssigningToAnotherVerifier_works() {
+        VerificationCase verificationCase = assignedCase();
+
+        verificationCase.releaseFromSuspendedVerifier(Instant.now()).assignVerifier(7);
+
+        assertThat(verificationCase.getStatus()).isEqualTo(CaseStatus.ASSIGNED);
+        assertThat(verificationCase.getVerifierUserId()).isEqualTo(7);
+    }
+
+    @Test
+    void releaseFromSuspendedVerifier_ofACaseThatIsNotAssigned_throwsDomainException() {
+        assertThatThrownBy(() -> newCase().releaseFromSuspendedVerifier(Instant.now()))
+                .isInstanceOf(DomainException.class);
+    }
+}

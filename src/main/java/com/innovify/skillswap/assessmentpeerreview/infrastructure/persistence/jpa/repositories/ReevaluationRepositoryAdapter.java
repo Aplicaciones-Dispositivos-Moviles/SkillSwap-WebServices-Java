@@ -30,6 +30,11 @@ public class ReevaluationRepositoryAdapter implements ReevaluationRepository {
     }
 
     @Override
+    public List<Reevaluation> findByStudentId(int studentId) {
+        return jpaRepository.findByStudentIdOrderByCreatedAtDescIdDesc(studentId);
+    }
+
+    @Override
     public Set<Integer> findReevaluatedSourceIds(ReevaluationSourceType sourceType, Collection<Integer> sourceIds) {
         if (sourceIds == null || sourceIds.isEmpty()) {
             return Set.of();

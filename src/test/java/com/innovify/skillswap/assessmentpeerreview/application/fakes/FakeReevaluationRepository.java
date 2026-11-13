@@ -47,6 +47,15 @@ public class FakeReevaluationRepository implements ReevaluationRepository {
     }
 
     @Override
+    public List<Reevaluation> findByStudentId(int studentId) {
+        return reevaluations.stream()
+                .filter(r -> r.getStudentId() == studentId)
+                .sorted(java.util.Comparator.comparing(Reevaluation::getCreatedAt)
+                        .thenComparing(Reevaluation::getId).reversed())
+                .toList();
+    }
+
+    @Override
     public List<Reevaluation> findBySource(ReevaluationSourceType sourceType, int sourceId) {
         return reevaluations.stream()
                 .filter(r -> r.getSourceType() == sourceType && r.getSourceId() == sourceId)

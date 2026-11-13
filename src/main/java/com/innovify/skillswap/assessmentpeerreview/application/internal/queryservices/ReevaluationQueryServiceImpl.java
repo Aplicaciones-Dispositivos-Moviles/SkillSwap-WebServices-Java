@@ -1,12 +1,17 @@
 package com.innovify.skillswap.assessmentpeerreview.application.internal.queryservices;
 
+import com.innovify.skillswap.assessmentpeerreview.application.internal.ReevaluationSourceResolver;
+import com.innovify.skillswap.assessmentpeerreview.application.internal.ReevaluationSourceResolver.Source;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.ReevaluationCandidate;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.ReevaluationQueryService;
+import com.innovify.skillswap.assessmentpeerreview.application.queryservices.StudentReevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.AssessmentPeerReviewError;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetReevaluationCandidatesQuery;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetStudentReevaluationsQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReevaluationSourceType;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.AssessmentAttemptRepository;
 import com.innovify.skillswap.assessmentpeerreview.domain.repositories.ReevaluationRepository;
@@ -37,6 +42,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>Each source is read newest first with some margin ({@value #FETCH_FACTOR} times the limit), because the ones
  * that were reevaluated or have a case in progress are discarded afterwards; the answer has at most the limit.
+ *
+ * <p>It also shows a student the reevaluations ordered on their own results, so they know why a node was reopened;
+ * nothing about the senior who ordered them leaves this service.
  */
 @Service
 public class ReevaluationQueryServiceImpl implements ReevaluationQueryService {
@@ -51,6 +59,7 @@ public class ReevaluationQueryServiceImpl implements ReevaluationQueryService {
     private final LearningPathContextFacade learningPathFacade;
     private final IamContextFacade iamFacade;
     private final MessageSource messageSource;
+    private final ReevaluationSourceResolver sourceResolver;
 
     public ReevaluationQueryServiceImpl(AssessmentAttemptRepository attemptRepository,
                                         VerificationCaseRepository caseRepository,
@@ -68,6 +77,7 @@ public class ReevaluationQueryServiceImpl implements ReevaluationQueryService {
         this.learningPathFacade = learningPathFacade;
         this.iamFacade = iamFacade;
         this.messageSource = messageSource;
+        this.sourceResolver = new ReevaluationSourceResolver(attemptRepository, caseRepository, learningPathFacade);
     }
 
     @Override
@@ -87,6 +97,22 @@ public class ReevaluationQueryServiceImpl implements ReevaluationQueryService {
         candidates.sort(Comparator.comparing(ReevaluationCandidate::resolvedAt).reversed()
                 .thenComparing(Comparator.comparingInt(ReevaluationCandidate::sourceId).reversed()));
         return Result.success(candidates.stream().limit(query.limit()).toList());
+    }
+
+    @Override
+    public List<StudentReevaluation> handle(GetStudentReevaluationsQuery query) {
+        return reevaluationRepository.findByStudentId(query.studentId()).stream()
+                .map(this::toStudentReevaluation)
+                .toList();
+    }
+
+    /** The node and the skill come from the attempt or the case; both stay null when it can no longer be found. */
+    private StudentReevaluation toStudentReevaluation(Reevaluation reevaluation) {
+        Source source = sourceResolver.resolve(reevaluation.getSourceType(), reevaluation.getSourceId());
+        boolean found = source.error() == null;
+        return new StudentReevaluation(reevaluation.getId(), reevaluation.getSourceType(), reevaluation.getSourceId(),
+                found ? source.pathNodeId() : null, found ? source.skillTag() : null,
+                reevaluation.getJustification(), reevaluation.getCreatedAt());
     }
 
     private List<ReevaluationCandidate> attemptCandidates(GetReevaluationCandidatesQuery query, int fetch) {

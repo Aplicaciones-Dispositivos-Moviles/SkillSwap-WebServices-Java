@@ -14,4 +14,6 @@ public interface ReevaluationJpaRepository extends JpaRepository<Reevaluation, I
 
     List<Reevaluation> findBySourceTypeAndSourceIdIn(ReevaluationSourceType sourceType,
                                                      Collection<Integer> sourceIds);
+
+    List<Reevaluation> findByStudentIdOrderByCreatedAtDescIdDesc(int studentId);
 }

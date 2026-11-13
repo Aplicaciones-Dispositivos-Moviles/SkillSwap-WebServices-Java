@@ -464,4 +464,53 @@ class ReevaluationsIntegrationTest extends PostgresIntegrationTest {
 
         assertThat(status(result)).isIn(401, 403);
     }
+
+    // ---------- The reevaluations of the student ----------
+
+    private MvcResult mine(String token) throws Exception {
+        return call(get(REEVALUATIONS + "/me"), token, null);
+    }
+
+    private int nodeId(User student, String token) throws Exception {
+        MvcResult path = call(get("/api/v1/learning-paths/" + student.getId()), token, null);
+        List<Integer> ids = read(path, "$.nodes[?(@.skillTag=='" + SKILL + "')].id");
+        return ids.get(0);
+    }
+
+    @Test
+    @DisplayName("US37: the student reads why their node was reopened, and only their own reevaluations")
+    void mine_returnsTheReevaluationsOfTheCallerWithTheNodeAndTheReason() throws Exception {
+        makeSenior(senior);
+        int anaAttempt = passAssessment(ana, anaToken);
+        int bobAttempt = passAssessment(bob, bobToken);
+        assertThat(status(order(seniorToken, "Attempt", anaAttempt, JUSTIFICATION))).isEqualTo(201);
+        assertThat(status(order(seniorToken, "Attempt", bobAttempt, "Another reason for Bob."))).isEqualTo(201);
+
+        MvcResult result = mine(anaToken);
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat(count(result)).isEqualTo(1);
+        assertThat((Integer) read(result, "$[0].id")).isPositive();
+        assertThat((String) read(result, "$[0].sourceType")).isEqualTo("Attempt");
+        assertThat((int) read(result, "$[0].sourceId")).isEqualTo(anaAttempt);
+        assertThat((int) read(result, "$[0].pathNodeId")).isEqualTo(nodeId(ana, anaToken));
+        assertThat((String) read(result, "$[0].skillTag")).isEqualTo(SKILL);
+        assertThat((String) read(result, "$[0].justification")).isEqualTo(JUSTIFICATION);
+        assertThat((String) read(result, "$[0].createdAt")).isNotBlank();
+        assertThat(body(result)).doesNotContain("orderedBy").doesNotContain("studentId")
+                .doesNotContain("Another reason for Bob.");
+    }
+
+    @Test
+    void mine_withoutReevaluations_returnsAnEmptyList() throws Exception {
+        MvcResult result = mine(anaToken);
+
+        assertThat(status(result)).as(body(result)).isEqualTo(200);
+        assertThat(count(result)).isZero();
+    }
+
+    @Test
+    void mine_withoutAToken_isRejected() throws Exception {
+        assertThat(status(mine(null))).isIn(401, 403);
+    }
 }

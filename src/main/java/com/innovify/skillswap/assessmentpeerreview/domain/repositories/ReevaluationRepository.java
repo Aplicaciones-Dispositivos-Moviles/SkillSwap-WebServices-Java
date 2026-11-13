@@ -17,4 +17,7 @@ public interface ReevaluationRepository {
 
     /** Which of the attempts or cases already have a reevaluation ordered; empty when none or when no ids are given. */
     Set<Integer> findReevaluatedSourceIds(ReevaluationSourceType sourceType, Collection<Integer> sourceIds);
+
+    /** The reevaluations ordered on the results of the student, from the newest to the oldest. */
+    List<Reevaluation> findByStudentId(int studentId);
 }

@@ -9,15 +9,18 @@ import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeVerific
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.FakeVerifierProfileRepository;
 import com.innovify.skillswap.assessmentpeerreview.application.fakes.TestMessages;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.ReevaluationCandidate;
+import com.innovify.skillswap.assessmentpeerreview.application.queryservices.StudentReevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.AssessmentPeerReviewError;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.AssessmentAttempt;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.Reevaluation;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerificationCase;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.aggregates.VerifierProfile;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetReevaluationCandidatesQuery;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetStudentReevaluationsQuery;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.CaseType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReevaluationSourceType;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDecision;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.valueobjects.ReviewDeadline;
 import com.innovify.skillswap.iam.application.acl.IamContextFacade;
 import com.innovify.skillswap.reputation.application.acl.ReputationContextFacade;
 import com.innovify.skillswap.shared.application.Result;
@@ -260,5 +263,80 @@ class ReevaluationQueryServiceImplTest {
 
         assertThat(candidates(null, 2)).extracting(ReevaluationCandidate::sourceId)
                 .containsExactly(newest.getId(), middle.getId());
+    }
+
+    // ---------- The reevaluations of the student ----------
+
+    private Reevaluation reevaluation(ReevaluationSourceType type, int sourceId, int studentId, String reason,
+                                      Instant at) {
+        Reevaluation reevaluation = reevaluations.save(new Reevaluation(type, sourceId, studentId, SENIOR_ID, reason));
+        ReflectionTestUtils.setField(reevaluation, "createdAt", at);
+        return reevaluation;
+    }
+
+    private List<StudentReevaluation> reevaluationsOf(int studentId) {
+        return service.handle(new GetStudentReevaluationsQuery(studentId));
+    }
+
+    @Test
+    void handleStudentReevaluations_returnsOnlyTheOwnOnesNewestFirstWithTheNodeAndSkillOfEachSource() {
+        AssessmentAttempt attempt = attempt(1, 1, SKILL, true, NOW.minusSeconds(600));
+        VerificationCase approved = approvedCase(50, 1, 11, "case-skill", NOW.minusSeconds(500));
+        AssessmentAttempt otherStudent = attempt(2, 2, SKILL, true, NOW.minusSeconds(600));
+        Reevaluation ofAttempt = reevaluation(ReevaluationSourceType.ATTEMPT, attempt.getId(), 1, "Looks copied.",
+                NOW.minusSeconds(200));
+        Reevaluation ofCase = reevaluation(ReevaluationSourceType.CASE, approved.getId(), 1, "Doubtful approval.",
+                NOW.minusSeconds(100));
+        reevaluation(ReevaluationSourceType.ATTEMPT, otherStudent.getId(), 2, "Not theirs.", NOW);
+
+        List<StudentReevaluation> result = reevaluationsOf(1);
+
+        assertThat(result).extracting(StudentReevaluation::id).containsExactly(ofCase.getId(), ofAttempt.getId());
+        StudentReevaluation caseItem = result.get(0);
+        assertThat(caseItem.sourceType()).isEqualTo(ReevaluationSourceType.CASE);
+        assertThat(caseItem.sourceId()).isEqualTo(approved.getId());
+        assertThat(caseItem.pathNodeId()).isEqualTo(11);
+        assertThat(caseItem.skillTag()).isEqualTo("case-skill");
+        assertThat(caseItem.justification()).isEqualTo("Doubtful approval.");
+        assertThat(caseItem.createdAt()).isEqualTo(NOW.minusSeconds(100));
+        StudentReevaluation attemptItem = result.get(1);
+        assertThat(attemptItem.sourceType()).isEqualTo(ReevaluationSourceType.ATTEMPT);
+        assertThat(attemptItem.sourceId()).isEqualTo(attempt.getId());
+        assertThat(attemptItem.pathNodeId()).isEqualTo(10);
+        assertThat(attemptItem.skillTag()).isEqualTo(SKILL);
+        assertThat(attemptItem.justification()).isEqualTo("Looks copied.");
+        assertThat(attemptItem.createdAt()).isEqualTo(NOW.minusSeconds(200));
+    }
+
+    @Test
+    void handleStudentReevaluations_whenTheSourceCannotBeResolved_leavesTheNodeAndSkillEmpty() {
+        AssessmentAttempt withoutBlueprint = attempt(99, 1, SKILL, true, NOW);
+        reevaluation(ReevaluationSourceType.ATTEMPT, withoutBlueprint.getId(), 1, "Blueprint gone.", NOW);
+        reevaluation(ReevaluationSourceType.ATTEMPT, 999, 1, "Attempt gone.", NOW.minusSeconds(10));
+        reevaluation(ReevaluationSourceType.CASE, 999, 1, "Case gone.", NOW.minusSeconds(20));
+
+        List<StudentReevaluation> result = reevaluationsOf(1);
+
+        assertThat(result).extracting(StudentReevaluation::justification)
+                .containsExactly("Blueprint gone.", "Attempt gone.", "Case gone.");
+        assertThat(result).extracting(StudentReevaluation::pathNodeId).containsOnlyNulls();
+        assertThat(result).extracting(StudentReevaluation::skillTag).containsOnlyNulls();
+    }
+
+    @Test
+    void handleStudentReevaluations_ofAReopenedCase_stillResolvesItsNode() {
+        VerificationCase approved = approvedCase(50, 1, 11, "case-skill", NOW.minusSeconds(500));
+        reevaluation(ReevaluationSourceType.CASE, approved.getId(), 1, "Doubtful approval.", NOW);
+        approved.reopenForReevaluation(ReviewDeadline.hours(48));
+        cases.save(approved);
+
+        assertThat(reevaluationsOf(1)).extracting(StudentReevaluation::pathNodeId).containsExactly(11);
+    }
+
+    @Test
+    void handleStudentReevaluations_withoutReevaluations_isEmpty() {
+        reevaluation(ReevaluationSourceType.ATTEMPT, attempt(2, 2, SKILL, true, NOW).getId(), 2, "Not theirs.", NOW);
+
+        assertThat(reevaluationsOf(1)).isEmpty();
     }
 }

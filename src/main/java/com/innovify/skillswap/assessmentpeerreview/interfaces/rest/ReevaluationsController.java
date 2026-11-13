@@ -4,6 +4,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.ReevaluationCandidateResource;
 import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetReevaluationCandidatesQuery;
+import com.innovify.skillswap.assessmentpeerreview.domain.model.queries.GetStudentReevaluationsQuery;
+import com.innovify.skillswap.assessmentpeerreview.interfaces.rest.resources.StudentReevaluationResource;
+import java.util.List;
 import com.innovify.skillswap.assessmentpeerreview.application.queryservices.ReevaluationQueryService;
 
 import com.innovify.skillswap.assessmentpeerreview.application.commandservices.ReevaluationCommandService;
@@ -59,6 +62,21 @@ public class ReevaluationsController {
         var result = queryService.handle(new GetReevaluationCandidatesQuery(actor.getId(), skillTag, limit));
         return AssessmentPeerReviewActionResultAssembler.toResponse(result, candidates -> ResponseEntity.ok(
                 candidates.stream().map(AssessmentPeerReviewResourceAssemblers::toResource).toList()));
+    }
+
+    /**
+     * The reevaluations ordered on the results of the caller, newest first, so the student knows why a node of their
+     * path was reopened: the attempt or case, the node and the skill to demonstrate again (null when the result can
+     * no longer be found), and the justification. It has nothing about the senior who ordered them. Always 200.
+     */
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('STUDENT')")
+    @ApiResponse(responseCode = "200",
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = StudentReevaluationResource.class))))
+    public ResponseEntity<List<StudentReevaluationResource>> getMine(@AuthenticationPrincipal User actor) {
+        return ResponseEntity.ok(queryService.handle(new GetStudentReevaluationsQuery(actor.getId())).stream()
+                .map(AssessmentPeerReviewResourceAssemblers::toResource)
+                .toList());
     }
 
     /**

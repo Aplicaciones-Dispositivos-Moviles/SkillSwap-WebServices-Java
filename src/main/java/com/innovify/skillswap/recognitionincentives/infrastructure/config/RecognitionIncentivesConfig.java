@@ -21,6 +21,7 @@ import com.innovify.skillswap.recognitionincentives.application.internal.queryse
 import com.innovify.skillswap.recognitionincentives.application.queryservices.ShareableCredentialQueryService;
 import com.innovify.skillswap.recognitionincentives.application.queryservices.WalletQueryService;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.CreditTransactionRepository;
+import com.innovify.skillswap.recognitionincentives.domain.repositories.RedemptionIdempotencyKeyRepository;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.ShareableCredentialRepository;
 import com.innovify.skillswap.recognitionincentives.domain.repositories.WalletRepository;
 import com.innovify.skillswap.recognitionincentives.domain.services.CredentialTokenGenerator;
@@ -55,13 +56,15 @@ public class RecognitionIncentivesConfig {
     @Bean
     public WalletCommandService walletCommandService(WalletRepository wallets,
                                                      CreditTransactionRepository transactions,
+                                                     RedemptionIdempotencyKeyRepository idempotencyKeys,
                                                      RedemptionPricing pricing,
                                                      PlatformTransactionManager transactionManager,
                                                      DomainEventPublisher eventPublisher,
                                                      MessageSource messageSource) {
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        return new WalletCommandServiceImpl(wallets, transactions, pricing, template, eventPublisher, messageSource);
+        return new WalletCommandServiceImpl(wallets, transactions, idempotencyKeys, pricing, template, eventPublisher,
+                messageSource);
     }
 
     @Bean

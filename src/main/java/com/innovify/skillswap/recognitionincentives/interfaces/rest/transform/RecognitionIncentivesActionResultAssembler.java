@@ -16,7 +16,7 @@ public final class RecognitionIncentivesActionResultAssembler {
 
     public static HttpStatus toStatusFromError(RecognitionIncentivesError error) {
         return switch (error) {
-            case NONE, INVALID_REDEMPTION_ITEM, INVALID_SKILL_TAG -> HttpStatus.BAD_REQUEST;
+            case NONE, INVALID_REDEMPTION_ITEM, INVALID_IDEMPOTENCY_KEY, INVALID_SKILL_TAG -> HttpStatus.BAD_REQUEST;
             case WALLET_NOT_FOUND, CREDENTIAL_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case NOT_WALLET_OWNER -> HttpStatus.FORBIDDEN;
             case INSUFFICIENT_BALANCE, BENEFIT_ALREADY_REDEEMED, SKILL_NOT_VERIFIED, OPERATION_CANCELLED -> HttpStatus.CONFLICT;

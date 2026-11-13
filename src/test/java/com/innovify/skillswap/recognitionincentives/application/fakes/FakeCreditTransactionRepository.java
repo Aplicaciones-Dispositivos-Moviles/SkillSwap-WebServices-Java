@@ -6,6 +6,7 @@ import com.innovify.skillswap.recognitionincentives.domain.model.valueobjects.Tr
 import com.innovify.skillswap.recognitionincentives.domain.repositories.CreditTransactionRepository;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** In-memory repository that assigns ids like the database does. */
@@ -35,6 +36,11 @@ public class FakeCreditTransactionRepository implements CreditTransactionReposit
         }
         items.add(transaction);
         return transaction;
+    }
+
+    @Override
+    public Optional<CreditTransaction> findById(int id) {
+        return items.stream().filter(t -> t.getId() == id).findFirst();
     }
 
     @Override

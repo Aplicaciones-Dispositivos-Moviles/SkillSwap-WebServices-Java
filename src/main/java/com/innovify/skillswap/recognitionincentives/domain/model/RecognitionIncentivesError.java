@@ -4,6 +4,7 @@ package com.innovify.skillswap.recognitionincentives.domain.model;
 public enum RecognitionIncentivesError {
     NONE,
     INVALID_REDEMPTION_ITEM,
+    INVALID_IDEMPOTENCY_KEY,
     WALLET_NOT_FOUND,
     NOT_WALLET_OWNER,
     INSUFFICIENT_BALANCE,
